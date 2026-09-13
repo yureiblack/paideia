@@ -1,0 +1,49 @@
+# Local development infrastructure.
+#
+# Purpose: describe every background service the project needs as one file, so
+# `docker compose up -d` reproduces the same environment on any machine and
+# `docker compose down` removes it without leaving anything installed.
+#
+# Nothing here is production configuration. These are throwaway containers
+# holding disposable local data.
+
+services:
+  postgres:
+    # pgvector's own image: Postgres 16 with the vector extension already
+    # compiled in. Using it means no build step and no extension to install by
+    # hand. Semantic search from Phase 05 depends on this.
+    image: pgvector/pgvector:pg16
+    container_name: paideia-postgres
+    # Credentials are plain text on purpose. They unlock nothing but a local
+    # container full of test data. Real deployment injects these from outside.
+    environment:
+      POSTGRES_USER: paideia
+      POSTGRES_PASSWORD: paideia
+      POSTGRES_DB: paideia
+    # host port : container port. The container always runs Postgres on its own
+    # standard 5432; the left number is only which door on your Mac reaches it.
+    ports:
+      - "5432:5432"
+    volumes:
+      # A named volume, so the data survives `docker compose down`. Without
+      # this, every restart would hand you an empty database.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Lets `docker compose ps` say "healthy" only once Postgres is genuinely
+      # accepting connections, rather than merely having started.
+      test: ["CMD-SHELL", "pg_isready -U paideia -d paideia"]
+      interval: 5s
+      retries: 12
+
+  redis:
+    # Provisioned now so the local stack is complete and reproducible, but
+    # nothing reads from it until Phase 18 introduces background job processing.
+    image: redis:7-alpine
+    container_name: paideia-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  # Declares the named volume used above. Docker manages where it actually
+  # lives on disk.
+  postgres_data:

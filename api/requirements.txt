@@ -1,0 +1,25 @@
+# Python packages the backend needs.
+#
+# Purpose: pin exactly which versions get installed, so your machine, a new
+# contributor's machine and CI all end up with identical builds. An unpinned
+# dependency is how a project that worked yesterday breaks today.
+#
+# Install with:  pip install -r api/requirements.txt from project root
+
+# Web framework, and the server process that actually runs it.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+
+# Reads .env into the typed Settings object in app/config.py.
+pydantic-settings==2.15.0
+
+# Database access. psycopg is the driver that speaks Postgres' wire protocol;
+# the [binary] extra ships a prebuilt version so nothing has to compile here.
+sqlalchemy==2.0.52
+psycopg[binary]==3.3.5
+
+# Development only, but kept in one file until a deployment needs them split.
+# httpx is required by FastAPI's test client, not called by us directly.
+pytest==9.1.1
+httpx2==2.12.0
+ruff==0.16.7

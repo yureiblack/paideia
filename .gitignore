@@ -1,0 +1,23 @@
+# Paths git should pretend do not exist.
+#
+# Purpose: keep two categories out of the repository. Secrets, which must never
+# be published. And anything regenerated from a checked-in file, since
+# committing those causes conflicts and bloat for no benefit.
+
+# Real configuration values. .env.example is the committed template instead.
+.env
+
+# Python: compiled bytecode caches, and the virtual environment, which is
+# rebuilt from requirements.txt.
+__pycache__/
+.venv/
+
+# Node: installed packages and build output, rebuilt from package.json.
+node_modules/
+.next/
+
+# Finder metadata, of interest to nobody.
+.DS_Store
+
+# Files
+ROADMAP.md
