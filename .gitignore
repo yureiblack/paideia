@@ -19,5 +19,8 @@ node_modules/
 # Finder metadata, of interest to nobody.
 .DS_Store
 
+# Claude Code local settings
+.claude/
+
 # Files
 ROADMAP.md
