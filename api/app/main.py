@@ -82,7 +82,9 @@ def health_db() -> DatabaseHealth:
             # switched on in this database. Enabling it is a schema change and
             # therefore belongs in an Alembic migration, not here.
             found = connection.execute(
-                text("select count(*) from pg_available_extensions where name = 'vector'")
+                text(
+                    "select count(*) from pg_available_extensions where name = 'vector'"
+                )
             ).scalar_one()
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="database unavailable") from exc
