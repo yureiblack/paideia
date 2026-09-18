@@ -11,11 +11,12 @@ throughout the codebase.
 Configuration is validated once at startup, so errors are caught early.
 This module only handles configuration and does not depend on application logic.
 
-It is the bottom of the dependency chain: 
+It is the bottom of the dependency chain:
 everything may import it, it imports nothing of ours.
 """
 
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # This file is api/app/config.py, so three levels up is the repository root,
