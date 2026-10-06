@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.config import settings
 from app.db import engine
 
 # The application object. Every route and every piece of middleware attaches to
@@ -25,10 +26,11 @@ app = FastAPI(title="Paideia API", version="0.1.0")
 # Browsers refuse to let a page served from one origin call another unless the
 # server explicitly allows it. The Next.js dev server runs on port 3000 while
 # this API runs on 8000, which counts as a different origin, so without this the
-# frontend health indicator would be blocked before the request ever arrived.
+# frontend would be blocked before the request ever arrived. Which origins are
+# allowed is configuration, not code, so it comes from the settings object.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.cors_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )

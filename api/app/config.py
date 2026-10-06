@@ -42,6 +42,18 @@ class Settings(BaseSettings):
     # connect somewhere unexpected.
     database_url: str
 
+    # Browser origins allowed to call this API, as a comma-separated list.
+    # Defaults to the local Next.js dev server, which is safe to assume: it
+    # only ever permits a page running on this same machine.
+    cors_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """cors_origins as a clean list, ignoring blanks and stray spaces."""
+        return [
+            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
+
 
 # The single shared instance, built once when this module is first imported.
 # Every other module imports this object rather than constructing its own, so

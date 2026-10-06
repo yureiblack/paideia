@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-// Hardcoded for local development. This moves to an environment variable the
-// moment there is a second environment to point at.
-const API_BASE_URL = "http://localhost:8000";
+import { API_BASE_URL } from "@/lib/config";
 
 type Status = "checking" | "ok" | "down";
 
