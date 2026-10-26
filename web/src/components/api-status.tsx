@@ -25,7 +25,7 @@ export function ApiStatus() {
   }, []);
 
   return (
-    <dl className="flex flex-col gap-3 rounded-xl border border-zinc-200 px-6 py-5 dark:border-zinc-800">
+    <dl className="flex items-center gap-4 text-sm">
       <StatusRow label="API" status={api} />
       <StatusRow label="Database" status={db} />
     </dl>
@@ -40,10 +40,10 @@ function StatusRow({ label, status }: { label: string; status: Status }) {
   }[status];
 
   return (
-    <div className="flex items-center gap-3">
-      <span className={`h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden />
-      <dt className="w-24 text-zinc-500 dark:text-zinc-400">{label}</dt>
-      <dd className="font-medium capitalize">{status}</dd>
+    <div className="flex items-center gap-1.5">
+      <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden />
+      <dt className="text-zinc-500 dark:text-zinc-400">{label}</dt>
+      <dd className="font-medium">{status}</dd>
     </div>
   );
 }
