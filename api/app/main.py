@@ -16,7 +16,9 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.config import settings
 from app.db import engine
+from app.routers import environments
 
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".
@@ -25,13 +27,18 @@ app = FastAPI(title="Paideia API", version="0.1.0")
 # Browsers refuse to let a page served from one origin call another unless the
 # server explicitly allows it. The Next.js dev server runs on port 3000 while
 # this API runs on 8000, which counts as a different origin, so without this the
-# frontend health indicator would be blocked before the request ever arrived.
+# frontend would be blocked before the request ever arrived. Which origins are
+# allowed is configuration, not code, so it comes from the settings object.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.cors_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Feature endpoints live in app/routers/ and are mounted under /api, which keeps
+# them apart from the health checks and any future non-API routes.
+app.include_router(environments.router, prefix="/api")
 
 
 class Health(BaseModel):

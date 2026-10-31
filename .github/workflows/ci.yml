@@ -38,6 +38,12 @@ jobs:
       - run: pip install -r requirements.txt
       - run: ruff check .
       - run: ruff format --check .
+      # The same command a deployment runs, through the app's own settings.
+      - name: Apply migrations
+        run: alembic upgrade head
+      # Fails if a model changed without a migration to match it.
+      - name: Check models match migrations
+        run: alembic check
       - run: pytest
 
   web:

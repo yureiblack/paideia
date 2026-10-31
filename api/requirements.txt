@@ -18,8 +18,12 @@ pydantic-settings==2.15.0
 sqlalchemy==2.0.52
 psycopg[binary]==3.3.5
 
+# Database schema migrations. Versioned scripts that change the database
+# structure in order, so every copy of the database ends up the same shape.
+alembic==1.20.0
+
 # Development only, but kept in one file until a deployment needs them split.
-# httpx is required by FastAPI's test client, not called by us directly.
+# httpx2 is required by FastAPI's test client, not called by us directly.
 pytest==9.1.1
 httpx2==2.12.0
 ruff==0.16.7
