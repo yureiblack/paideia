@@ -10,9 +10,11 @@ gives them their own:
    every test run, then built purely by running the Alembic migrations. A
    model change that ships without its migration therefore breaks the tests.
 2. A guard that refuses to run against any database not named *_test.
-3. A Session per test, inside a transaction that is rolled back when the test
-   ends. Every test starts from an empty database, and nothing is ever really
-   written, which also makes the suite fast.
+3. One connection per test, inside a transaction that is rolled back when the
+   test ends. Every test starts from an empty database, and nothing is ever
+   really written, which also makes the suite fast. Each request, and each
+   background task, gets its own Session on that connection, as in production.
+4. An empty temporary data folder per test, so no test touches the real data/.
 
 Code under test may call session.commit() freely. Inside the outer transaction
 each commit only releases a savepoint, a bookmark inside the transaction, so
@@ -26,14 +28,26 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import URL, Engine, create_engine, make_url, text
+from sqlalchemy import URL, Connection, Engine, create_engine, make_url, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import get_session
+from app.db import get_session, get_session_factory
 from app.main import app
 
 API_DIR = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point every test at its own empty data folder, never the real data/.
+
+    autouse applies it to every test without being asked for. Code that stores
+    files reads settings.data_dir at call time, so this redirects all of it.
+    """
+    folder = tmp_path / "data"
+    monkeypatch.setattr(settings, "data_dir", folder)
+    return folder
 
 
 def _test_database_url() -> URL:
@@ -88,26 +102,56 @@ def test_engine(test_database_url: URL) -> Iterator[Engine]:
 
 
 @pytest.fixture
-def session(test_engine: Engine) -> Iterator[Session]:
-    """A Session whose every change is rolled back when the test ends."""
+def connection(test_engine: Engine) -> Iterator[Connection]:
+    """One connection per test, inside a transaction rolled back at the end."""
     with test_engine.connect() as connection:
         transaction = connection.begin()
-        session = Session(
-            bind=connection,
-            join_transaction_mode="create_savepoint",
-            expire_on_commit=False,
-        )
         try:
-            yield session
+            yield connection
         finally:
-            session.close()
             transaction.rollback()
 
 
+def _session_on(connection: Connection) -> Session:
+    """A Session whose commits only release savepoints in the test transaction."""
+    return Session(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    )
+
+
 @pytest.fixture
-def client(session: Session) -> Iterator[TestClient]:
-    """An HTTP client whose requests all use the rolled-back test Session."""
-    app.dependency_overrides[get_session] = lambda: session
+def session(connection: Connection) -> Iterator[Session]:
+    """A Session for calling services directly, rolled back with the test."""
+    session = _session_on(connection)
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def session_factory(connection: Connection):
+    """What background tasks receive in tests: Sessions on the test connection."""
+    return lambda: _session_on(connection)
+
+
+@pytest.fixture
+def client(connection: Connection, session_factory) -> Iterator[TestClient]:
+    """An HTTP client whose requests all run inside the test transaction.
+
+    Every request gets its own Session, as in production, so one request
+    cannot read another's stale objects. Background tasks get Sessions on the
+    same connection through the overridden session factory.
+    """
+
+    def request_session() -> Iterator[Session]:
+        with _session_on(connection) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = request_session
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     try:
         yield TestClient(app)
     finally:
