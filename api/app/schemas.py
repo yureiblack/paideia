@@ -122,3 +122,19 @@ class PageRead(BaseModel):
 
     page_number: int
     content: str
+
+
+class ChunkRead(BaseModel):
+    """One passage of a document, with where its text sits in the pages."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ordinal: int
+    page_start: int
+    char_start: int
+    page_end: int
+    char_end: int
+    heading: str | None
+    content: str
+    content_hash: str

@@ -11,6 +11,7 @@ Everything about one document lives at its own id:
 
     GET    /api/documents/{document_id}
     GET    /api/documents/{document_id}/pages
+    GET    /api/documents/{document_id}/chunks
     POST   /api/documents/{document_id}/reprocess
     DELETE /api/documents/{document_id}
 
@@ -40,7 +41,7 @@ from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
 from app.parsing import Parser, PyMuPDFParser
 from app.routers.environments import EnvironmentDep
-from app.schemas import DocumentRead, PageRead
+from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import documents as service
 
 router = APIRouter(tags=["documents"])
@@ -156,6 +157,12 @@ def read_document(document: DocumentDep) -> Document:
 @router.get("/documents/{document_id}/pages", response_model=list[PageRead])
 def read_pages(document: DocumentDep, session: SessionDep) -> list:
     return service.get_pages(session, document.id)
+
+
+@router.get("/documents/{document_id}/chunks", response_model=list[ChunkRead])
+def read_chunks(document: DocumentDep, session: SessionDep) -> list:
+    """The passages a document was cut into, in reading order."""
+    return service.get_chunks(session, document.id)
 
 
 @router.post(
