@@ -3,6 +3,8 @@
 
 import { API_BASE_URL } from "@/lib/config";
 import type {
+  Document,
+  DocumentPage,
   Environment,
   EnvironmentInput,
   EnvironmentPatch,
@@ -45,12 +47,7 @@ async function errorMessage(response: Response): Promise<string> {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      // Only requests that carry a body declare it as JSON. Leaving the header
-      // off GET and DELETE spares the browser an extra CORS preflight request.
-      headers: init.body ? { "Content-Type": "application/json" } : undefined,
-    });
+    response = await fetch(`${API_BASE_URL}${path}`, init);
   } catch {
     // fetch only throws when no response arrived: the API is down or
     // unreachable. The browser's own wording, "Failed to fetch", says nothing
@@ -64,8 +61,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+// A request carrying JSON. Only requests with a body declare a content type:
+// leaving it off GET and DELETE spares the browser a CORS preflight request.
+function withJson(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
 const environmentPath = (id: string) =>
   `/api/environments/${encodeURIComponent(id)}`;
+const documentPath = (id: string) =>
+  `/api/documents/${encodeURIComponent(id)}`;
 
 export const api = {
   listEnvironments: () => request<Environment[]>("/api/environments"),
@@ -73,17 +82,38 @@ export const api = {
   getEnvironment: (id: string) => request<Environment>(environmentPath(id)),
 
   createEnvironment: (input: EnvironmentInput) =>
-    request<Environment>("/api/environments", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+    request<Environment>("/api/environments", withJson("POST", input)),
 
   updateEnvironment: (id: string, patch: EnvironmentPatch) =>
-    request<Environment>(environmentPath(id), {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    }),
+    request<Environment>(environmentPath(id), withJson("PATCH", patch)),
 
   deleteEnvironment: (id: string) =>
     request<void>(environmentPath(id), { method: "DELETE" }),
+
+  listDocuments: (environmentId: string) =>
+    request<Document[]>(`${environmentPath(environmentId)}/documents`),
+
+  // The PDF travels as the raw request body, not inside a form, so the
+  // backend can stop an oversized upload part-way. The browser announces the
+  // file's size up front, which lets it refuse one before any byte is sent.
+  uploadDocument: (environmentId: string, file: File) =>
+    request<Document>(
+      `${environmentPath(environmentId)}/documents?filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "POST",
+        body: file,
+        headers: { "Content-Type": "application/pdf" },
+      },
+    ),
+
+  getPages: (documentId: string) =>
+    request<DocumentPage[]>(`${documentPath(documentId)}/pages`),
+
+  reprocessDocument: (documentId: string) =>
+    request<Document>(`${documentPath(documentId)}/reprocess`, {
+      method: "POST",
+    }),
+
+  deleteDocument: (documentId: string) =>
+    request<void>(documentPath(documentId), { method: "DELETE" }),
 };

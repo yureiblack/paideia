@@ -15,6 +15,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import storage
 from app.models import Environment
 from app.schemas import EnvironmentCreate, EnvironmentUpdate
 
@@ -57,6 +58,13 @@ def update_environment(
 
 
 def delete_environment(session: Session, environment: Environment) -> None:
-    """Remove an environment for good."""
+    """Remove an environment for good, with its documents, pages and files.
+
+    The database deletes the documents and pages itself, through the foreign
+    keys' ON DELETE CASCADE. The files on disk go only after that commit has
+    succeeded, so a failed delete never leaves documents whose files are gone.
+    """
+    environment_id = environment.id
     session.delete(environment)
     session.commit()
+    storage.delete_environment_files(environment_id)

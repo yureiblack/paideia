@@ -26,3 +26,6 @@ node_modules/
 ROADMAP.md
 # Local working notes
 context/
+
+# Uploaded PDFs and anything else the app stores locally. Never committed.
+data/

@@ -1,10 +1,8 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { Materials } from "@/components/materials";
 
-export default function MaterialsPage() {
-  return (
-    <ComingSoon
-      title="Materials"
-      description="Upload PDFs into this environment. Arrives in Phase 03."
-    />
-  );
+export default async function MaterialsPage({
+  params,
+}: PageProps<"/environments/[id]/materials">) {
+  const { id } = await params;
+  return <Materials environmentId={id} />;
 }

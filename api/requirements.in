@@ -1,0 +1,45 @@
+# The backend's direct dependencies: the packages this project chose itself.
+#
+# Purpose: this is the file you edit. pip-compile turns it into
+# requirements.txt, which pins every package an install pulls in, the
+# dependencies of these dependencies included, so a laptop, a new contributor
+# and CI all install exactly the same versions.
+#
+# To add or upgrade a package: change its line here, then from api/ run
+#   pip-compile --strip-extras --unsafe-package pip requirements.in
+#   pip install -r requirements.txt
+# Never edit requirements.txt by hand.
+
+# Web framework, and the server process that actually runs it.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+
+# Reads .env into the typed Settings object in app/config.py.
+pydantic-settings==2.15.0
+
+# Database access. psycopg is the driver that speaks Postgres' wire protocol;
+# the [binary] extra ships a prebuilt version so nothing has to compile here.
+sqlalchemy==2.0.52
+psycopg[binary]==3.3.5
+# SQLAlchemy needs greenlet on Linux, CI included, but not on Apple Silicon
+# Macs. pip-compile only resolves for the machine it runs on, so a file
+# compiled on a Mac would leave it unpinned for CI. Listing it here pins it
+# everywhere; on a Mac it is installed but unused.
+greenlet==3.5.6
+
+# Database schema migrations. Versioned scripts that change the database
+# structure in order, so every copy of the database ends up the same shape.
+alembic==1.20.0
+
+# Reads uploaded PDFs page by page. Licensed AGPL-3.0, which this public
+# repository satisfies. 1.28.2 rather than 2.x, whose built-in AI layout
+# engine brings eight more packages this phase does not use.
+pymupdf==1.28.2
+
+# Development only, but kept in one file until a deployment needs them split.
+# httpx2 is required by FastAPI's test client, not called by us directly.
+pytest==9.1.1
+httpx2==2.12.0
+ruff==0.16.7
+# Compiles this file into requirements.txt.
+pip-tools==7.6.2

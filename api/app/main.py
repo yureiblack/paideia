@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.db import engine
-from app.routers import environments
+from app.routers import documents, environments
 
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".
@@ -39,6 +39,7 @@ app.add_middleware(
 # Feature endpoints live in app/routers/ and are mounted under /api, which keeps
 # them apart from the health checks and any future non-API routes.
 app.include_router(environments.router, prefix="/api")
+app.include_router(documents.router, prefix="/api")
 
 
 class Health(BaseModel):

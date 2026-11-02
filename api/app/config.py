@@ -17,6 +17,7 @@ everything may import it, it imports nothing of ours.
 
 from pathlib import Path
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # This file is api/app/config.py, so three levels up is the repository root,
@@ -53,6 +54,26 @@ class Settings(BaseSettings):
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
         ]
+
+    # Where uploaded PDFs are stored, under uploads/<environment id>/. Outside
+    # the database on purpose: Postgres holds the extracted text, the disk holds
+    # the original files. A relative path is taken from the repository root, so
+    # the location never depends on which folder the server was started from.
+    data_dir: Path = REPO_ROOT / "data"
+
+    # The largest PDF accepted, in megabytes. Must be at least 1.
+    max_upload_mb: int = Field(default=50, gt=0)
+
+    @field_validator("data_dir")
+    @classmethod
+    def resolve_from_repo_root(cls, path: Path) -> Path:
+        """Anchor a relative DATA_DIR at the repository root."""
+        return path if path.is_absolute() else REPO_ROOT / path
+
+    @property
+    def max_upload_bytes(self) -> int:
+        """max_upload_mb in bytes, the unit uploads are counted in."""
+        return self.max_upload_mb * 1024 * 1024
 
 
 # The single shared instance, built once when this module is first imported.
