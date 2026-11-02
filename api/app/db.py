@@ -17,7 +17,8 @@ turns that configuration into database connectivity. It knows nothing about
 HTTP, routes, or business logic.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from typing import Annotated
 
 from fastapi import Depends
@@ -47,3 +48,20 @@ def get_session() -> Iterator[Session]:
 
 # Shorthand for endpoint signatures: `session: SessionDep`.
 SessionDep = Annotated[Session, Depends(get_session)]
+
+
+# Something that opens a Session for use in a `with` block. SessionLocal is one.
+SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+
+def get_session_factory() -> SessionFactory:
+    """Give work that outlives the request a way to open its own Session.
+
+    A background task cannot borrow the request's Session, which is closed
+    once the response is sent. It receives this factory instead, and tests
+    replace it so the task's work stays inside the rolled-back test database.
+    """
+    return SessionLocal
+
+
+SessionFactoryDep = Annotated[SessionFactory, Depends(get_session_factory)]

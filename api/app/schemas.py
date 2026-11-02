@@ -13,7 +13,7 @@ runs, and answers 422 with a readable list of problems when one does not fit.
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
@@ -86,3 +86,39 @@ class EnvironmentRead(BaseModel):
     description: str | None
     created_at: datetime
     updated_at: datetime
+
+
+DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
+
+
+class DocumentRead(BaseModel):
+    """What the API returns for an uploaded document.
+
+    status is uploaded while waiting to be parsed, processing while being
+    parsed, then ready or failed. error explains a failure. page_count,
+    pages_with_text and repaired are filled in by a successful parse.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    environment_id: uuid.UUID
+    filename: str
+    size_bytes: int
+    sha256: str
+    status: DocumentStatus
+    error: str | None
+    page_count: int | None
+    pages_with_text: int | None
+    repaired: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PageRead(BaseModel):
+    """The extracted text of one page, numbered from 1."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    page_number: int
+    content: str

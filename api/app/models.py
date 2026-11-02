@@ -11,14 +11,26 @@ altered only by the Alembic migrations in migrations/versions/. `alembic check`
 compares the two and fails if they disagree, so a model change that ships
 without its migration is caught.
 
-One flat file until a second model arrives.
+Tables so far: environments, documents, document_pages.
 """
 
 import uuid
 from datetime import datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import DateTime, MetaData, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    MetaData,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+    func,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Predictable names for constraints and indexes, so a later migration can find
@@ -26,7 +38,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # "<table>_pkey", so the existing environments_pkey already conforms.
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    # Every column, so a two-column constraint names both: uq_documents_environment_id_sha256.
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "%(table_name)s_pkey",
@@ -67,3 +80,87 @@ class Environment(Base):
         server_default=func.now(),
         onupdate=func.statement_timestamp(),
     )
+
+
+# The four stages of a document, in order. Stored lowercase as text with a
+# CHECK constraint rather than a native Postgres ENUM, so adding a stage later
+# is an ordinary migration.
+DOCUMENT_STATUSES = ("uploaded", "processing", "ready", "failed")
+
+
+class Document(Base):
+    """One uploaded PDF belonging to an environment.
+
+    The original file lives on disk at
+    <data_dir>/uploads/<environment_id>/<id>.pdf, never in the database.
+    status moves uploaded -> processing -> ready or failed; error says why a
+    document failed. page_count, pages_with_text and repaired are filled in
+    by a successful parse.
+    """
+
+    __tablename__ = "documents"
+    __table_args__ = (
+        # The same PDF twice in one environment is a mistake; the same PDF in
+        # two environments is fine. Enforced here, not only in code, so two
+        # simultaneous uploads cannot both slip through.
+        UniqueConstraint("environment_id", "sha256"),
+        CheckConstraint(
+            "status IN ('uploaded', 'processing', 'ready', 'failed')", name="status"
+        ),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # Deleting an environment deletes its documents in the database itself.
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE")
+    )
+    # The name the file had when it was uploaded. Display only: the file on
+    # disk is named by id, so a hostile name can never become a path.
+    filename: Mapped[str] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    # SHA-256 of the file as 64 lowercase hex characters: its fingerprint.
+    sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(Text, server_default=text("'uploaded'"))
+    error: Mapped[str | None] = mapped_column(Text)
+    page_count: Mapped[int | None]
+    # Pages with any extractable text. 0 of 12 usually means a scanned PDF.
+    pages_with_text: Mapped[int | None]
+    # True when the file was damaged and PyMuPDF had to repair it to read it.
+    repaired: Mapped[bool] = mapped_column(server_default=false())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.statement_timestamp(),
+    )
+
+
+class DocumentPage(Base):
+    """The text of one page of a document, as extracted.
+
+    Pages are derived data: a reprocess deletes and rewrites all of a
+    document's pages in one transaction, so they carry no timestamps of their
+    own. page_number counts from 1, as a reader would.
+    """
+
+    __tablename__ = "document_pages"
+    __table_args__ = (
+        UniqueConstraint("document_id", "page_number"),
+        CheckConstraint("page_number >= 1", name="page_number_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    page_number: Mapped[int]
+    # Named content rather than text, which would shadow SQLAlchemy's text()
+    # in this module and is also the name of a Postgres type.
+    content: Mapped[str] = mapped_column(Text)
