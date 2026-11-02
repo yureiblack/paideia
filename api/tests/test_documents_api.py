@@ -249,12 +249,65 @@ def test_reprocess_during_a_live_parse_is_a_409(
     assert response.status_code == 409
 
 
+# --- chunks -----------------------------------------------------------------
+
+
+LECTURE = pdfs.html_pdf(
+    "<h1>Processes</h1><p>A process is a program in execution.</p>"
+    "<h2>States</h2><p>New, ready, running, waiting and terminated.</p>",
+    "<h2>Scheduling</h2><p>The scheduler picks the next ready process.</p>",
+)
+
+
+def test_chunks_follow_the_headings_in_reading_order(client: TestClient, env: str):
+    document = uploaded(client, env, LECTURE)
+
+    chunks = client.get(f"/api/documents/{document['id']}/chunks").json()
+
+    # Each heading with a paragraph under it opens its own chunk.
+    assert [c["ordinal"] for c in chunks] == [0, 1, 2]
+    assert [c["heading"] for c in chunks] == ["Processes", "States", "Scheduling"]
+    assert chunks[0]["content"] == "Processes\n\nA process is a program in execution."
+    assert (chunks[2]["page_start"], chunks[2]["page_end"]) == (2, 2)
+
+
+def test_chunk_offsets_point_at_their_text_in_the_pages(client: TestClient, env: str):
+    document = uploaded(client, env, LECTURE)
+    pages = {
+        p["page_number"]: p["content"]
+        for p in client.get(f"/api/documents/{document['id']}/pages").json()
+    }
+
+    for chunk in client.get(f"/api/documents/{document['id']}/chunks").json():
+        assert chunk["page_start"] == chunk["page_end"]
+        text = pages[chunk["page_start"]][chunk["char_start"] : chunk["char_end"]]
+        assert text == chunk["content"]
+
+
+def test_reprocessing_the_same_pdf_gives_the_same_chunks(client: TestClient, env: str):
+    # The roadmap's acceptance test: run 1 gives N chunks, run 2 the same
+    # identities, no duplicates.
+    document = uploaded(client, env, LECTURE)
+    first = client.get(f"/api/documents/{document['id']}/chunks").json()
+
+    client.post(f"/api/documents/{document['id']}/reprocess")
+    second = client.get(f"/api/documents/{document['id']}/chunks").json()
+
+    assert [c["id"] for c in second] == [c["id"] for c in first]
+
+
 # --- read and delete --------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("method", "suffix"),
-    [("get", ""), ("get", "/pages"), ("post", "/reprocess"), ("delete", "")],
+    [
+        ("get", ""),
+        ("get", "/pages"),
+        ("get", "/chunks"),
+        ("post", "/reprocess"),
+        ("delete", ""),
+    ],
 )
 def test_an_unknown_document_is_a_404(client: TestClient, method: str, suffix: str):
     response = getattr(client, method)(f"/api/documents/{uuid.uuid4()}{suffix}")
