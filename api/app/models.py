@@ -11,7 +11,7 @@ altered only by the Alembic migrations in migrations/versions/. `alembic check`
 compares the two and fails if they disagree, so a model change that ships
 without its migration is caught.
 
-Tables so far: environments, documents, document_pages.
+Tables so far: environments, documents, document_pages, document_chunks.
 """
 
 import uuid
@@ -21,8 +21,10 @@ from typing import Any, ClassVar
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
+    Index,
     MetaData,
     String,
     Text,
@@ -31,6 +33,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Predictable names for constraints and indexes, so a later migration can find
@@ -164,3 +167,58 @@ class DocumentPage(Base):
     # Named content rather than text, which would shadow SQLAlchemy's text()
     # in this module and is also the name of a Postgres type.
     content: Mapped[str] = mapped_column(Text)
+
+
+# What full-text search matches against. The English dictionary reduces words
+# to their stems, so "processes" matches "process". The heading is weighted A
+# and the body B, so a match in a chunk's heading ranks above one in its text.
+SEARCH_VECTOR = (
+    "setweight(to_tsvector('english', coalesce(heading, '')), 'A') || "
+    "setweight(to_tsvector('english', content), 'B')"
+)
+
+
+class DocumentChunk(Base):
+    """A passage of a document, the unit of search and later of citation.
+
+    Made by app/chunking.py. Its id is computed there from the document, the
+    content and its occurrence, never by the database, so the same text always
+    gets the same id and a reprocess never duplicates chunks. The position
+    columns locate its exact text in the stored pages.
+    """
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        CheckConstraint("ordinal >= 0", name="ordinal_not_negative"),
+        CheckConstraint(
+            "page_start >= 1 AND page_end >= page_start", name="page_range"
+        ),
+        CheckConstraint(
+            "char_start >= 0 AND char_end >= 0", name="offsets_not_negative"
+        ),
+        # GIN is the index type built for full-text search.
+        Index(
+            "ix_document_chunks_search_vector", "search_vector", postgresql_using="gin"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int]
+    page_start: Mapped[int]
+    char_start: Mapped[int]
+    page_end: Mapped[int]
+    char_end: Mapped[int]
+    heading: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    # Computed and stored by Postgres itself from heading and content, so it
+    # can never drift from the text. Deferred: loaded only when asked for.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR, Computed(SEARCH_VECTOR, persisted=True), deferred=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

@@ -12,10 +12,11 @@ centre of the product.
 ## Status
 
 Learning environments and their study material work end to end. You can create
-environments, upload PDFs into each one, watch every PDF being read page by
-page, and read the extracted text with its page numbers. Duplicates are caught,
-damaged and scanned files are handled, and a failed file can be retried.
-Chunking and search come next, followed by the learning features.
+environments, upload PDFs into each one, watch every PDF being read, and read
+its text page by page. Each document is then cut into chunks along its
+paragraphs and headings, ready for search: the same PDF always produces the
+same chunks, and keyword search with word-form matching runs inside
+Postgres. Semantic search on top of the chunks comes next.
 
 ## Stack
 
@@ -95,7 +96,8 @@ by default, since it assumes the API is at http://localhost:8000.
 | POST | `/api/environments/{id}/documents?filename=...` | Upload a PDF as the raw request body. Returns 201; reading happens in the background. |
 | GET | `/api/environments/{id}/documents` | The environment's documents, newest first, with their status. |
 | GET | `/api/documents/{id}` | One document: status is `uploaded`, `processing`, `ready` or `failed`. |
-| GET | `/api/documents/{id}/pages` | The extracted text, page by page, numbered from 1. |
+| GET | `/api/documents/{id}/pages` | The extracted text, page by page, numbered from 1. Paragraphs are separated by a blank line. |
+| GET | `/api/documents/{id}/chunks` | The passages the document was cut into, in reading order, each with its heading and exact position in the pages. |
 | POST | `/api/documents/{id}/reprocess` | Read a document again, for example after a failure. Returns 202. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 
@@ -105,6 +107,10 @@ if it is larger than the limit (50 MB by default), and 415 if it is not a PDF.
 
 Uploaded files are stored under `data/uploads/`, one folder per environment,
 outside the database and outside git.
+
+Documents read by an earlier version keep their old text format and have no
+chunks. `POST /api/documents/{id}/reprocess` reads one again with the current
+version.
 
 ## Development
 
@@ -160,7 +166,8 @@ api/                    FastAPI backend
   app/                  application code
     models.py           database tables, as Python classes
     schemas.py          request and response shapes
-    parsing.py          PDF to page-numbered text
+    parsing.py          PDF to page-numbered paragraphs and headings
+    chunking.py         page text to deterministic chunks
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints

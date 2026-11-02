@@ -10,7 +10,7 @@ A document moves through four statuses:
 
     uploaded     stored and waiting for a background task to parse it
     processing   a task is parsing it now
-    ready        parsed; its pages are stored
+    ready        parsed; its pages and chunks are stored
     failed       could not be parsed; error says why
 
 Only a document in uploaded can be claimed for parsing. Reprocessing puts a
@@ -22,13 +22,14 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, literal_column, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import storage
+from app.chunking import Chunk, chunk_document
 from app.db import SessionFactory
-from app.models import Document, DocumentPage, Environment
+from app.models import Document, DocumentChunk, DocumentPage, Environment
 from app.parsing import ParsedDocument, ParseError, Parser
 
 logger = logging.getLogger(__name__)
@@ -166,17 +167,20 @@ def process_document(
         path = storage.document_path(document.environment_id, document.id)
 
         parsed: ParsedDocument | None = None
+        chunks: list[Chunk] = []
         error: str | None = None
         try:
             parsed = parser.parse(path)
+            chunks = chunk_document(document_id, parsed)
         except ParseError as exc:
-            error = str(exc)
+            parsed, error = None, str(exc)
         except Exception:
             logger.exception("Unexpected error while parsing document %s", document_id)
+            parsed = None
             error = "An unexpected error occurred while reading the PDF."
 
         try:
-            _store_result(session, document_id, parsed, error)
+            _store_result(session, document_id, parsed, chunks, error)
         except Exception:
             # Storing the result failed, so nothing of it was kept. Record the
             # failure in a fresh transaction rather than leaving the document
@@ -187,6 +191,7 @@ def process_document(
                 session,
                 document_id,
                 None,
+                [],
                 "The PDF was read, but its text could not be stored.",
             )
 
@@ -195,9 +200,10 @@ def _store_result(
     session: Session,
     document_id: uuid.UUID,
     parsed: ParsedDocument | None,
+    chunks: list[Chunk],
     error: str | None,
 ) -> None:
-    """Write a parse's outcome: ready with its pages, or failed with a reason."""
+    """Write a parse's outcome: ready with its pages and chunks, or failed."""
     document = _lock(session, document_id)
     if document is None:  # deleted while it was being parsed
         session.rollback()
@@ -206,6 +212,7 @@ def _store_result(
     # A document's pages are replaced as a whole, inside this transaction:
     # readers see the old set or the new one, never a mixture.
     session.execute(delete(DocumentPage).where(DocumentPage.document_id == document_id))
+    _sync_chunks(session, document_id, chunks)
     if parsed is None:
         document.status = "failed"
         document.error = error
@@ -225,6 +232,95 @@ def _store_result(
         document.pages_with_text = parsed.pages_with_text
         document.repaired = parsed.repaired
     session.commit()
+
+
+# The chunk fields that may change while its content, and so its id, stays the
+# same: text added or removed earlier in the document moves it.
+_CHUNK_POSITION = (
+    "ordinal",
+    "page_start",
+    "char_start",
+    "page_end",
+    "char_end",
+    "heading",
+)
+
+
+def _sync_chunks(session: Session, document_id: uuid.UUID, chunks: list[Chunk]) -> None:
+    """Make the stored chunks match the given ones, touching only what changed.
+
+    A chunk's id is derived from its content, so a chunk produced again keeps
+    its row: anything stored on it later, such as an embedding, survives a
+    reprocess. Only its position is updated if it moved. Chunks no longer
+    produced are deleted and new ones inserted. Passing no chunks deletes them
+    all, as for a failed parse.
+    """
+    query = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+    stored = {row.id: row for row in session.scalars(query)}
+    wanted = {chunk.id for chunk in chunks}
+
+    for chunk_id, row in stored.items():
+        if chunk_id not in wanted:
+            session.delete(row)
+    for chunk in chunks:
+        row = stored.get(chunk.id)
+        if row is None:
+            session.add(
+                DocumentChunk(
+                    id=chunk.id,
+                    document_id=document_id,
+                    content=chunk.content,
+                    content_hash=chunk.content_hash,
+                    **{field: getattr(chunk, field) for field in _CHUNK_POSITION},
+                )
+            )
+            continue
+        for field in _CHUNK_POSITION:
+            if getattr(row, field) != getattr(chunk, field):
+                setattr(row, field, getattr(chunk, field))
+
+
+def get_chunks(session: Session, document_id: uuid.UUID) -> list[DocumentChunk]:
+    """A document's chunks in reading order. Empty until a parse succeeds."""
+    query = (
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == document_id)
+        .order_by(DocumentChunk.ordinal)
+    )
+    return list(session.scalars(query))
+
+
+# The text-search configuration chunks are indexed with. Must match the one in
+# models.SEARCH_VECTOR, or queries would be stemmed differently from the text.
+_SEARCH_CONFIG = literal_column("'english'::regconfig")
+
+
+def search_chunks(
+    session: Session, environment_id: uuid.UUID, query: str, limit: int = 10
+) -> list[tuple[DocumentChunk, float]]:
+    """Full-text search over one environment's chunks, best match first.
+
+    websearch_to_tsquery accepts what people type: plain words, "quoted
+    phrases", OR, and -excluded words. ts_rank_cd scores by how many query
+    terms appear and how close together; a heading counts for more than body
+    text. Ties are broken by id so results are stable. A query of only stop
+    words, such as "the", matches nothing.
+    """
+    if not query.strip():
+        return []
+    ts_query = func.websearch_to_tsquery(_SEARCH_CONFIG, query)
+    rank = func.ts_rank_cd(DocumentChunk.search_vector, ts_query)
+    statement = (
+        select(DocumentChunk, rank)
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(
+            Document.environment_id == environment_id,
+            DocumentChunk.search_vector.bool_op("@@")(ts_query),
+        )
+        .order_by(rank.desc(), DocumentChunk.id)
+        .limit(limit)
+    )
+    return [(chunk, score) for chunk, score in session.execute(statement)]
 
 
 def request_reprocess(session: Session, document: Document) -> Document:
