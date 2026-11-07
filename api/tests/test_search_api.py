@@ -2,8 +2,8 @@
 
 Purpose: prove the HTTP contract the Search tab relies on: the result shape,
 ordering, top_k, environment isolation, input validation, a clear 503 when
-the model is unavailable, and the roadmap's acceptance query end to end with
-the real model.
+a model is unavailable, debug mode's view of every stage, and the roadmap's
+acceptance query end to end with the real models.
 """
 
 import uuid
@@ -11,11 +11,13 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.embedding import default_embedder
 from app.main import app
-from app.routers.search import get_embedder
+from app.reranking import default_reranker
+from app.routers.search import get_embedder, get_reranker
 from tests import pdfs
-from tests.fakes import BrokenEmbedder
+from tests.fakes import BrokenEmbedder, BrokenReranker
 
 
 def environment(client: TestClient, name: str = "Operating Systems") -> str:
@@ -33,10 +35,18 @@ def upload(client: TestClient, env: str, data: bytes) -> dict:
     return response.json()
 
 
-def search(client: TestClient, env: str, query: str, top_k: int | None = None):
+def search(
+    client: TestClient,
+    env: str,
+    query: str,
+    top_k: int | None = None,
+    debug: bool | None = None,
+):
     body = {"environment_id": env, "query": query}
     if top_k is not None:
         body["top_k"] = top_k
+    if debug is not None:
+        body["debug"] = debug
     return client.post("/api/search", json=body)
 
 
@@ -89,7 +99,7 @@ def test_another_environment_is_never_searched(client: TestClient):
     mine, theirs = environment(client, "Mine"), environment(client, "Theirs")
     upload(client, theirs, LECTURE)
 
-    assert search(client, mine, "deadlock").json() == {"results": []}
+    assert search(client, mine, "deadlock").json() == {"results": [], "debug": None}
 
 
 @pytest.mark.parametrize(
@@ -104,6 +114,7 @@ def test_another_environment_is_never_searched(client: TestClient):
         pytest.param({"query": "x" * 501}, id="query too long"),
         pytest.param({"query": "x", "top_k": 0}, id="top_k zero"),
         pytest.param({"query": "x", "top_k": 51}, id="top_k too large"),
+        pytest.param({"query": "x", "debug": "maybe"}, id="debug not a boolean"),
         pytest.param({"query": "x", "mode": "fuzzy"}, id="unknown field"),
     ],
 )
@@ -125,20 +136,88 @@ def test_an_unknown_environment_is_a_404(client: TestClient):
     assert response.json() == {"detail": "Environment not found"}
 
 
-def test_an_unavailable_model_is_a_503_with_the_reason(client: TestClient):
+@pytest.mark.parametrize(
+    ("dependency", "broken"),
+    [
+        pytest.param(get_embedder, BrokenEmbedder, id="embedding model"),
+        pytest.param(get_reranker, BrokenReranker, id="reranking model"),
+    ],
+)
+def test_an_unavailable_model_is_a_503_with_the_reason(
+    client: TestClient, dependency, broken
+):
     env = environment(client)
-    app.dependency_overrides[get_embedder] = BrokenEmbedder
+    upload(client, env, LECTURE)
+    app.dependency_overrides[dependency] = broken
 
-    response = search(client, env, "anything")
+    response = search(client, env, "deadlock")
 
     assert response.status_code == 503
     assert "No internet connection" in response.json()["detail"]
 
 
+def test_debug_shows_every_candidate_at_every_stage(client: TestClient):
+    env = environment(client)
+    upload(client, env, LECTURE)
+
+    body = search(client, env, "paging frames", top_k=2, debug=True).json()
+
+    debug = body["debug"]
+    assert {k: v for k, v in debug.items() if k != "candidates"} == {
+        "top_k_lexical": settings.retrieval_top_k_lexical,
+        "top_k_dense": settings.retrieval_top_k_dense,
+        "candidate_pool": settings.retrieval_candidate_pool,
+        "final_k": 2,
+    }
+    candidates = debug["candidates"]
+    assert set(candidates[0]) == {
+        "chunk_id",
+        "document_id",
+        "filename",
+        "page_start",
+        "page_end",
+        "heading",
+        "lexical_rank",
+        "lexical_score",
+        "semantic_rank",
+        "semantic_score",
+        "fusion_score",
+        "rerank_score",
+        "final_rank",
+    }
+    # In merged order, and the results are the candidates with a final rank.
+    fusion = [c["fusion_score"] for c in candidates]
+    assert fusion == sorted(fusion, reverse=True)
+    finalists = sorted(
+        (c for c in candidates if c["final_rank"]), key=lambda c: c["final_rank"]
+    )
+    assert [c["chunk_id"] for c in finalists] == [
+        r["chunk_id"] for r in body["results"]
+    ]
+    assert [round(c["rerank_score"], 4) for c in finalists] == [
+        r["score"] for r in body["results"]
+    ]
+    paging = next(c for c in candidates if c["heading"] == "Paging")
+    assert paging["lexical_rank"] == 1 and paging["semantic_rank"] == 1
+    assert paging["final_rank"] == 1
+
+
+def test_without_debug_the_response_is_just_the_results(client: TestClient):
+    env = environment(client)
+    upload(client, env, LECTURE)
+
+    body = search(client, env, "paging").json()
+
+    assert body["debug"] is None
+    assert len(body["results"]) == 3  # fewer chunks than the default top_k
+
+
 def test_the_roadmaps_acceptance_query_with_the_real_model(client: TestClient):
     # "Find material related to process scheduling", answered without an exact
-    # keyword match: no section below uses "process" or "scheduling".
+    # keyword match: no section below uses "process" or "scheduling". The
+    # whole pipeline is real: embedding model and reranker.
     app.dependency_overrides[get_embedder] = default_embedder
+    app.dependency_overrides[get_reranker] = default_reranker
     env = environment(client)
     lecture = pdfs.html_pdf(
         "<h2>CPU time sharing</h2><p>The CPU decides which ready task runs next. Round"

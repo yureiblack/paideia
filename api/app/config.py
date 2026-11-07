@@ -70,6 +70,20 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimensions: int = Field(default=384, gt=0)
 
+    # The local cross-encoder that reorders search candidates, reading the
+    # query and each passage together. Decision record 06 explains the choice.
+    rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+
+    # The sizes of each stage of a search. Keyword search and semantic search
+    # each contribute their best top_k_lexical and top_k_dense chunks; the two
+    # lists are merged, and the best candidate_pool of the merged list are
+    # reordered by the reranker. final_k is how many results a search returns
+    # when the request does not say, at most 50.
+    retrieval_top_k_lexical: int = Field(default=30, gt=0)
+    retrieval_top_k_dense: int = Field(default=30, gt=0)
+    retrieval_candidate_pool: int = Field(default=30, gt=0)
+    retrieval_final_k: int = Field(default=10, gt=0, le=50)
+
     # Where downloaded models are cached, so each is fetched from the internet
     # only once. Separate from data_dir so the tests, which give every test its
     # own empty data folder, still share one downloaded copy.

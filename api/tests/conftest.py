@@ -34,8 +34,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_session, get_session_factory
 from app.main import app
-from app.routers.search import get_embedder
-from tests.fakes import FakeEmbedder
+from app.routers.search import get_embedder, get_reranker
+from tests.fakes import FakeEmbedder, FakeReranker
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -147,7 +147,15 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
-def client(connection: Connection, session_factory, embedder) -> Iterator[TestClient]:
+def reranker() -> FakeReranker:
+    """The reranker the client's searches use: the fast, offline fake."""
+    return FakeReranker()
+
+
+@pytest.fixture
+def client(
+    connection: Connection, session_factory, embedder, reranker
+) -> Iterator[TestClient]:
     """An HTTP client whose requests all run inside the test transaction.
 
     Every request gets its own Session, as in production, so one request
@@ -162,6 +170,7 @@ def client(connection: Connection, session_factory, embedder) -> Iterator[TestCl
     app.dependency_overrides[get_session] = request_session
     app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.dependency_overrides[get_embedder] = lambda: embedder
+    app.dependency_overrides[get_reranker] = lambda: reranker
     try:
         yield TestClient(app)
     finally:

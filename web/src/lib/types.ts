@@ -53,8 +53,8 @@ export type DocumentPage = {
 export const MAX_UPLOAD_MB = 50;
 
 // One passage that matched a search, and where it came from. score is the
-// cosine similarity between the query and the passage: higher means closer in
-// meaning. It ranks results; it is not a percentage.
+// reranker's judgement of how well the passage answers the query, from 0 to
+// 1: higher is better. It orders results; it is not a probability.
 export type SearchResult = {
   chunk_id: string;
   document_id: string;
@@ -66,8 +66,39 @@ export type SearchResult = {
   score: number;
 };
 
+// One chunk either search found, with its place at every stage of the search.
+// Ranks count from 1; null means that stage never saw the chunk.
+// lexical_score: Postgres's text-search rank. semantic_score: cosine
+// similarity. fusion_score: the Reciprocal Rank Fusion sum. rerank_score: the
+// reranker's 0 to 1. final_rank: its place in the results, if it made them.
+export type SearchCandidate = {
+  chunk_id: string;
+  document_id: string;
+  filename: string;
+  page_start: number;
+  page_end: number;
+  heading: string | null;
+  lexical_rank: number | null;
+  lexical_score: number | null;
+  semantic_rank: number | null;
+  semantic_score: number | null;
+  fusion_score: number;
+  rerank_score: number | null;
+  final_rank: number | null;
+};
+
+// How a search was ranked, sent only when the request asks for it.
+export type SearchDebug = {
+  top_k_lexical: number;
+  top_k_dense: number;
+  candidate_pool: number;
+  final_k: number;
+  candidates: SearchCandidate[];
+};
+
 export type SearchResponse = {
   results: SearchResult[];
+  debug: SearchDebug | null;
 };
 
 // The backend's limit on a search query's length.

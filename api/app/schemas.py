@@ -17,6 +17,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from app.config import settings
+
 NAME_MAX_LENGTH = 100
 DESCRIPTION_MAX_LENGTH = 2000
 
@@ -141,7 +143,11 @@ class ChunkRead(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Body of POST /api/search."""
+    """Body of POST /api/search.
+
+    top_k is how many results to return; without it, the RETRIEVAL_FINAL_K
+    setting. debug adds every candidate and its scores at each stage.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -149,14 +155,16 @@ class SearchRequest(BaseModel):
     query: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
     ]
-    top_k: int = Field(default=10, ge=1, le=50)
+    top_k: int = Field(default=settings.retrieval_final_k, ge=1, le=50)
+    debug: bool = False
 
 
 class SearchResult(BaseModel):
     """One passage that matched, with where it came from.
 
     The roadmap's fields, plus filename and heading, which any display of the
-    result needs. score is cosine similarity: higher means closer in meaning.
+    result needs. score is the reranker's: between 0 and 1, higher means a
+    better answer to the query. It orders results; it is not a probability.
     """
 
     chunk_id: uuid.UUID
@@ -169,5 +177,43 @@ class SearchResult(BaseModel):
     score: float
 
 
+class SearchCandidate(BaseModel):
+    """One chunk either search found, with its place at every stage.
+
+    Ranks count from 1. None means that stage never saw the chunk: keyword
+    search did not match it, semantic search did not reach it, or it fell
+    outside the reranked pool. lexical_score is Postgres's ts_rank,
+    semantic_score cosine similarity, fusion_score the Reciprocal Rank Fusion
+    sum, rerank_score the reranker's 0 to 1. final_rank is its place in the
+    results, if it made them.
+    """
+
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    filename: str
+    page_start: int
+    page_end: int
+    heading: str | None
+    lexical_rank: int | None
+    lexical_score: float | None
+    semantic_rank: int | None
+    semantic_score: float | None
+    fusion_score: float
+    rerank_score: float | None
+    final_rank: int | None
+
+
+class SearchDebug(BaseModel):
+    """How a search was ranked: the sizes it used and every candidate, in the
+    merged order the reranker received them."""
+
+    top_k_lexical: int
+    top_k_dense: int
+    candidate_pool: int
+    final_k: int
+    candidates: list[SearchCandidate]
+
+
 class SearchResponse(BaseModel):
     results: list[SearchResult]
+    debug: SearchDebug | None = None  # only when the request asked for it

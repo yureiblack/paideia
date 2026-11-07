@@ -231,7 +231,7 @@ def search(
     session: Session, env: Environment, query: str, limit: int = 10
 ) -> list[str]:
     results = search_service.keyword_search(session, env.id, query, limit)
-    return [chunk.heading or chunk.content for chunk, _ in results]
+    return [hit.chunk.heading or hit.chunk.content for hit in results]
 
 
 def test_search_matches_word_forms(session: Session, library):
@@ -254,8 +254,9 @@ def test_a_match_in_a_heading_ranks_first(session: Session, library):
 
     results = search_service.keyword_search(session, os_env.id, "process")
 
-    assert results[0][0].heading == "Process scheduling"
-    assert results[0][1] > results[1][1]
+    assert results[0].chunk.heading == "Process scheduling"
+    assert results[0].score > results[1].score
+    assert results[0].filename == "lecture.pdf"
 
 
 @pytest.mark.parametrize(
@@ -277,6 +278,27 @@ def test_search_understands_what_people_type(
     os_env, _ = library
 
     assert sorted(search(session, os_env, query)) == sorted(expected)
+
+
+def test_any_word_of_a_question_can_match(session: Session, library):
+    # Requiring every word would find nothing here: no chunk mentions
+    # "decides" or "next". Without search syntax, any word may match.
+    os_env, _ = library
+
+    assert search(session, os_env, "what decides which task runs next") == [
+        "Process scheduling"
+    ]
+
+
+def test_more_matching_words_rank_higher(session: Session, library):
+    # All three words sit in body text, two in Memory's and one in
+    # scheduling's, so no heading weight tips the balance.
+    os_env, _ = library
+
+    assert search(session, os_env, "virtual frames quantum") == [
+        "Memory",
+        "Process scheduling",
+    ]
 
 
 def test_search_respects_the_limit(session: Session, library):
