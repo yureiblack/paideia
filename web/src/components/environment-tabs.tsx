@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { label: "Overview", segment: "" },
   { label: "Materials", segment: "materials" },
+  { label: "Search", segment: "search" },
   { label: "Knowledge map", segment: "knowledge-map" },
   { label: "Roadmap", segment: "roadmap" },
   { label: "Summary", segment: "summary" },

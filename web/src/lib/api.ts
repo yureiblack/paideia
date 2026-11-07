@@ -8,6 +8,7 @@ import type {
   Environment,
   EnvironmentInput,
   EnvironmentPatch,
+  SearchResponse,
 } from "@/lib/types";
 
 // A failed request, carrying the HTTP status so callers can tell "not found"
@@ -116,4 +117,10 @@ export const api = {
 
   deleteDocument: (documentId: string) =>
     request<void>(documentPath(documentId), { method: "DELETE" }),
+
+  search: (environmentId: string, query: string, topK?: number) =>
+    request<SearchResponse>(
+      "/api/search",
+      withJson("POST", { environment_id: environmentId, query, top_k: topK }),
+    ),
 };
