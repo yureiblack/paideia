@@ -10,7 +10,7 @@ A document moves through four statuses:
 
     uploaded     stored and waiting for a background task to parse it
     processing   a task is parsing it now
-    ready        parsed; its pages and chunks are stored
+    ready        parsed; its pages, chunks and chunk embeddings are stored
     failed       could not be parsed; error says why
 
 Only a document in uploaded can be claimed for parsing. Reprocessing puts a
@@ -22,13 +22,14 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, literal_column, select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import storage
 from app.chunking import Chunk, chunk_document
 from app.db import SessionFactory
+from app.embedding import Embedder, EmbeddingError
 from app.models import Document, DocumentChunk, DocumentPage, Environment
 from app.parsing import ParsedDocument, ParseError, Parser
 
@@ -143,18 +144,22 @@ def _lock(session: Session, document_id: uuid.UUID) -> Document | None:
 
 
 def process_document(
-    session_factory: SessionFactory, document_id: uuid.UUID, parser: Parser
+    session_factory: SessionFactory,
+    document_id: uuid.UUID,
+    parser: Parser,
+    embedder: Embedder,
 ) -> None:
-    """Parse a document's file and store its pages. Runs as a background task.
+    """Parse, chunk and embed a document, and store it all. A background task.
 
     It first claims the document by moving it from uploaded to processing; a
     document in any other status was claimed already, or deleted, and is left
-    alone. The parse itself happens without holding the lock, so the document
-    is locked and read again before the result is written: it may have been
-    deleted in the meantime.
+    alone. Parsing, chunking and embedding happen without holding the lock, so
+    the document is locked and read again before the result is written: it
+    may have been deleted in the meantime.
 
     Whatever goes wrong, the document ends ready or failed, never stuck in
-    processing: a failed parse and a failed write both mark it failed.
+    processing: a failed parse, a failed embedding and a failed write all mark
+    it failed with the reason.
     """
     with session_factory() as session:
         document = _lock(session, document_id)
@@ -168,6 +173,7 @@ def process_document(
 
         parsed: ParsedDocument | None = None
         chunks: list[Chunk] = []
+        embeddings: dict[uuid.UUID, list[float]] = {}
         error: str | None = None
         try:
             parsed = parser.parse(path)
@@ -179,8 +185,30 @@ def process_document(
             parsed = None
             error = "An unexpected error occurred while reading the PDF."
 
+        if parsed is not None:
+            try:
+                embeddings = _embed_where_needed(session, document_id, chunks, embedder)
+            except EmbeddingError as exc:
+                parsed, chunks, error = None, [], str(exc)
+            except Exception:
+                logger.exception(
+                    "Unexpected error while embedding document %s", document_id
+                )
+                parsed, chunks = None, []
+                error = (
+                    "An unexpected error occurred while preparing the text for search."
+                )
+
         try:
-            _store_result(session, document_id, parsed, chunks, error)
+            _store_result(
+                session,
+                document_id,
+                parsed,
+                chunks,
+                embeddings,
+                embedder.model_name,
+                error,
+            )
         except Exception:
             # Storing the result failed, so nothing of it was kept. Record the
             # failure in a fresh transaction rather than leaving the document
@@ -192,8 +220,33 @@ def process_document(
                 document_id,
                 None,
                 [],
+                {},
+                embedder.model_name,
                 "The PDF was read, but its text could not be stored.",
             )
+
+
+def _embed_where_needed(
+    session: Session, document_id: uuid.UUID, chunks: list[Chunk], embedder: Embedder
+) -> dict[uuid.UUID, list[float]]:
+    """Embed only the chunks that need it, and return the new vectors by id.
+
+    A chunk needs embedding when it is new, when its stored embedding is
+    empty, or when a different model made it. Chunk rows survive a reprocess,
+    so reprocessing an unchanged document embeds nothing at all.
+    """
+    query = select(
+        DocumentChunk.id,
+        DocumentChunk.embedding_model,
+        DocumentChunk.embedding.is_(None),
+    ).where(DocumentChunk.document_id == document_id)
+    current = {
+        chunk_id: model if not empty else None
+        for chunk_id, model, empty in session.execute(query)
+    }
+    needed = [chunk for chunk in chunks if current.get(chunk.id) != embedder.model_name]
+    vectors = embedder.embed_passages([chunk.content for chunk in needed])
+    return {chunk.id: vector for chunk, vector in zip(needed, vectors, strict=True)}
 
 
 def _store_result(
@@ -201,9 +254,11 @@ def _store_result(
     document_id: uuid.UUID,
     parsed: ParsedDocument | None,
     chunks: list[Chunk],
+    embeddings: dict[uuid.UUID, list[float]],
+    model_name: str,
     error: str | None,
 ) -> None:
-    """Write a parse's outcome: ready with its pages and chunks, or failed."""
+    """Write the outcome: ready with pages, chunks and embeddings, or failed."""
     document = _lock(session, document_id)
     if document is None:  # deleted while it was being parsed
         session.rollback()
@@ -212,7 +267,7 @@ def _store_result(
     # A document's pages are replaced as a whole, inside this transaction:
     # readers see the old set or the new one, never a mixture.
     session.execute(delete(DocumentPage).where(DocumentPage.document_id == document_id))
-    _sync_chunks(session, document_id, chunks)
+    _sync_chunks(session, document_id, chunks, embeddings, model_name)
     if parsed is None:
         document.status = "failed"
         document.error = error
@@ -246,14 +301,20 @@ _CHUNK_POSITION = (
 )
 
 
-def _sync_chunks(session: Session, document_id: uuid.UUID, chunks: list[Chunk]) -> None:
+def _sync_chunks(
+    session: Session,
+    document_id: uuid.UUID,
+    chunks: list[Chunk],
+    embeddings: dict[uuid.UUID, list[float]],
+    model_name: str,
+) -> None:
     """Make the stored chunks match the given ones, touching only what changed.
 
     A chunk's id is derived from its content, so a chunk produced again keeps
-    its row: anything stored on it later, such as an embedding, survives a
-    reprocess. Only its position is updated if it moved. Chunks no longer
-    produced are deleted and new ones inserted. Passing no chunks deletes them
-    all, as for a failed parse.
+    its row and its embedding survives a reprocess. Only its position is
+    updated if it moved, and its embedding only if a new one was computed.
+    Chunks no longer produced are deleted and new ones inserted. Passing no
+    chunks deletes them all, as for a failed parse.
     """
     query = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
     stored = {row.id: row for row in session.scalars(query)}
@@ -265,19 +326,21 @@ def _sync_chunks(session: Session, document_id: uuid.UUID, chunks: list[Chunk]) 
     for chunk in chunks:
         row = stored.get(chunk.id)
         if row is None:
-            session.add(
-                DocumentChunk(
-                    id=chunk.id,
-                    document_id=document_id,
-                    content=chunk.content,
-                    content_hash=chunk.content_hash,
-                    **{field: getattr(chunk, field) for field in _CHUNK_POSITION},
-                )
+            row = DocumentChunk(
+                id=chunk.id,
+                document_id=document_id,
+                content=chunk.content,
+                content_hash=chunk.content_hash,
+                **{field: getattr(chunk, field) for field in _CHUNK_POSITION},
             )
-            continue
-        for field in _CHUNK_POSITION:
-            if getattr(row, field) != getattr(chunk, field):
-                setattr(row, field, getattr(chunk, field))
+            session.add(row)
+        else:
+            for field in _CHUNK_POSITION:
+                if getattr(row, field) != getattr(chunk, field):
+                    setattr(row, field, getattr(chunk, field))
+        if chunk.id in embeddings:
+            row.embedding = embeddings[chunk.id]
+            row.embedding_model = model_name
 
 
 def get_chunks(session: Session, document_id: uuid.UUID) -> list[DocumentChunk]:
@@ -288,39 +351,6 @@ def get_chunks(session: Session, document_id: uuid.UUID) -> list[DocumentChunk]:
         .order_by(DocumentChunk.ordinal)
     )
     return list(session.scalars(query))
-
-
-# The text-search configuration chunks are indexed with. Must match the one in
-# models.SEARCH_VECTOR, or queries would be stemmed differently from the text.
-_SEARCH_CONFIG = literal_column("'english'::regconfig")
-
-
-def search_chunks(
-    session: Session, environment_id: uuid.UUID, query: str, limit: int = 10
-) -> list[tuple[DocumentChunk, float]]:
-    """Full-text search over one environment's chunks, best match first.
-
-    websearch_to_tsquery accepts what people type: plain words, "quoted
-    phrases", OR, and -excluded words. ts_rank_cd scores by how many query
-    terms appear and how close together; a heading counts for more than body
-    text. Ties are broken by id so results are stable. A query of only stop
-    words, such as "the", matches nothing.
-    """
-    if not query.strip():
-        return []
-    ts_query = func.websearch_to_tsquery(_SEARCH_CONFIG, query)
-    rank = func.ts_rank_cd(DocumentChunk.search_vector, ts_query)
-    statement = (
-        select(DocumentChunk, rank)
-        .join(Document, Document.id == DocumentChunk.document_id)
-        .where(
-            Document.environment_id == environment_id,
-            DocumentChunk.search_vector.bool_op("@@")(ts_query),
-        )
-        .order_by(rank.desc(), DocumentChunk.id)
-        .limit(limit)
-    )
-    return [(chunk, score) for chunk, score in session.execute(statement)]
 
 
 def request_reprocess(session: Session, document: Document) -> Document:

@@ -41,6 +41,7 @@ from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
 from app.parsing import Parser, PyMuPDFParser
 from app.routers.environments import EnvironmentDep
+from app.routers.search import EmbedderDep
 from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import documents as service
 
@@ -108,6 +109,7 @@ async def upload_document(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     parser: ParserDep,
+    embedder: EmbedderDep,
     background: BackgroundTasks,
 ) -> Document:
     name = _display_name(filename)
@@ -138,7 +140,9 @@ async def upload_document(
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     # Parsing happens after the response is sent; the client polls the status.
-    background.add_task(service.process_document, session_factory, document.id, parser)
+    background.add_task(
+        service.process_document, session_factory, document.id, parser, embedder
+    )
     return document
 
 
@@ -175,13 +179,16 @@ def reprocess_document(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     parser: ParserDep,
+    embedder: EmbedderDep,
     background: BackgroundTasks,
 ) -> Document:
     try:
         service.request_reprocess(session, document)
     except service.StillProcessing as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    background.add_task(service.process_document, session_factory, document.id, parser)
+    background.add_task(
+        service.process_document, session_factory, document.id, parser, embedder
+    )
     return document
 
 

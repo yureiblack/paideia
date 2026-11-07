@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Any, ClassVar
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -35,6 +36,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.config import settings
 
 # Predictable names for constraints and indexes, so a later migration can find
 # and drop them by name. The primary-key pattern matches Postgres's own default,
@@ -200,6 +203,14 @@ class DocumentChunk(Base):
         Index(
             "ix_document_chunks_search_vector", "search_vector", postgresql_using="gin"
         ),
+        # HNSW is pgvector's graph index for nearest-neighbour search, here by
+        # cosine distance, the measure the BGE models are trained for.
+        Index(
+            "ix_document_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -219,6 +230,14 @@ class DocumentChunk(Base):
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR, Computed(SEARCH_VECTOR, persisted=True), deferred=True
     )
+    # The content's meaning as a vector, from app/embedding.py, and the model
+    # that made it. Empty until computed. An embedding made by a model other
+    # than the configured one counts as missing. Deferred, like search_vector:
+    # 384 numbers per row are loaded only when asked for.
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.embedding_dimensions), deferred=True
+    )
+    embedding_model: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
