@@ -1,9 +1,10 @@
-"""A stand-in Embedder for fast, offline tests.
+"""Stand-ins for the embedding and reranking models, for fast, offline tests.
 
-It turns each word into a fixed position in a 384-number vector, so texts that
-share words get similar vectors and texts that share none get unrelated ones.
-That is crude next to a real model, which also matches meaning, but it is
-deterministic, instant, and needs no download.
+FakeEmbedder turns each word into a fixed position in a 384-number vector, so
+texts that share words get similar vectors and texts that share none get
+unrelated ones. FakeReranker scores a passage by the share of the query's
+words it contains. Both are crude next to the real models, which also match
+meaning, but they are deterministic, instant, and need no download.
 """
 
 import hashlib
@@ -48,3 +49,31 @@ class BrokenEmbedder(FakeEmbedder):
         )
 
     embed_query = embed_passages
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z]+", text.lower()))
+
+
+class FakeReranker:
+    model_name = "fake-word-overlap"
+
+    def __init__(self):
+        self.calls: list[tuple[str, list[str]]] = []  # every (query, passages)
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        self.calls.append((query, list(passages)))
+        wanted = _words(query)
+        return [
+            len(wanted & _words(passage)) / len(wanted) if wanted else 0.0
+            for passage in passages
+        ]
+
+
+class BrokenReranker(FakeReranker):
+    """Fails like a reranking model that could not be downloaded."""
+
+    def score(self, query, passages):
+        from app.reranking import RerankError
+
+        raise RerankError("Could not load the reranking model. No internet connection.")
