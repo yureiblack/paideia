@@ -36,6 +36,14 @@ alembic==1.20.0
 # engine brings eight more packages this phase does not use.
 pymupdf==1.28.2
 
+# Turns text into embeddings with a local open model (BAAI/bge-small-en-v1.5),
+# run through ONNX Runtime. Chosen over Sentence Transformers, which needs
+# PyTorch and, on Linux, about 1.5 GB of GPU libraries; see
+# docs/architecture/05-embeddings.md.
+fastembed==0.9.1
+# Lets SQLAlchemy read and write pgvector's vector column type.
+pgvector==0.5.1
+
 # Development only, but kept in one file until a deployment needs them split.
 # httpx2 is required by FastAPI's test client, not called by us directly.
 pytest==9.1.1
