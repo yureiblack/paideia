@@ -118,9 +118,10 @@ export const api = {
   deleteDocument: (documentId: string) =>
     request<void>(documentPath(documentId), { method: "DELETE" }),
 
-  search: (environmentId: string, query: string, topK?: number) =>
+  // debug asks for every candidate and its score at each stage.
+  search: (environmentId: string, query: string, debug = false) =>
     request<SearchResponse>(
       "/api/search",
-      withJson("POST", { environment_id: environmentId, query, top_k: topK }),
+      withJson("POST", { environment_id: environmentId, query, debug }),
     ),
 };
