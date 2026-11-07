@@ -36,6 +36,14 @@ jobs:
           cache: pip
           cache-dependency-path: api/requirements.txt
       - run: pip install -r requirements.txt
+      # The embedding model the real-model tests load, about 64 MB, kept
+      # between runs instead of downloaded every time. app/config.py names
+      # the model, so any change there fetches it afresh.
+      - name: Cache the embedding model
+        uses: actions/cache@v6
+        with:
+          path: data/models
+          key: embedding-model-${{ hashFiles('api/app/config.py') }}
       - run: ruff check .
       - run: ruff format --check .
       # The same command a deployment runs, through the app's own settings.

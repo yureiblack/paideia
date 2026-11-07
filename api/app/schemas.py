@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 NAME_MAX_LENGTH = 100
 DESCRIPTION_MAX_LENGTH = 2000
@@ -138,3 +138,36 @@ class ChunkRead(BaseModel):
     heading: str | None
     content: str
     content_hash: str
+
+
+class SearchRequest(BaseModel):
+    """Body of POST /api/search."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    environment_id: uuid.UUID
+    query: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+    ]
+    top_k: int = Field(default=10, ge=1, le=50)
+
+
+class SearchResult(BaseModel):
+    """One passage that matched, with where it came from.
+
+    The roadmap's fields, plus filename and heading, which any display of the
+    result needs. score is cosine similarity: higher means closer in meaning.
+    """
+
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    filename: str
+    page_start: int
+    page_end: int
+    heading: str | None
+    text: str
+    score: float
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResult]

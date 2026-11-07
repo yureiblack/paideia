@@ -51,3 +51,24 @@ export type DocumentPage = {
 // The backend's default MAX_UPLOAD_MB. Checked here only to spare a pointless
 // upload; the backend enforces its own setting either way.
 export const MAX_UPLOAD_MB = 50;
+
+// One passage that matched a search, and where it came from. score is the
+// cosine similarity between the query and the passage: higher means closer in
+// meaning. It ranks results; it is not a percentage.
+export type SearchResult = {
+  chunk_id: string;
+  document_id: string;
+  filename: string;
+  page_start: number;
+  page_end: number;
+  heading: string | null;
+  text: string;
+  score: number;
+};
+
+export type SearchResponse = {
+  results: SearchResult[];
+};
+
+// The backend's limit on a search query's length.
+export const SEARCH_QUERY_MAX_LENGTH = 500;

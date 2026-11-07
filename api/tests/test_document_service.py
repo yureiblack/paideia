@@ -22,6 +22,7 @@ from app.schemas import EnvironmentCreate
 from app.services import documents as service
 from app.services import environments as environment_service
 from tests import pdfs
+from tests.fakes import FakeEmbedder
 
 
 def environment(session: Session, name: str = "Operating Systems") -> Environment:
@@ -41,7 +42,9 @@ def upload(
 def process(
     session: Session, session_factory, document: Document, parser=None
 ) -> Document:
-    service.process_document(session_factory, document.id, parser or PyMuPDFParser())
+    service.process_document(
+        session_factory, document.id, parser or PyMuPDFParser(), FakeEmbedder()
+    )
     session.refresh(document)
     return document
 
@@ -205,7 +208,9 @@ def test_a_document_deleted_mid_parse_is_dropped_quietly(
                 service.delete_document(other, other.get(Document, document_id))
             return ParsedDocument(pages=[ParsedPage(1, "x")], repaired=False)
 
-    service.process_document(session_factory, document_id, DeletesWhileParsing())
+    service.process_document(
+        session_factory, document_id, DeletesWhileParsing(), FakeEmbedder()
+    )
 
     session.expire_all()
     assert session.get(Document, document_id) is None

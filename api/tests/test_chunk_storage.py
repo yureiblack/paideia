@@ -23,7 +23,9 @@ from app.parsing import ParseError, PyMuPDFParser
 from app.schemas import EnvironmentCreate
 from app.services import documents as service
 from app.services import environments as environment_service
+from app.services import search as search_service
 from tests import pdfs
+from tests.fakes import FakeEmbedder
 from tests.parsed import H, P, Returns, document, words
 
 OLD = datetime(2000, 1, 1, tzinfo=UTC)
@@ -51,7 +53,7 @@ def run(session: Session, session_factory, document_id: uuid.UUID, parser) -> No
     row = session.get(Document, document_id)
     if row.status != "uploaded":
         service.request_reprocess(session, row)
-    service.process_document(session_factory, document_id, parser)
+    service.process_document(session_factory, document_id, parser, FakeEmbedder())
     session.expire_all()
 
 
@@ -228,7 +230,7 @@ def library(session: Session, session_factory):
 def search(
     session: Session, env: Environment, query: str, limit: int = 10
 ) -> list[str]:
-    results = service.search_chunks(session, env.id, query, limit)
+    results = search_service.keyword_search(session, env.id, query, limit)
     return [chunk.heading or chunk.content for chunk, _ in results]
 
 
@@ -250,7 +252,7 @@ def test_search_stays_inside_one_environment(session: Session, library):
 def test_a_match_in_a_heading_ranks_first(session: Session, library):
     os_env, _ = library
 
-    results = service.search_chunks(session, os_env.id, "process")
+    results = search_service.keyword_search(session, os_env.id, "process")
 
     assert results[0][0].heading == "Process scheduling"
     assert results[0][1] > results[1][1]

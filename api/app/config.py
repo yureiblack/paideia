@@ -64,10 +64,21 @@ class Settings(BaseSettings):
     # The largest PDF accepted, in megabytes. Must be at least 1.
     max_upload_mb: int = Field(default=50, gt=0)
 
-    @field_validator("data_dir")
+    # The local embedding model and the size of the vectors it produces. The
+    # database column is vector(384), so a model of another size needs a
+    # migration as well as these two settings.
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dimensions: int = Field(default=384, gt=0)
+
+    # Where downloaded models are cached, so each is fetched from the internet
+    # only once. Separate from data_dir so the tests, which give every test its
+    # own empty data folder, still share one downloaded copy.
+    model_dir: Path = REPO_ROOT / "data" / "models"
+
+    @field_validator("data_dir", "model_dir")
     @classmethod
     def resolve_from_repo_root(cls, path: Path) -> Path:
-        """Anchor a relative DATA_DIR at the repository root."""
+        """Anchor a relative path at the repository root."""
         return path if path.is_absolute() else REPO_ROOT / path
 
     @property

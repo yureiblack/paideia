@@ -16,7 +16,10 @@ environments, upload PDFs into each one, watch every PDF being read, and read
 its text page by page. Each document is then cut into chunks along its
 paragraphs and headings, ready for search: the same PDF always produces the
 same chunks, and keyword search with word-form matching runs inside
-Postgres. Semantic search on top of the chunks comes next.
+Postgres. Every chunk is also embedded by a local model, so the Search tab
+finds passages by meaning: "material related to process scheduling" finds a
+passage about round robin that shares none of those words. Combining keyword
+and semantic search, and reranking the results, comes next.
 
 ## Stack
 
@@ -25,6 +28,7 @@ Postgres. Semantic search on top of the chunks comes next.
 | Frontend | Next.js 16, TypeScript, Tailwind CSS, TanStack Query |
 | Backend | FastAPI, Pydantic, SQLAlchemy 2, Alembic |
 | PDF reading | PyMuPDF |
+| Embeddings | fastembed (ONNX Runtime) running BAAI/bge-small-en-v1.5, locally |
 | Database | PostgreSQL 16 with pgvector |
 | Jobs | Redis, provisioned but not yet used |
 | Language models | Local, via Ollama, in a later phase |
@@ -67,6 +71,10 @@ Prerequisites: Docker Desktop, Python 3.13, Node 22, pnpm.
    `alembic upgrade head` creates the tables. Run it again whenever you pull a
    change that adds a migration.
 
+   The first document you upload downloads the embedding model, about 64 MB,
+   into `data/models/`, so that moment needs an internet connection. After
+   that everything runs offline.
+
 4. Frontend, in another:
 
    ```sh
@@ -100,17 +108,21 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/documents/{id}/chunks` | The passages the document was cut into, in reading order, each with its heading and exact position in the pages. |
 | POST | `/api/documents/{id}/reprocess` | Read a document again, for example after a failure. Returns 202. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
+| POST | `/api/search` | Search one environment by meaning. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10). Returns the closest passages first, each with its document, pages, heading, text and `score`, the cosine similarity: higher is closer. |
 
 Invalid input gets a 422 listing each problem and the field it belongs to. An
 upload is refused with 409 if the same file is already in that environment, 413
 if it is larger than the limit (50 MB by default), and 415 if it is not a PDF.
+Search returns 404 for an unknown environment, and 503 with the reason if the
+embedding model cannot be loaded.
 
 Uploaded files are stored under `data/uploads/`, one folder per environment,
 outside the database and outside git.
 
-Documents read by an earlier version keep their old text format and have no
-chunks. `POST /api/documents/{id}/reprocess` reads one again with the current
-version.
+Documents read by an earlier version keep their old text format and may have
+no chunks or no embeddings; semantic search leaves out chunks without one.
+`POST /api/documents/{id}/reprocess` reads one again with the current version,
+embedding only the chunks that need it.
 
 ## Development
 
@@ -122,11 +134,15 @@ ruff format .        # format
 pytest               # tests; needs docker compose up
 ```
 
-The tests never touch your development database or your `data/` folder. Each
+The tests never touch your development database or your uploaded files. Each
 run drops and rebuilds a separate `paideia_test` database from the migrations,
 every test is rolled back when it finishes, and every test gets its own
 temporary data folder. Test PDFs are built in code, so the repository holds no
 binary files.
+
+Most tests use a stand-in embedder that needs no model. A few load the real
+one, including the roadmap's "process scheduling" test; they share the model
+in `data/models/`, so the first run downloads it.
 
 Python dependencies are pinned with pip-tools. Edit `api/requirements.in`, never
 `api/requirements.txt`, then from `api/`:
@@ -157,7 +173,8 @@ pnpm build
 
 CI runs all of the above on every pull request, with a real pgvector Postgres
 behind the tests. It also applies the migrations and fails if a model changed
-without a migration to match.
+without a migration to match, and keeps the embedding model cached between
+runs.
 
 ## Layout
 
@@ -168,6 +185,7 @@ api/                    FastAPI backend
     schemas.py          request and response shapes
     parsing.py          PDF to page-numbered paragraphs and headings
     chunking.py         page text to deterministic chunks
+    embedding.py        text to vectors, through a local model
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
@@ -180,7 +198,7 @@ web/                    Next.js frontend
   src/components/       UI pieces
   src/hooks/            data fetching
   src/lib/              API client, types, config
-data/                   uploaded files, created on first upload, never committed
+data/                   uploaded files and the model cache, never committed
 docs/architecture/      decision records
 docker-compose.yml      local Postgres and Redis
 .github/workflows/      CI

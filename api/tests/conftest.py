@@ -34,6 +34,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_session, get_session_factory
 from app.main import app
+from app.routers.search import get_embedder
+from tests.fakes import FakeEmbedder
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -138,7 +140,14 @@ def session_factory(connection: Connection):
 
 
 @pytest.fixture
-def client(connection: Connection, session_factory) -> Iterator[TestClient]:
+def embedder() -> FakeEmbedder:
+    """The embedder the client's requests and background tasks use: the fast,
+    offline fake. Tests that need the real model ask for it explicitly."""
+    return FakeEmbedder()
+
+
+@pytest.fixture
+def client(connection: Connection, session_factory, embedder) -> Iterator[TestClient]:
     """An HTTP client whose requests all run inside the test transaction.
 
     Every request gets its own Session, as in production, so one request
@@ -152,6 +161,7 @@ def client(connection: Connection, session_factory) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_session] = request_session
     app.dependency_overrides[get_session_factory] = lambda: session_factory
+    app.dependency_overrides[get_embedder] = lambda: embedder
     try:
         yield TestClient(app)
     finally:

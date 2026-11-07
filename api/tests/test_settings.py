@@ -37,3 +37,17 @@ def test_upload_limit_is_converted_to_bytes():
 def test_upload_limit_must_be_positive(limit: int):
     with pytest.raises(ValidationError):
         Settings(database_url=URL, max_upload_mb=limit)
+
+
+def test_the_embedding_model_defaults_to_bge_small():
+    settings = Settings(database_url=URL)
+
+    assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
+    assert settings.embedding_dimensions == 384
+
+
+def test_models_are_cached_under_data_by_default_and_anchored_like_data_dir():
+    assert Settings(database_url=URL).model_dir == REPO_ROOT / "data" / "models"
+    assert (
+        Settings(database_url=URL, model_dir="cache").model_dir == REPO_ROOT / "cache"
+    )
