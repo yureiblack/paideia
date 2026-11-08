@@ -52,18 +52,43 @@ export type DocumentPage = {
 // upload; the backend enforces its own setting either way.
 export const MAX_UPLOAD_MB = 50;
 
-// One passage that matched a search, and where it came from. score is the
-// reranker's judgement of how well the passage answers the query, from 0 to
-// 1: higher is better. It orders results; it is not a probability.
-export type SearchResult = {
-  chunk_id: string;
+// Where a passage came from: the one shape everything cites with, search
+// results now and generated summaries later. document_version is the
+// fingerprint (SHA-256) of the document's file; with chunk_id it pins one
+// exact passage. filename serves as the title; excerpt is the passage itself.
+export type Citation = {
+  environment_id: string;
   document_id: string;
+  document_version: string;
   filename: string;
+  chunk_id: string;
   page_start: number;
   page_end: number;
   heading: string | null;
-  text: string;
+  excerpt: string;
+};
+
+// One passage that matched a search. score is the reranker's judgement of how
+// well it answers the query, from 0 to 1: higher is better. It orders
+// results; it is not a probability.
+export type SearchResult = {
+  citation: Citation;
   score: number;
+};
+
+// One page a cited passage touches. The passage covers content from
+// highlight_start up to, but not including, highlight_end.
+export type SourcePage = {
+  page_number: number;
+  content: string;
+  highlight_start: number;
+  highlight_end: number;
+};
+
+// A citation shown in its place: every page the passage touches, in order.
+export type SourcePreview = {
+  citation: Citation;
+  pages: SourcePage[];
 };
 
 // One chunk either search found, with its place at every stage of the search.

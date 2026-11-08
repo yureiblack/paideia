@@ -9,6 +9,7 @@ import type {
   EnvironmentInput,
   EnvironmentPatch,
   SearchResponse,
+  SourcePreview,
 } from "@/lib/types";
 
 // A failed request, carrying the HTTP status so callers can tell "not found"
@@ -117,6 +118,9 @@ export const api = {
 
   deleteDocument: (documentId: string) =>
     request<void>(documentPath(documentId), { method: "DELETE" }),
+
+  getPreview: (chunkId: string) =>
+    request<SourcePreview>(`/api/chunks/${encodeURIComponent(chunkId)}/preview`),
 
   // debug asks for every candidate and its score at each stage.
   search: (environmentId: string, query: string, debug = false) =>
