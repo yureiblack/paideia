@@ -159,21 +159,53 @@ class SearchRequest(BaseModel):
     debug: bool = False
 
 
-class SearchResult(BaseModel):
-    """One passage that matched, with where it came from.
+class Citation(BaseModel):
+    """Where a passage came from: the one shape every part of the app cites
+    with, search results now and generated summaries later.
 
-    The roadmap's fields, plus filename and heading, which any display of the
-    result needs. score is the reranker's: between 0 and 1, higher means a
-    better answer to the query. It orders results; it is not a probability.
+    document_version is the SHA-256 of the document's file. The file never
+    changes, and a chunk whose text changes gets a new chunk_id, so the
+    version and the chunk id together pin one exact passage. filename serves
+    as the document's title. excerpt is the passage itself.
     """
 
-    chunk_id: uuid.UUID
+    environment_id: uuid.UUID
     document_id: uuid.UUID
+    document_version: str
     filename: str
+    chunk_id: uuid.UUID
     page_start: int
     page_end: int
     heading: str | None
-    text: str
+    excerpt: str
+
+
+class SourcePage(BaseModel):
+    """One page a cited passage touches. The passage covers content from
+    highlight_start up to, but not including, highlight_end."""
+
+    page_number: int
+    content: str
+    highlight_start: int
+    highlight_end: int
+
+
+class SourcePreview(BaseModel):
+    """A citation shown in its place: every page the passage touches, in
+    order, each with the part the passage covers."""
+
+    citation: Citation
+    pages: list[SourcePage]
+
+
+class SearchResult(BaseModel):
+    """One passage that matched: where it came from, and how well it answers.
+
+    score is the reranker's: between 0 and 1, higher means a better answer to
+    the query. It orders results; it is not a probability.
+    """
+
+    citation: Citation
     score: float
 
 

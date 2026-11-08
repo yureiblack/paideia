@@ -24,6 +24,7 @@ from app.schemas import (
 )
 from app.services import environments as environment_service
 from app.services import search as search_service
+from app.services import sources as source_service
 
 router = APIRouter(tags=["search"])
 
@@ -62,19 +63,11 @@ def search(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
+    citations = source_service.cite_all(session, [c.chunk for c in found.results])
     return SearchResponse(
         results=[
-            SearchResult(
-                chunk_id=c.chunk.id,
-                document_id=c.chunk.document_id,
-                filename=c.filename,
-                page_start=c.chunk.page_start,
-                page_end=c.chunk.page_end,
-                heading=c.chunk.heading,
-                text=c.chunk.content,
-                score=round(c.rerank_score, 4),
-            )
-            for c in found.results
+            SearchResult(citation=citation, score=round(c.rerank_score, 4))
+            for c, citation in zip(found.results, citations, strict=True)
         ],
         debug=_debug(found) if request.debug else None,
     )

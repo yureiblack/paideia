@@ -1,19 +1,23 @@
 "use client";
 
 // The Search tab: ask in your own words and get back the passages that best
-// answer it, with the document and pages each came from. Search runs when the
-// form is submitted, not on every keystroke. "Show scoring" reveals how each
-// result was ranked: its place in keyword search and in semantic search,
-// their fused score, and the reranker's verdict, plus every candidate.
+// answer it, each cited with its document and pages. "Show in page" opens a
+// citation: the page the passage sits on, with the passage marked. Search
+// runs when the form is submitted, not on every keystroke. "Show scoring"
+// reveals how each result was ranked: its place in keyword search and in
+// semantic search, their fused score, and the reranker's verdict, plus every
+// candidate.
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type Ref } from "react";
 
 import { useSearch } from "@/hooks/use-search";
+import { usePreview } from "@/hooks/use-sources";
 import {
   SEARCH_QUERY_MAX_LENGTH,
   type SearchCandidate,
   type SearchDebug,
   type SearchResult,
+  type SourcePage,
 } from "@/lib/types";
 
 export function Search({ environmentId }: { environmentId: string }) {
@@ -88,10 +92,11 @@ export function Search({ environmentId }: { environmentId: string }) {
         <>
           <ol className="flex flex-col gap-3" aria-label="Search results">
             {search.data.results.map((result) => (
-              <li key={result.chunk_id}>
+              <li key={result.citation.chunk_id}>
                 <ResultCard
+                  environmentId={environmentId}
                   result={result}
-                  scores={scoresById.get(result.chunk_id)}
+                  scores={scoresById.get(result.citation.chunk_id)}
                 />
               </li>
             ))}
@@ -108,20 +113,25 @@ function pagesLabel(start: number, end: number) {
 }
 
 function ResultCard({
+  environmentId,
   result,
   scores,
 }: {
+  environmentId: string;
   result: SearchResult;
   scores: SearchCandidate | undefined;
 }) {
+  const { citation } = result;
+  const [showingPage, setShowingPage] = useState(false);
+
   return (
     <article className="flex flex-col gap-2 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="truncate font-medium">{result.filename}</h3>
+          <h3 className="truncate font-medium">{citation.filename}</h3>
           <p className="text-xs text-zinc-500">
-            {pagesLabel(result.page_start, result.page_end)}
-            {result.heading && ` · ${result.heading}`}
+            {pagesLabel(citation.page_start, citation.page_end)}
+            {citation.heading && ` · ${citation.heading}`}
           </p>
         </div>
         <span
@@ -131,9 +141,102 @@ function ResultCard({
           {result.score.toFixed(2)}
         </span>
       </div>
-      <p className="whitespace-pre-wrap text-sm">{result.text}</p>
+      <p className="whitespace-pre-wrap text-sm">{citation.excerpt}</p>
       {scores && <StageScores scores={scores} />}
+      <button
+        type="button"
+        onClick={() => setShowingPage(!showingPage)}
+        aria-expanded={showingPage}
+        className="self-start rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium dark:border-zinc-700"
+      >
+        {showingPage ? "Hide page" : "Show in page"}
+      </button>
+      {showingPage && (
+        <SourcePanel environmentId={environmentId} chunkId={citation.chunk_id} />
+      )}
     </article>
+  );
+}
+
+// The pages a cited passage sits on, with the passage marked and scrolled
+// into view, so it can be read in its context.
+function SourcePanel({
+  environmentId,
+  chunkId,
+}: {
+  environmentId: string;
+  chunkId: string;
+}) {
+  const preview = usePreview(environmentId, chunkId, true);
+  const scroller = useRef<HTMLDivElement>(null);
+  const marked = useRef<HTMLElement>(null);
+
+  // Scroll only the panel, not the whole page, to the start of the passage.
+  useEffect(() => {
+    if (scroller.current && marked.current) {
+      scroller.current.scrollTop = Math.max(0, marked.current.offsetTop - 24);
+    }
+  }, [preview.data]);
+
+  if (preview.isPending) {
+    return <p className="text-sm text-zinc-500">Loading the page…</p>;
+  }
+  if (preview.isError) {
+    return (
+      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        {preview.error.message}
+      </p>
+    );
+  }
+  const { citation, pages } = preview.data;
+  return (
+    <section
+      aria-label={`${citation.filename}, ${pagesLabel(citation.page_start, citation.page_end)}`}
+      className="flex flex-col gap-2"
+    >
+      <p className="text-sm font-medium">
+        {citation.filename} · {pagesLabel(citation.page_start, citation.page_end)}
+      </p>
+      <div
+        ref={scroller}
+        className="relative flex max-h-[28rem] flex-col gap-4 overflow-y-auto rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900"
+      >
+        {pages.map((page, index) => (
+          <PageWithPassage
+            key={page.page_number}
+            page={page}
+            markRef={index === 0 ? marked : undefined}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PageWithPassage({
+  page,
+  markRef,
+}: {
+  page: SourcePage;
+  markRef?: Ref<HTMLElement>;
+}) {
+  const { content, highlight_start: start, highlight_end: end } = page;
+  return (
+    <section aria-label={`Page ${page.page_number}`}>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        Page {page.page_number}
+      </h4>
+      <p className="whitespace-pre-wrap text-sm">
+        {content.slice(0, start)}
+        <mark
+          ref={markRef}
+          className="rounded-sm bg-amber-100 text-inherit dark:bg-amber-900/60"
+        >
+          {content.slice(start, end)}
+        </mark>
+        {content.slice(end)}
+      </p>
+    </section>
   );
 }
 
