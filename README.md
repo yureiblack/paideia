@@ -24,7 +24,11 @@ search catches paraphrases, Reciprocal Rank Fusion merges the two lists, and
 a local cross-encoder reranks the best of them. On a labelled set of 32
 questions this puts the right passage at the top far more often than either
 search alone, and "Show scoring" reveals how each result was ranked.
-Citations and source previews come next.
+
+Every result cites exactly where it came from: the document, the version of
+its file, the pages and the passage. "Show in page" opens the citation, with
+the passage highlighted in its page. Summaries and answers will cite their
+sources the same way. A local language model comes next.
 
 ## Stack
 
@@ -114,7 +118,8 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/documents/{id}/chunks` | The passages the document was cut into, in reading order, each with its heading and exact position in the pages. |
 | POST | `/api/documents/{id}/reprocess` | Read a document again, for example after a failure. Returns 202. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
-| POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each with its document, pages, heading, text and `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
+| POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
+| GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
 
 Invalid input gets a 422 listing each problem and the field it belongs to. An
 upload is refused with 409 if the same file is already in that environment, 413
