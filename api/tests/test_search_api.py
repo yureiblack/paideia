@@ -57,7 +57,7 @@ LECTURE = pdfs.html_pdf(
 )
 
 
-def test_results_carry_the_roadmap_fields_and_where_they_came_from(client: TestClient):
+def test_each_result_cites_exactly_where_it_came_from(client: TestClient):
     env = environment(client)
     document = upload(client, env, LECTURE)
 
@@ -65,23 +65,24 @@ def test_results_carry_the_roadmap_fields_and_where_they_came_from(client: TestC
 
     assert response.status_code == 200
     first = response.json()["results"][0]
-    assert set(first) == {
-        "chunk_id",
-        "document_id",
-        "filename",
-        "page_start",
-        "page_end",
-        "heading",
-        "text",
-        "score",
-    }
-    assert first["document_id"] == document["id"]
-    assert first["filename"] == "lecture.pdf"
-    assert (first["heading"], first["page_start"], first["page_end"]) == (
-        "Deadlock",
-        2,
-        2,
+    assert set(first) == {"citation", "score"}
+    citation = first["citation"]
+    chunk = next(
+        c
+        for c in client.get(f"/api/documents/{document['id']}/chunks").json()
+        if c["heading"] == "Deadlock"
     )
+    assert citation == {
+        "environment_id": env,
+        "document_id": document["id"],
+        "document_version": document["sha256"],
+        "filename": "lecture.pdf",
+        "chunk_id": chunk["id"],
+        "page_start": 2,
+        "page_end": 2,
+        "heading": "Deadlock",
+        "excerpt": chunk["content"],
+    }
 
 
 def test_results_are_ordered_and_limited(client: TestClient):
@@ -91,7 +92,7 @@ def test_results_are_ordered_and_limited(client: TestClient):
     results = search(client, env, "paging frames", top_k=2).json()["results"]
 
     assert len(results) == 2
-    assert results[0]["heading"] == "Paging"
+    assert results[0]["citation"]["heading"] == "Paging"
     assert results[0]["score"] >= results[1]["score"]
 
 
@@ -192,7 +193,7 @@ def test_debug_shows_every_candidate_at_every_stage(client: TestClient):
         (c for c in candidates if c["final_rank"]), key=lambda c: c["final_rank"]
     )
     assert [c["chunk_id"] for c in finalists] == [
-        r["chunk_id"] for r in body["results"]
+        r["citation"]["chunk_id"] for r in body["results"]
     ]
     assert [round(c["rerank_score"], 4) for c in finalists] == [
         r["score"] for r in body["results"]
@@ -235,6 +236,7 @@ def test_the_roadmaps_acceptance_query_with_the_real_model(client: TestClient):
         "results"
     ]
 
-    assert results[0]["heading"] == "CPU time sharing"
-    assert "process" not in results[0]["text"].lower()
-    assert "schedul" not in results[0]["text"].lower()
+    top = results[0]["citation"]
+    assert top["heading"] == "CPU time sharing"
+    assert "process" not in top["excerpt"].lower()
+    assert "schedul" not in top["excerpt"].lower()
