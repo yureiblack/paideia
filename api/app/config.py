@@ -84,6 +84,16 @@ class Settings(BaseSettings):
     retrieval_candidate_pool: int = Field(default=30, gt=0)
     retrieval_final_k: int = Field(default=10, gt=0, le=50)
 
+    # The local language model, served by Ollama on this machine (decision
+    # record 08). llm_context_tokens is how much text the model reads at once,
+    # question and answer together. llm_timeout_seconds limits one request;
+    # failed requests are retried up to llm_max_retries times.
+    llm_base_url: str = "http://localhost:11434"
+    llm_model: str = "ministral-3:8b"
+    llm_context_tokens: int = Field(default=16384, gt=0)
+    llm_timeout_seconds: float = Field(default=300, gt=0)
+    llm_max_retries: int = Field(default=2, ge=0)
+
     # Where downloaded models are cached, so each is fetched from the internet
     # only once. Separate from data_dir so the tests, which give every test its
     # own empty data folder, still share one downloaded copy.
