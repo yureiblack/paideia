@@ -45,6 +45,7 @@ from app.routers.environments import EnvironmentDep
 from app.routers.search import EmbedderDep
 from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import documents as service
+from app.services import environment_summaries as environment_summary_service
 from app.services import summaries as summary_service
 
 router = APIRouter(tags=["documents"])
@@ -151,6 +152,12 @@ async def upload_document(
     background.add_task(
         summary_service.summarize_when_ready, session_factory, document.id, llm
     )
+    background.add_task(
+        environment_summary_service.refresh_environment_summary,
+        session_factory,
+        document.environment_id,
+        llm,
+    )
     return document
 
 
@@ -201,9 +208,30 @@ def reprocess_document(
     background.add_task(
         summary_service.summarize_when_ready, session_factory, document.id, llm
     )
+    background.add_task(
+        environment_summary_service.refresh_environment_summary,
+        session_factory,
+        document.environment_id,
+        llm,
+    )
     return document
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(document: DocumentDep, session: SessionDep) -> None:
+def delete_document(
+    document: DocumentDep,
+    session: SessionDep,
+    session_factory: SessionFactoryDep,
+    llm: LLMDep,
+    background: BackgroundTasks,
+) -> None:
+    environment_id = document.environment_id
     service.delete_document(session, document)
+    # The environment's summary was built from this document: rebuild it from
+    # what is left, or leave it as history if nothing is.
+    background.add_task(
+        environment_summary_service.refresh_environment_summary,
+        session_factory,
+        environment_id,
+        llm,
+    )

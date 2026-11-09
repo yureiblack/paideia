@@ -1,10 +1,8 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { EnvironmentSummary } from "@/components/environment-summary";
 
-export default function SummaryPage() {
-  return (
-    <ComingSoon
-      title="Summary"
-      description="A summary that updates as material is added. Arrives in Phases 09 and 10."
-    />
-  );
+export default async function SummaryPage({
+  params,
+}: PageProps<"/environments/[id]/summary">) {
+  const { id } = await params;
+  return <EnvironmentSummary environmentId={id} />;
 }

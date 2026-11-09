@@ -9,6 +9,7 @@ import type {
   Environment,
   EnvironmentInput,
   EnvironmentPatch,
+  EnvironmentSummaryState,
   SearchResponse,
   SourcePreview,
 } from "@/lib/types";
@@ -92,6 +93,15 @@ export const api = {
 
   deleteEnvironment: (id: string) =>
     request<void>(environmentPath(id), { method: "DELETE" }),
+
+  getEnvironmentSummary: (environmentId: string) =>
+    request<EnvironmentSummaryState>(`${environmentPath(environmentId)}/summary`),
+
+  // Bring the environment's summary up to date, or try again after a failure.
+  requestEnvironmentSummary: (environmentId: string) =>
+    request<EnvironmentSummaryState>(`${environmentPath(environmentId)}/summary`, {
+      method: "POST",
+    }),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),

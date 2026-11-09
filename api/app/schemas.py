@@ -238,6 +238,70 @@ class CurrentSummaryRead(SummaryRead):
     earlier_versions: int
 
 
+class SourceDocument(BaseModel):
+    """A document an environment summary was built from, as it was then: the
+    version of its file, and which of its summaries was used."""
+
+    document_id: uuid.UUID
+    filename: str
+    document_version: str
+    summary_id: uuid.UUID
+
+
+class NotIncluded(BaseModel):
+    """A document an environment summary leaves out, and why."""
+
+    document_id: uuid.UUID
+    filename: str
+    reason: str
+
+
+class EnvironmentSummaryRead(BaseModel):
+    """A stored summary of a whole environment, built from its documents'
+    summaries. based_on lists those documents as they were when it was built.
+    current is false for one built from earlier material, model or prompt."""
+
+    id: uuid.UUID
+    environment_id: uuid.UUID
+    status: Literal["pending", "generating", "ready", "failed"]
+    error: str | None
+    overview: str | None
+    key_points: list[SummaryPoint]
+    model: str
+    prompt_versions: list[str]
+    source_version: str
+    based_on: list[SourceDocument]
+    seconds: float | None
+    current: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class EnvironmentSummaryState(BaseModel):
+    """Where an environment's summary stands, and the newest one to show.
+
+    state is one of:
+      up_to_date  the summary shown covers the material as it is now
+      updating    a summary of the current material is being written; the
+                  one shown, if any, is older
+      waiting     documents are still being read or summarized
+                  (waiting_for of them); it is built once they are done
+      stale       the material changed and no rebuild has been asked for
+      failed      building it failed; error says why
+      none        nothing to summarize yet
+
+    summary is the newest ready one, or none. not_included lists documents
+    left out and why. earlier_versions counts older summaries kept.
+    """
+
+    state: Literal["up_to_date", "updating", "waiting", "stale", "failed", "none"]
+    waiting_for: int
+    error: str | None
+    summary: EnvironmentSummaryRead | None
+    not_included: list[NotIncluded]
+    earlier_versions: int
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

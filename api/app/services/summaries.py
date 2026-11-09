@@ -24,7 +24,6 @@ written as a new one, and the old ones are kept.
 
 import hashlib
 import logging
-import threading
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -38,7 +37,7 @@ from sqlalchemy.orm import Session
 
 from app import prompting
 from app.db import SessionFactory
-from app.llm import LLMError, LLMProvider
+from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
 from app.models import Document, DocumentChunk, GeneratedArtifact
 from app.schemas import Citation, SummaryPoint, SummaryRead
 from app.services import sources
@@ -68,9 +67,6 @@ MAX_SECTIONS = 20
 # abandoned, by a server restart for example. Longer than documents'
 # processing timeout, since a long document takes many model calls.
 STALE_GENERATING = timedelta(hours=1)
-
-# Summaries are written one at a time in this process (see write_summary).
-_ONE_AT_A_TIME = threading.Lock()
 
 
 class NotReadyToSummarize(Exception):
@@ -304,7 +300,7 @@ def write_summary(
     model works outside any transaction, and the result is stored under the
     lock again, so a summary always ends ready or failed with a reason.
     """
-    with _ONE_AT_A_TIME:
+    with ONE_AT_A_TIME:
         with session_factory() as session:
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":

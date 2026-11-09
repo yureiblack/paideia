@@ -34,8 +34,15 @@ document as soon as it has been read: an overview and key points, each citing
 the passages it rests on with the same citations search uses, so every claim
 can be opened and checked in its page. Summaries are kept. The same document,
 model and prompt never produce a second one; new text or a newer model
-writes a new summary and keeps the earlier ones. Next comes a summary of the
-whole environment that keeps itself up to date.
+writes a new summary and keeps the earlier ones.
+
+Each environment also keeps a summary of all its material, on its Summary tab,
+up to date by itself. It is built from the documents' summaries and rebuilt
+whenever they change: after a document is added and summarized, or deleted.
+When nothing it is built from has changed, nothing is rebuilt. It shows when
+it was last updated, which documents it is based on and in which version,
+and which documents were left out and why, and every key point cites the
+passages it rests on, across all the documents.
 
 ## Stack
 
@@ -141,6 +148,9 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/documents/{id}/summary` | The document's current summary: `status` (`pending`, `generating`, `ready` or `failed` with an `error`), then its `overview` and `key_points`, each with its `citations`, the `model` and `prompt_versions` that wrote it, and how many `earlier_versions` are kept. 404 if none yet. |
 | POST | `/api/documents/{id}/summary` | Make sure the document has a summary: 200 with it if ready, 202 if it is waiting or being written, which this starts if it was missing or had failed. Asking again never writes a second one. 409 if the document is not read yet, 422 if it cannot be summarized (no text, or too long). |
 | GET | `/api/documents/{id}/summaries` | Every summary of the document, newest first, `current` marking the one for its present text, model and prompts. |
+| GET | `/api/environments/{id}/summary` | Where the environment's summary stands: `state` (`up_to_date`, `updating`, `waiting` for documents still being read or summarized, `stale`, `failed`, or `none`), the newest `summary` with its `overview`, cited `key_points` and the documents it is `based_on`, the documents `not_included` and why, and how many `earlier_versions` are kept. |
+| POST | `/api/environments/{id}/summary` | Bring it up to date, or try again after a failure. It never writes twice for the same material, and waits while documents are on their way. 422 if there is nothing summarized to build it from. |
+| GET | `/api/environments/{id}/summaries` | Every summary of the environment, newest first. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |

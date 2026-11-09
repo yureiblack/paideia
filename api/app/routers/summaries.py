@@ -18,6 +18,7 @@ from app.db import SessionDep, SessionFactoryDep
 from app.routers.deps import LLMDep
 from app.routers.documents import DocumentDep
 from app.schemas import CurrentSummaryRead, SummaryRead
+from app.services import environment_summaries as environment_summary_service
 from app.services import summaries as service
 
 router = APIRouter(tags=["summaries"])
@@ -69,6 +70,13 @@ def request_summary(
     session.commit()
     if write_now:
         background.add_task(service.write_summary, session_factory, artifact.id, llm)
+        # A new document summary may change the environment's summary.
+        background.add_task(
+            environment_summary_service.refresh_environment_summary,
+            session_factory,
+            document.environment_id,
+            llm,
+        )
     if artifact.status != "ready":
         response.status_code = status.HTTP_202_ACCEPTED
     return body

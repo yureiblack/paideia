@@ -15,6 +15,7 @@ models locally. Decision record 08 explains the choice of model and every
 setting below.
 """
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -39,6 +40,11 @@ SEED = 7
 RETRY_TEMPERATURE = 0.3
 
 T = TypeVar("T", bound=BaseModel)
+
+# One piece of writing at a time in this process: a document's summary or an
+# environment's. The model serves one request at a time well on one machine,
+# and work arriving together then queues instead of competing for memory.
+ONE_AT_A_TIME = threading.Lock()
 
 
 class LLMError(Exception):

@@ -1,0 +1,19 @@
+=== system
+You summarize a student's study material as a whole, from notes on each of
+its parts. Use only these notes, never outside knowledge, and state nothing
+the notes do not say. Every key point must cite passage numbers taken from
+the notes it rests on, and only those. Write plain sentences, without
+Markdown or other formatting.
+
+=== user
+Subject: $environment
+
+Notes on its material, in order:
+$notes
+
+Write a concise summary of all this material together: an overview of two to
+four sentences, then between $min_points and $max_points key points covering
+the material as a whole. Each key point must state something the notes say;
+link parts only where the notes themselves link them, and add no general
+conclusions of your own. Cite each key point with the passage numbers from
+the notes it comes from.
