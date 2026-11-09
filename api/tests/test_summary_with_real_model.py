@@ -1,8 +1,9 @@
 """A summary from the real language model, where one is available.
 
 Purpose: the whole path, from an uploaded PDF through Ollama to a stored,
-cited summary, written by itself once the document is read, and then the
-environment's summary built from it, with the configured model. It needs Ollama running with the model
+cited summary, written by itself once the document is read, the
+environment's summary built from it, and the document's concepts, with the
+configured model. It needs Ollama running with the model
 downloaded, so it is skipped where they are not, which includes CI: there,
 an 8B model on machines without a GPU would take minutes per summary. Run it
 locally after changing prompts, the model or the summary service.
@@ -83,3 +84,11 @@ def test_the_real_model_summarizes_an_uploaded_document_by_itself(client: TestCl
     for point in master["key_points"]:
         excerpts = [c["excerpt"] for c in point["citations"]]
         assert max(reranker.score(point["text"], excerpts)) >= 0.5, point
+
+    # And its concepts were extracted: validated, each with its evidence.
+    concepts = client.get(f"/api/documents/{document['id']}/concepts").json()
+    assert concepts["extraction"]["status"] == "ready", concepts["extraction"]
+    found = concepts["concepts"]
+    assert len(found) >= 3
+    assert all(c["evidence"] and c["definition"] for c in found)
+    assert len({c["normalized_name"] for c in found}) == len(found)

@@ -82,8 +82,10 @@ class BrokenReranker(FakeReranker):
 
 
 def allowed_numbers(schema) -> list[int]:
-    """The passage numbers a summary answer schema allows."""
-    item = schema.model_json_schema()["$defs"]["KeyPoint"]["properties"]["sources"]
+    """The passage numbers an answer schema allows, for summaries
+    (KeyPoint) and concept extraction (ProposedConcept) alike."""
+    defs = schema.model_json_schema()["$defs"]
+    item = (defs.get("KeyPoint") or defs["ProposedConcept"])["properties"]["sources"]
     item = item["items"]
     if "enum" in item:
         return list(item["enum"])
@@ -91,10 +93,25 @@ def allowed_numbers(schema) -> list[int]:
 
 
 def simple_answer(prompt, schema) -> dict:
-    """A valid summary answer: one key point per allowed number, as few as
-    the schema allows, each citing its number."""
+    """A valid answer of the shape the schema asks for. A summary: one key
+    point per allowed number, as few as the schema allows, each citing its
+    number. Concepts: one per passage, "Concept 1" and so on, each citing
+    its passage."""
     numbers = allowed_numbers(schema)
-    least = schema.model_json_schema()["properties"]["key_points"]["minItems"]
+    properties = schema.model_json_schema()["properties"]
+    if "concepts" in properties:
+        return {
+            "concepts": [
+                {
+                    "name": f"Concept {n}",
+                    "definition": f"What passage {n} explains.",
+                    "aliases": [],
+                    "sources": [n],
+                }
+                for n in numbers
+            ]
+        }
+    least = properties["key_points"]["minItems"]
     return {
         "overview": f"An overview of {len(numbers)} passages.",
         "key_points": [
