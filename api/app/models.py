@@ -246,8 +246,8 @@ class DocumentChunk(Base):
 class GeneratedArtifact(Base):
     """Something the language model wrote, kept with what it was written from.
 
-    Phase 09 writes one kind, a document's summary; later phases add more
-    (artifact_type). source_version fingerprints exactly what an artifact
+    Two kinds so far (artifact_type): a document's summary (Phase 09), and an
+    environment's master summary (Phase 10), which has no document_id. source_version fingerprints exactly what an artifact
     read: for a document summary, the document's file version and its chunk
     ids in reading order, so it changes exactly when the text changes.
     model_name and prompt_version record what wrote it.
@@ -276,7 +276,23 @@ class GeneratedArtifact(Base):
         CheckConstraint(
             "status IN ('pending', 'generating', 'ready', 'failed')", name="status"
         ),
-        CheckConstraint("artifact_type IN ('document_summary')", name="artifact_type"),
+        CheckConstraint(
+            "artifact_type IN ('document_summary', 'environment_summary')",
+            name="artifact_type",
+        ),
+        # The key above never matches a row without a document, since NULLs
+        # are distinct in a unique constraint, so artifacts about a whole
+        # environment get their own key.
+        Index(
+            "uq_generated_artifacts_environment_key",
+            "environment_id",
+            "artifact_type",
+            "source_version",
+            "model_name",
+            "prompt_version",
+            unique=True,
+            postgresql_where=text("document_id IS NULL"),
+        ),
     )
     __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
 
