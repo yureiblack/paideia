@@ -1,15 +1,18 @@
 "use client";
 
 // The Materials tab: upload PDFs into an environment, watch them being read,
-// retry failures, delete them, and read the extracted text page by page.
+// retry failures, delete them, read the extracted text page by page, and ask
+// the local language model for a cited summary of any document.
 
 import { useRef, useState, type ChangeEvent } from "react";
 
+import { DocumentSummaryPanel } from "@/components/document-summary";
 import {
   useDeleteDocument,
   useDocuments,
   usePages,
   useReprocessDocument,
+  useSummarizeDocument,
   useUploadDocument,
 } from "@/hooks/use-documents";
 import { formatBytes, formatDate } from "@/lib/format";
@@ -114,6 +117,19 @@ function DocumentRow({
 }) {
   const reprocess = useReprocessDocument(environmentId);
   const remove = useDeleteDocument(environmentId);
+  const summarize = useSummarizeDocument();
+  const [showingSummary, setShowingSummary] = useState(false);
+
+  // Started by the click itself, never by the panel appearing, so one click
+  // is always one request to the model.
+  function handleSummarize() {
+    if (showingSummary && !summarize.isPending) {
+      setShowingSummary(false);
+      return;
+    }
+    setShowingSummary(true);
+    if (!summarize.data && !summarize.isPending) summarize.mutate(document.id);
+  }
 
   function handleDelete() {
     if (window.confirm(`Delete "${document.filename}"? This cannot be undone.`)) {
@@ -147,6 +163,31 @@ function DocumentRow({
             {isReading ? "Hide text" : "Read text"}
           </button>
         )}
+        {document.status === "ready" && (
+          <button
+            type="button"
+            onClick={handleSummarize}
+            aria-expanded={showingSummary}
+            disabled={summarize.isPending}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            {summarize.isPending
+              ? "Summarizing…"
+              : showingSummary
+                ? "Hide summary"
+                : "Summarize"}
+          </button>
+        )}
+        {showingSummary && summarize.data && (
+          <button
+            type="button"
+            onClick={() => summarize.mutate(document.id)}
+            disabled={summarize.isPending}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            Summarize again
+          </button>
+        )}
         {document.status === "failed" && (
           <button
             type="button"
@@ -171,6 +212,15 @@ function DocumentRow({
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {(reprocess.error ?? remove.error)?.message}
         </p>
+      )}
+
+      {showingSummary && (
+        <DocumentSummaryPanel
+          environmentId={environmentId}
+          isPending={summarize.isPending}
+          error={summarize.error}
+          summary={summarize.data}
+        />
       )}
 
       {isReading && <PageReader documentId={document.id} />}

@@ -5,6 +5,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type {
   Document,
   DocumentPage,
+  DocumentSummary,
   Environment,
   EnvironmentInput,
   EnvironmentPatch,
@@ -113,6 +114,13 @@ export const api = {
 
   reprocessDocument: (documentId: string) =>
     request<Document>(`${documentPath(documentId)}/reprocess`, {
+      method: "POST",
+    }),
+
+  // Written by the local language model on request: usually under a
+  // minute, a few minutes for a long document.
+  summarizeDocument: (documentId: string) =>
+    request<DocumentSummary>(`${documentPath(documentId)}/summary`, {
       method: "POST",
     }),
 
