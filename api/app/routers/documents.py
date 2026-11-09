@@ -44,6 +44,7 @@ from app.routers.deps import LLMDep
 from app.routers.environments import EnvironmentDep
 from app.routers.search import EmbedderDep
 from app.schemas import ChunkRead, DocumentRead, PageRead
+from app.services import concepts as concept_service
 from app.services import documents as service
 from app.services import environment_summaries as environment_summary_service
 from app.services import summaries as summary_service
@@ -149,8 +150,16 @@ async def upload_document(
     background.add_task(
         service.process_document, session_factory, document.id, parser, embedder
     )
+    # Concepts are queued at once so they show as waiting while the summary,
+    # which comes first, is written; then extracted.
+    background.add_task(
+        concept_service.queue_when_ready, session_factory, document.id, llm
+    )
     background.add_task(
         summary_service.summarize_when_ready, session_factory, document.id, llm
+    )
+    background.add_task(
+        concept_service.extract_when_ready, session_factory, document.id, llm
     )
     background.add_task(
         environment_summary_service.refresh_environment_summary,
@@ -205,8 +214,16 @@ def reprocess_document(
     background.add_task(
         service.process_document, session_factory, document.id, parser, embedder
     )
+    # Concepts are queued at once so they show as waiting while the summary,
+    # which comes first, is written; then extracted.
+    background.add_task(
+        concept_service.queue_when_ready, session_factory, document.id, llm
+    )
     background.add_task(
         summary_service.summarize_when_ready, session_factory, document.id, llm
+    )
+    background.add_task(
+        concept_service.extract_when_ready, session_factory, document.id, llm
     )
     background.add_task(
         environment_summary_service.refresh_environment_summary,
@@ -227,6 +244,9 @@ def delete_document(
 ) -> None:
     environment_id = document.environment_id
     service.delete_document(session, document)
+    # Its concept links went with it; concepts no document mentions now go too.
+    concept_service.refresh_concepts(session, environment_id)
+    session.commit()
     # The environment's summary was built from this document: rebuild it from
     # what is left, or leave it as history if nothing is.
     background.add_task(

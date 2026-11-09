@@ -302,6 +302,59 @@ class EnvironmentSummaryState(BaseModel):
     earlier_versions: int
 
 
+class ConceptDocument(BaseModel):
+    """A document a concept appears in."""
+
+    document_id: uuid.UUID
+    filename: str
+
+
+class ConceptRead(BaseModel):
+    """One concept of an environment: its name and definition as shown, its
+    aliases, the documents it appears in, and the passages that explain it."""
+
+    id: uuid.UUID
+    name: str
+    normalized_name: str
+    definition: str
+    aliases: list[str]
+    documents: list[ConceptDocument]
+    evidence: list[Citation]
+
+
+class ExtractionState(BaseModel):
+    """Where a document's concept extraction stands. document_status is the
+    document's own (still being read, or could not be). status is none when
+    no extraction was asked for, otherwise pending, generating, ready or
+    failed (error says why). proposed and kept count the model's proposals and how
+    many passed validation."""
+
+    document_id: uuid.UUID
+    filename: str
+    document_status: Literal["uploaded", "processing", "ready", "failed"]
+    status: Literal["none", "pending", "generating", "ready", "failed"]
+    error: str | None
+    model: str | None
+    prompt_version: str | None
+    proposed: int | None
+    kept: int | None
+
+
+class ConceptInventory(BaseModel):
+    """Every concept in an environment, by name, and each document's
+    extraction state."""
+
+    concepts: list[ConceptRead]
+    documents: list[ExtractionState]
+
+
+class DocumentConceptsRead(BaseModel):
+    """One document's extraction state and the concepts it contributes."""
+
+    extraction: ExtractionState
+    concepts: list[ConceptRead]
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 
