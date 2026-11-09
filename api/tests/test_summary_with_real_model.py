@@ -1,7 +1,8 @@
 """A summary from the real language model, where one is available.
 
-Purpose: the whole path, from an uploaded PDF through Ollama to a cited
-summary, with the configured model. It needs Ollama running with the model
+Purpose: the whole path, from an uploaded PDF through Ollama to a stored,
+cited summary, written by itself once the document is read, with the
+configured model. It needs Ollama running with the model
 downloaded, so it is skipped where they are not, which includes CI: there,
 an 8B model on machines without a GPU would take minutes per summary. Run it
 locally after changing prompts, the model or the summary service.
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 from app.llm import default_provider
 from app.main import app
 from app.reranking import default_reranker
-from app.routers.summaries import get_llm
+from app.routers.deps import get_llm
 from tests import pdfs
 
 PROBLEM = default_provider().check()
@@ -42,7 +43,9 @@ LECTURE = pdfs.html_pdf(
 )
 
 
-def test_the_real_model_writes_a_plain_cited_grounded_summary(client: TestClient):
+def test_the_real_model_summarizes_an_uploaded_document_by_itself(client: TestClient):
+    # The real model from the start: the upload's background tasks read the
+    # document, then write its summary.
     app.dependency_overrides[get_llm] = default_provider
     env = client.post("/api/environments", json={"name": "Operating Systems"}).json()
     document = client.post(
@@ -52,10 +55,12 @@ def test_the_real_model_writes_a_plain_cited_grounded_summary(client: TestClient
         headers={"Content-Type": "application/pdf"},
     ).json()
 
-    response = client.post(f"/api/documents/{document['id']}/summary")
+    response = client.get(f"/api/documents/{document['id']}/summary")
 
     assert response.status_code == 200, response.text
     summary = response.json()
+    assert summary["status"] == "ready", summary["error"]
+    assert summary["model"] == default_provider().model_name
     points = summary["key_points"]
     assert 3 <= len(points) <= 7
     texts = [summary["overview"], *(p["text"] for p in points)]

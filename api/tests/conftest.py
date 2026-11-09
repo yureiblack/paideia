@@ -34,8 +34,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_session, get_session_factory
 from app.main import app
+from app.routers.deps import get_llm
 from app.routers.search import get_embedder, get_reranker
-from app.routers.summaries import get_llm
 from tests.fakes import FakeEmbedder, FakeReranker, MockProvider
 
 API_DIR = Path(__file__).resolve().parents[1]
