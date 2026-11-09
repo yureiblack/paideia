@@ -34,7 +34,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import settings
@@ -240,4 +240,73 @@ class DocumentChunk(Base):
     embedding_model: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class GeneratedArtifact(Base):
+    """Something the language model wrote, kept with what it was written from.
+
+    Phase 09 writes one kind, a document's summary; later phases add more
+    (artifact_type). source_version fingerprints exactly what an artifact
+    read: for a document summary, the document's file version and its chunk
+    ids in reading order, so it changes exactly when the text changes.
+    model_name and prompt_version record what wrote it.
+
+    One row per (document, type, source version, model, prompt version):
+    asking again for the same thing finds the existing row instead of writing
+    it twice. When any of them changes, a new row is written and the old one
+    stays as history, never overwritten (decision record 09).
+
+    status moves pending -> generating -> ready or failed; error says why.
+    content holds the finished artifact, citations included in full so an
+    old summary stays readable after its passages change; metadata_json
+    records how it was made.
+    """
+
+    __tablename__ = "generated_artifacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "artifact_type",
+            "source_version",
+            "model_name",
+            "prompt_version",
+            name="uq_generated_artifacts_key",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'generating', 'ready', 'failed')", name="status"
+        ),
+        CheckConstraint("artifact_type IN ('document_summary')", name="artifact_type"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    # Empty for artifacts about a whole environment (Phase 10). No index of
+    # its own: the unique key starts with it and serves lookups by document.
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    artifact_type: Mapped[str] = mapped_column(Text)
+    source_version: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"))
+    error: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[dict | None] = mapped_column(JSONB)
+    metadata_json: Mapped[dict] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb")
+    )
+    model_name: Mapped[str] = mapped_column(Text)
+    # Every prompt version that wrote it, in order, separated by commas.
+    prompt_version: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.statement_timestamp(),
     )

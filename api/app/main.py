@@ -19,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.db import engine
 from app.routers import documents, environments, search, sources, summaries
-from app.routers.summaries import LLMDep
+from app.routers.deps import LLMDep
 
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".

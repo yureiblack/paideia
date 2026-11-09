@@ -108,9 +108,10 @@ class MockProvider:
     """A language model that answers with answer(prompt, schema), by default
     simple_answer, and records every prompt and schema it was given."""
 
-    model_name = "mock-llm"
-
-    def __init__(self, answer=simple_answer, problem: str | None = None):
+    def __init__(
+        self, answer=simple_answer, problem: str | None = None, model_name="mock-llm"
+    ):
+        self.model_name = model_name
         self.answer = answer
         self.problem = problem  # what check() reports
         self.calls = []  # (prompt, schema) for every request
