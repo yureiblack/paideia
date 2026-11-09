@@ -198,6 +198,33 @@ class SourcePreview(BaseModel):
     pages: list[SourcePage]
 
 
+class SummaryPoint(BaseModel):
+    """One key point of a summary and the passages it rests on."""
+
+    text: str
+    citations: list[Citation]
+
+
+class DocumentSummary(BaseModel):
+    """A summary of one document, written by the language model from the
+    document's own passages, every key point cited.
+
+    model and prompt_versions record what produced it, so any summary can be
+    traced and reproduced. sections is how many parts the document was read
+    in: 1 for a single request, more for a long document whose sections were
+    summarized separately and then combined. seconds is the model's time.
+    """
+
+    document_id: uuid.UUID
+    overview: str
+    key_points: list[SummaryPoint]
+    model: str
+    prompt_versions: list[str]
+    sections: int
+    seconds: float
+    generated_at: datetime
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

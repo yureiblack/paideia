@@ -18,7 +18,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.db import engine
-from app.routers import documents, environments, search, sources
+from app.routers import documents, environments, search, sources, summaries
+from app.routers.summaries import LLMDep
 
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".
@@ -42,6 +43,7 @@ app.include_router(environments.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
+app.include_router(summaries.router, prefix="/api")
 
 
 class Health(BaseModel):
@@ -59,6 +61,13 @@ class DatabaseHealth(BaseModel):
 
     status: str
     pgvector_available: bool
+
+
+class LLMHealth(BaseModel):
+    """Response shape for GET /health/llm."""
+
+    status: str
+    model: str
 
 
 @app.get("/health", response_model=Health)
@@ -100,3 +109,18 @@ def health_db() -> DatabaseHealth:
         raise HTTPException(status_code=503, detail="database unavailable") from exc
 
     return DatabaseHealth(status="ok", pgvector_available=found == 1)
+
+
+@app.get("/health/llm", response_model=LLMHealth)
+def health_llm(llm: LLMDep) -> LLMHealth:
+    """Report whether the language model is ready: Ollama answering, and the
+    configured model downloaded.
+
+    Like /health/db it answers 503, with the reason, rather than failing, so
+    the header can show what to fix. Only summaries need the model; the rest
+    of the app works without it.
+    """
+    problem = llm.check()
+    if problem is not None:
+        raise HTTPException(status_code=503, detail=problem)
+    return LLMHealth(status="ok", model=llm.model_name)

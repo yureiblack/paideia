@@ -24,6 +24,15 @@ from app.models import Document, DocumentChunk, DocumentPage
 from app.schemas import Citation, SourcePage, SourcePreview
 
 
+def with_heading(chunk: DocumentChunk) -> str:
+    """A chunk's text with its section heading in front, unless the text
+    already starts with it, so a passage from the middle of a section keeps
+    its context when a model reads it on its own."""
+    if chunk.heading and not chunk.content.startswith(chunk.heading):
+        return f"{chunk.heading}\n\n{chunk.content}"
+    return chunk.content
+
+
 def cite(chunk: DocumentChunk, document: Document) -> Citation:
     """The citation for one chunk of a document."""
     return Citation(

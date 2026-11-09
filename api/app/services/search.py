@@ -31,6 +31,7 @@ from app.config import settings
 from app.embedding import Embedder
 from app.models import Document, DocumentChunk
 from app.reranking import Reranker
+from app.services.sources import with_heading
 
 # The text-search configuration chunks are indexed with. Must match the one in
 # models.SEARCH_VECTOR, or queries would be stemmed differently from the text.
@@ -237,15 +238,6 @@ class HybridResult:
     sizes: RetrievalSizes
 
 
-def _rerank_text(chunk: DocumentChunk) -> str:
-    """What the reranker reads for a chunk: its text, with its section heading
-    in front when the text does not already start with it, so a passage from
-    the middle of a section keeps its context."""
-    if chunk.heading and not chunk.content.startswith(chunk.heading):
-        return f"{chunk.heading}\n\n{chunk.content}"
-    return chunk.content
-
-
 def hybrid_search(
     session: Session,
     environment_id: uuid.UUID,
@@ -299,7 +291,8 @@ def hybrid_search(
     if not pool:
         # Nothing matched, so the reranker, and its model, are never needed.
         return HybridResult(results=[], candidates=[], sizes=sizes)
-    scores = reranker.score(query, [_rerank_text(c.chunk) for c in pool])
+    # The reranker reads each chunk with its section heading in front.
+    scores = reranker.score(query, [with_heading(c.chunk) for c in pool])
     for candidate, score in zip(pool, scores, strict=True):
         candidate.rerank_score = score
     # sorted() keeps equal scores in their merged order.
