@@ -205,24 +205,37 @@ class SummaryPoint(BaseModel):
     citations: list[Citation]
 
 
-class DocumentSummary(BaseModel):
-    """A summary of one document, written by the language model from the
-    document's own passages, every key point cited.
+class SummaryRead(BaseModel):
+    """A stored summary of one document and what it was written from.
 
-    model and prompt_versions record what produced it, so any summary can be
-    traced and reproduced. sections is how many parts the document was read
-    in: 1 for a single request, more for a long document whose sections were
-    summarized separately and then combined. seconds is the model's time.
+    status is pending (waiting its turn), generating, ready or failed; error
+    says why it failed. overview and key_points are filled in once ready.
+    model, prompt_versions and source_version record what wrote it and from
+    which text. current is false for a summary of an earlier text, or by an
+    earlier model or prompt: kept, never overwritten. sections is how many
+    parts the document was read in; seconds is the model's time.
     """
 
+    id: uuid.UUID
     document_id: uuid.UUID
-    overview: str
+    status: Literal["pending", "generating", "ready", "failed"]
+    error: str | None
+    overview: str | None
     key_points: list[SummaryPoint]
     model: str
     prompt_versions: list[str]
-    sections: int
-    seconds: float
-    generated_at: datetime
+    source_version: str
+    sections: int | None
+    seconds: float | None
+    current: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CurrentSummaryRead(SummaryRead):
+    """The current summary, and how many earlier ones are kept."""
+
+    earlier_versions: int
 
 
 class SearchResult(BaseModel):

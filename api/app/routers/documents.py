@@ -40,10 +40,12 @@ from app.config import settings
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
 from app.parsing import Parser, PyMuPDFParser
+from app.routers.deps import LLMDep
 from app.routers.environments import EnvironmentDep
 from app.routers.search import EmbedderDep
 from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import documents as service
+from app.services import summaries as summary_service
 
 router = APIRouter(tags=["documents"])
 
@@ -110,6 +112,7 @@ async def upload_document(
     session_factory: SessionFactoryDep,
     parser: ParserDep,
     embedder: EmbedderDep,
+    llm: LLMDep,
     background: BackgroundTasks,
 ) -> Document:
     name = _display_name(filename)
@@ -140,8 +143,13 @@ async def upload_document(
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     # Parsing happens after the response is sent; the client polls the status.
+    # Background tasks run in order, so the summary is asked for once parsing
+    # has finished.
     background.add_task(
         service.process_document, session_factory, document.id, parser, embedder
+    )
+    background.add_task(
+        summary_service.summarize_when_ready, session_factory, document.id, llm
     )
     return document
 
@@ -180,6 +188,7 @@ def reprocess_document(
     session_factory: SessionFactoryDep,
     parser: ParserDep,
     embedder: EmbedderDep,
+    llm: LLMDep,
     background: BackgroundTasks,
 ) -> Document:
     try:
@@ -188,6 +197,9 @@ def reprocess_document(
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     background.add_task(
         service.process_document, session_factory, document.id, parser, embedder
+    )
+    background.add_task(
+        summary_service.summarize_when_ready, session_factory, document.id, llm
     )
     return document
 
