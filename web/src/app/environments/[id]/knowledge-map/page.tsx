@@ -1,10 +1,8 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { ConceptInventory } from "@/components/concept-inventory";
 
-export default function KnowledgeMapPage() {
-  return (
-    <ComingSoon
-      title="Knowledge map"
-      description="Concepts from your material and how they connect. Arrives in Phases 11 and 12."
-    />
-  );
+export default async function KnowledgeMapPage({
+  params,
+}: PageProps<"/environments/[id]/knowledge-map">) {
+  const { id } = await params;
+  return <ConceptInventory environmentId={id} />;
 }

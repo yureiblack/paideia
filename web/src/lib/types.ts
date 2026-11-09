@@ -149,6 +149,39 @@ export type EnvironmentSummaryState = {
   earlier_versions: number;
 };
 
+// One concept of an environment, proposed by the language model and
+// validated by the backend: its name and definition as shown, aliases, the
+// documents it appears in, and the passages that explain it.
+export type Concept = {
+  id: string;
+  name: string;
+  normalized_name: string;
+  definition: string;
+  aliases: string[];
+  documents: { document_id: string; filename: string }[];
+  evidence: Citation[];
+};
+
+// Where a document's concept extraction stands. none: not asked for yet.
+// proposed and kept: how many concepts the model proposed, and how many
+// passed validation.
+export type ExtractionState = {
+  document_id: string;
+  filename: string;
+  document_status: DocumentStatus;
+  status: "none" | "pending" | "generating" | "ready" | "failed";
+  error: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  proposed: number | null;
+  kept: number | null;
+};
+
+export type ConceptInventory = {
+  concepts: Concept[];
+  documents: ExtractionState[];
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.
