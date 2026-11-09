@@ -29,11 +29,13 @@ Every result cites exactly where it came from: the document, the version of
 its file, the pages and the passage. "Show in page" opens the citation, with
 the passage highlighted in its page.
 
-A local language model, run by Ollama on your own machine, writes a concise
-summary of any document on request: an overview and key points, each citing
+A local language model, run by Ollama on your own machine, summarizes every
+document as soon as it has been read: an overview and key points, each citing
 the passages it rests on with the same citations search uses, so every claim
-can be opened and checked in its page. Summaries are not saved yet; keeping
-them, and writing them automatically when a document arrives, comes next.
+can be opened and checked in its page. Summaries are kept. The same document,
+model and prompt never produce a second one; new text or a newer model
+writes a new summary and keeps the earlier ones. Next comes a summary of the
+whole environment that keeps itself up to date.
 
 ## Stack
 
@@ -136,7 +138,9 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/documents/{id}/pages` | The extracted text, page by page, numbered from 1. Paragraphs are separated by a blank line. |
 | GET | `/api/documents/{id}/chunks` | The passages the document was cut into, in reading order, each with its heading and exact position in the pages. |
 | POST | `/api/documents/{id}/reprocess` | Read a document again, for example after a failure. Returns 202. |
-| POST | `/api/documents/{id}/summary` | A fresh summary by the local language model: an `overview` and `key_points`, each with its `citations`, plus the `model` and `prompt_versions` that produced it. Usually under a minute. 409 if the document is not read yet, 422 if it has no text or is too long to summarize on request, 503 with the reason if the model cannot be used. |
+| GET | `/api/documents/{id}/summary` | The document's current summary: `status` (`pending`, `generating`, `ready` or `failed` with an `error`), then its `overview` and `key_points`, each with its `citations`, the `model` and `prompt_versions` that wrote it, and how many `earlier_versions` are kept. 404 if none yet. |
+| POST | `/api/documents/{id}/summary` | Make sure the document has a summary: 200 with it if ready, 202 if it is waiting or being written, which this starts if it was missing or had failed. Asking again never writes a second one. 409 if the document is not read yet, 422 if it cannot be summarized (no text, or too long). |
+| GET | `/api/documents/{id}/summaries` | Every summary of the document, newest first, `current` marking the one for its present text, model and prompts. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
