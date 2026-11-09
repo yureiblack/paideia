@@ -74,20 +74,33 @@ export type SummaryPoint = {
   citations: Citation[];
 };
 
-// A summary of one document written by the local language model from the
-// document's own passages. model and prompt_versions record what produced
-// it. sections is how many parts a long document was read in (1 for most);
-// seconds is the model's time. Generated on request; not stored.
-export type DocumentSummary = {
+// A stored summary of one document, written by the local language model from
+// the document's own passages. status: pending (waiting its turn),
+// generating, ready or failed (error says why). overview and key_points are
+// filled in once ready. model, prompt_versions and source_version record what
+// wrote it and from which text; current is false for one kept from an earlier
+// text, model or prompt. sections is how many parts the document was read in.
+export type SummaryStatus = "pending" | "generating" | "ready" | "failed";
+
+export type Summary = {
+  id: string;
   document_id: string;
-  overview: string;
+  status: SummaryStatus;
+  error: string | null;
+  overview: string | null;
   key_points: SummaryPoint[];
   model: string;
   prompt_versions: string[];
-  sections: number;
-  seconds: number;
-  generated_at: string;
+  source_version: string;
+  sections: number | null;
+  seconds: number | null;
+  current: boolean;
+  created_at: string;
+  updated_at: string;
 };
+
+// The current summary, and how many earlier ones are kept.
+export type CurrentSummary = Summary & { earlier_versions: number };
 
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders

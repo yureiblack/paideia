@@ -12,11 +12,16 @@ import {
   useDocuments,
   usePages,
   useReprocessDocument,
-  useSummarizeDocument,
+  useRequestSummary,
+  useSummary,
   useUploadDocument,
 } from "@/hooks/use-documents";
 import { formatBytes, formatDate } from "@/lib/format";
-import { MAX_UPLOAD_MB, type Document } from "@/lib/types";
+import {
+  MAX_UPLOAD_MB,
+  type CurrentSummary,
+  type Document,
+} from "@/lib/types";
 
 export function Materials({ environmentId }: { environmentId: string }) {
   const documents = useDocuments(environmentId);
@@ -117,18 +122,19 @@ function DocumentRow({
 }) {
   const reprocess = useReprocessDocument(environmentId);
   const remove = useDeleteDocument(environmentId);
-  const summarize = useSummarizeDocument();
+  const summary = useSummary(environmentId, document);
+  const askForSummary = useRequestSummary(environmentId, document.id);
   const [showingSummary, setShowingSummary] = useState(false);
 
-  // Started by the click itself, never by the panel appearing, so one click
-  // is always one request to the model.
-  function handleSummarize() {
-    if (showingSummary && !summarize.isPending) {
+  // A document read before summaries were automatic has none until asked.
+  // The click asks, never the panel appearing, so one click is one request.
+  function handleSummary() {
+    if (showingSummary) {
       setShowingSummary(false);
       return;
     }
     setShowingSummary(true);
-    if (!summarize.data && !summarize.isPending) summarize.mutate(document.id);
+    if (summary.data === null && !askForSummary.isPending) askForSummary.mutate();
   }
 
   function handleDelete() {
@@ -166,26 +172,11 @@ function DocumentRow({
         {document.status === "ready" && (
           <button
             type="button"
-            onClick={handleSummarize}
+            onClick={handleSummary}
             aria-expanded={showingSummary}
-            disabled={summarize.isPending}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium dark:border-zinc-700"
           >
-            {summarize.isPending
-              ? "Summarizing…"
-              : showingSummary
-                ? "Hide summary"
-                : "Summarize"}
-          </button>
-        )}
-        {showingSummary && summarize.data && (
-          <button
-            type="button"
-            onClick={() => summarize.mutate(document.id)}
-            disabled={summarize.isPending}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
-            Summarize again
+            {showingSummary ? "Hide summary" : summaryLabel(summary.data)}
           </button>
         )}
         {document.status === "failed" && (
@@ -217,15 +208,32 @@ function DocumentRow({
       {showingSummary && (
         <DocumentSummaryPanel
           environmentId={environmentId}
-          isPending={summarize.isPending}
-          error={summarize.error}
-          summary={summarize.data}
+          summary={summary.data}
+          loadError={summary.error}
+          onTryAgain={() => askForSummary.mutate()}
+          retrying={askForSummary.isPending}
+          retryError={askForSummary.error}
         />
       )}
 
       {isReading && <PageReader documentId={document.id} />}
     </article>
   );
+}
+
+// What the summary button says while the summary is closed.
+function summaryLabel(summary: CurrentSummary | null | undefined) {
+  switch (summary?.status) {
+    case "pending":
+    case "generating":
+      return "Writing summary…";
+    case "ready":
+      return "Show summary";
+    case "failed":
+      return "Summary failed";
+    default:
+      return "Summarize";
+  }
 }
 
 const BADGE = {

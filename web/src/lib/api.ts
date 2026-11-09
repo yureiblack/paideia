@@ -5,7 +5,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type {
   Document,
   DocumentPage,
-  DocumentSummary,
+  CurrentSummary,
   Environment,
   EnvironmentInput,
   EnvironmentPatch,
@@ -117,10 +117,20 @@ export const api = {
       method: "POST",
     }),
 
-  // Written by the local language model on request: usually under a
-  // minute, a few minutes for a long document.
-  summarizeDocument: (documentId: string) =>
-    request<DocumentSummary>(`${documentPath(documentId)}/summary`, {
+  // The document's current summary, or null if none has been asked for.
+  getSummary: async (documentId: string) => {
+    try {
+      return await request<CurrentSummary>(`${documentPath(documentId)}/summary`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
+
+  // Make sure the document has a summary: returns it if ready, otherwise the
+  // waiting one, which the server then writes in the background.
+  requestSummary: (documentId: string) =>
+    request<CurrentSummary>(`${documentPath(documentId)}/summary`, {
       method: "POST",
     }),
 

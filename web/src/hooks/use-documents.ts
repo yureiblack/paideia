@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import type { Document } from "@/lib/types";
+import type { CurrentSummary, Document } from "@/lib/types";
 
 // Under the environment's own key, so deleting the environment clears these.
 const listKey = (environmentId: string) =>
@@ -67,10 +67,37 @@ export function useDeleteDocument(environmentId: string) {
   });
 }
 
-// A summary is generated afresh each time it is asked for, so it is a
-// mutation rather than a cached query.
-export function useSummarizeDocument() {
+// A document's summary, written in the background once the document is read.
+// Polled every two seconds while it waits or is being written, and for a
+// minute after the document became ready, while its summary is being asked
+// for. Under the environment's key, so deleting the environment clears it.
+const summaryKey = (environmentId: string, documentId: string) =>
+  ["environments", environmentId, "documents", documentId, "summary"] as const;
+
+const isWriting = (summary: CurrentSummary | null | undefined) =>
+  summary?.status === "pending" || summary?.status === "generating";
+
+export function useSummary(environmentId: string, document: Document) {
+  const ready = document.status === "ready";
+  return useQuery({
+    queryKey: summaryKey(environmentId, document.id),
+    queryFn: () => api.getSummary(document.id),
+    enabled: ready,
+    refetchInterval: (query) => {
+      const summary = query.state.data;
+      const justRead =
+        summary === null &&
+        Date.now() - new Date(document.updated_at).getTime() < 60_000;
+      return isWriting(summary) || justRead ? 2000 : false;
+    },
+  });
+}
+
+export function useRequestSummary(environmentId: string, documentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (documentId: string) => api.summarizeDocument(documentId),
+    mutationFn: () => api.requestSummary(documentId),
+    onSuccess: (summary) =>
+      queryClient.setQueryData(summaryKey(environmentId, documentId), summary),
   });
 }
