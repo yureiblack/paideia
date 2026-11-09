@@ -44,6 +44,14 @@ it was last updated, which documents it is based on and in which version,
 and which documents were left out and why, and every key point cites the
 passages it rests on, across all the documents.
 
+The model also proposes the concepts each document teaches, with a short
+definition, other names, and the passages that explain them. The backend
+checks every proposal before keeping it: names are cleaned up the same way
+every time, so "Threads" and "Thread" are one concept, descriptions passed off
+as other names are dropped, and only passages the model was actually given
+count as evidence. The Knowledge map tab lists the environment's concepts,
+each opening the passages behind it; the map of how they relate comes next.
+
 ## Stack
 
 | Layer | Choice |
@@ -151,6 +159,9 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/environments/{id}/summary` | Where the environment's summary stands: `state` (`up_to_date`, `updating`, `waiting` for documents still being read or summarized, `stale`, `failed`, or `none`), the newest `summary` with its `overview`, cited `key_points` and the documents it is `based_on`, the documents `not_included` and why, and how many `earlier_versions` are kept. |
 | POST | `/api/environments/{id}/summary` | Bring it up to date, or try again after a failure. It never writes twice for the same material, and waits while documents are on their way. 422 if there is nothing summarized to build it from. |
 | GET | `/api/environments/{id}/summaries` | Every summary of the environment, newest first. |
+| GET | `/api/environments/{id}/concepts` | Every concept in the environment, by name, with its `definition`, `aliases`, the `documents` it appears in and the `evidence` citations; and each document's extraction state (`proposed` and `kept` counts what passed validation). |
+| GET | `/api/documents/{id}/concepts` | One document's extraction state and the concepts it contributes. |
+| POST | `/api/documents/{id}/concepts` | Make sure the document's concepts are extracted, or try again after a failure: 200 if ready, 202 if waiting or being extracted. 409 if the document is not read yet, 422 if it has no text or is too long. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -245,6 +256,7 @@ api/                    FastAPI backend
     llm.py              the language model behind a replaceable interface
     prompting.py        prompt templates, loaded by name and version
     prompts/            the templates, one file per version, never edited
+    concepts.py         concept names and the validation of the model's proposals
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
