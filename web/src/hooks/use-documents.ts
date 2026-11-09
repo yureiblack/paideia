@@ -66,3 +66,11 @@ export function useDeleteDocument(environmentId: string) {
     },
   });
 }
+
+// A summary is generated afresh each time it is asked for, so it is a
+// mutation rather than a cached query.
+export function useSummarizeDocument() {
+  return useMutation({
+    mutationFn: (documentId: string) => api.summarizeDocument(documentId),
+  });
+}

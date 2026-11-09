@@ -1,10 +1,12 @@
-"""Stand-ins for the embedding and reranking models, for fast, offline tests.
+"""Stand-ins for the three models, for fast, offline tests.
 
 FakeEmbedder turns each word into a fixed position in a 384-number vector, so
 texts that share words get similar vectors and texts that share none get
 unrelated ones. FakeReranker scores a passage by the share of the query's
-words it contains. Both are crude next to the real models, which also match
-meaning, but they are deterministic, instant, and need no download.
+words it contains. MockProvider answers prompts for the language model with
+scripted or simple answers that fit the schema it is given. All are crude
+next to the real models, but they are deterministic, instant, and need no
+download.
 """
 
 import hashlib
@@ -77,3 +79,62 @@ class BrokenReranker(FakeReranker):
         from app.reranking import RerankError
 
         raise RerankError("Could not load the reranking model. No internet connection.")
+
+
+def allowed_numbers(schema) -> list[int]:
+    """The passage numbers a summary answer schema allows."""
+    item = schema.model_json_schema()["$defs"]["KeyPoint"]["properties"]["sources"]
+    item = item["items"]
+    if "enum" in item:
+        return list(item["enum"])
+    return list(range(item["minimum"], item["maximum"] + 1))
+
+
+def simple_answer(prompt, schema) -> dict:
+    """A valid summary answer: one key point per allowed number, as few as
+    the schema allows, each citing its number."""
+    numbers = allowed_numbers(schema)
+    least = schema.model_json_schema()["properties"]["key_points"]["minItems"]
+    return {
+        "overview": f"An overview of {len(numbers)} passages.",
+        "key_points": [
+            {"point": f"Point about passage {n}.", "sources": [n]}
+            for n in numbers[:least]
+        ],
+    }
+
+
+class MockProvider:
+    """A language model that answers with answer(prompt, schema), by default
+    simple_answer, and records every prompt and schema it was given."""
+
+    model_name = "mock-llm"
+
+    def __init__(self, answer=simple_answer, problem: str | None = None):
+        self.answer = answer
+        self.problem = problem  # what check() reports
+        self.calls = []  # (prompt, schema) for every request
+
+    def generate_structured(self, prompt, schema):
+        from app.llm import Generated
+
+        self.calls.append((prompt, schema))
+        return Generated(
+            value=schema.model_validate(self.answer(prompt, schema)),
+            model=self.model_name,
+            prompt_version=prompt.id,
+            seconds=1.5,
+        )
+
+    def check(self):
+        return self.problem
+
+
+class FailingProvider(MockProvider):
+    """Fails like a language model that is not running."""
+
+    def generate_structured(self, prompt, schema):
+        from app.llm import LLMError
+
+        self.calls.append((prompt, schema))
+        raise LLMError("Could not reach Ollama. Is it running?")

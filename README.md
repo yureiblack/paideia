@@ -27,8 +27,13 @@ search alone, and "Show scoring" reveals how each result was ranked.
 
 Every result cites exactly where it came from: the document, the version of
 its file, the pages and the passage. "Show in page" opens the citation, with
-the passage highlighted in its page. Summaries and answers will cite their
-sources the same way. A local language model comes next.
+the passage highlighted in its page.
+
+A local language model, run by Ollama on your own machine, writes a concise
+summary of any document on request: an overview and key points, each citing
+the passages it rests on with the same citations search uses, so every claim
+can be opened and checked in its page. Summaries are not saved yet; keeping
+them, and writing them automatically when a document arrives, comes next.
 
 ## Stack
 
@@ -40,7 +45,7 @@ sources the same way. A local language model comes next.
 | Embeddings and reranking | fastembed (ONNX Runtime) running BAAI/bge-small-en-v1.5 and ms-marco-MiniLM-L-6-v2, locally |
 | Database | PostgreSQL 16 with pgvector |
 | Jobs | Redis, provisioned but not yet used |
-| Language models | Local, via Ollama, in a later phase |
+| Language model | Ollama running ministral-3:8b locally, behind a replaceable provider interface |
 | Quality | Ruff, pytest, ESLint, TypeScript, GitHub Actions |
 
 The reasoning behind these choices is in
@@ -49,7 +54,8 @@ The reasoning behind these choices is in
 
 ## Running it locally
 
-Prerequisites: Docker Desktop, Python 3.13, Node 22, pnpm.
+Prerequisites: Docker Desktop, Python 3.13, Node 22, pnpm, and for
+summaries, Ollama (on a Mac: `brew install ollama`).
 
 1. Start the database and Redis:
 
@@ -93,8 +99,20 @@ Prerequisites: Docker Desktop, Python 3.13, Node 22, pnpm.
    pnpm dev
    ```
 
-Open http://localhost:3000. The header shows whether the API and the database
-are reachable. The API's generated documentation is at
+5. For summaries, start Ollama and download the model once, about 6 GB:
+
+   ```sh
+   brew services start ollama
+   ollama pull ministral-3:8b
+   ```
+
+   Ollama runs on the machine itself rather than in Docker: on a Mac, Docker
+   cannot use the GPU, and the model would be several times slower. It needs
+   about 7.5 GB of memory while it works. Everything else in the app runs
+   without it.
+
+Open http://localhost:3000. The header shows whether the API, the database and
+the language model are ready; hover over one that is down to see why. The API's generated documentation is at
 http://localhost:8000/docs.
 
 The frontend reads the same root `.env` as the backend. It needs nothing from it
@@ -106,6 +124,7 @@ by default, since it assumes the API is at http://localhost:8000.
 |---|---|---|
 | GET | `/health` | Is the API process alive. Touches nothing else. |
 | GET | `/health/db` | Can the API reach Postgres, and is pgvector available. Returns 503 if not. |
+| GET | `/health/llm` | Is Ollama answering, with the configured model downloaded. Returns 503 with the reason if not. |
 | GET | `/api/environments` | Every environment, newest first. |
 | POST | `/api/environments` | Create one. Body: `name`, optional `description`. Returns 201. |
 | GET | `/api/environments/{id}` | One environment, or 404. |
@@ -117,6 +136,7 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/documents/{id}/pages` | The extracted text, page by page, numbered from 1. Paragraphs are separated by a blank line. |
 | GET | `/api/documents/{id}/chunks` | The passages the document was cut into, in reading order, each with its heading and exact position in the pages. |
 | POST | `/api/documents/{id}/reprocess` | Read a document again, for example after a failure. Returns 202. |
+| POST | `/api/documents/{id}/summary` | A fresh summary by the local language model: an `overview` and `key_points`, each with its `citations`, plus the `model` and `prompt_versions` that produced it. Usually under a minute. 409 if the document is not read yet, 422 if it has no text or is too long to summarize on request, 503 with the reason if the model cannot be used. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -154,10 +174,12 @@ every test is rolled back when it finishes, and every test gets its own
 temporary data folder. Test PDFs are built in code, so the repository holds no
 binary files.
 
-Most tests use stand-ins for the two models. A few load the real ones,
+Most tests use stand-ins for the models. A few load the real ones,
 including the roadmap's "process scheduling" test and the retrieval
 evaluation; they share the models in `data/models/`, so the first run
-downloads them. The evaluation scores each way of searching on a labelled
+downloads them. One test summarizes a document with the real language model;
+it runs only when Ollama is up with the model downloaded, and is skipped
+otherwise, including in CI. The evaluation scores each way of searching on a labelled
 set of questions; to print its table, from `api/`:
 
 ```sh
@@ -206,6 +228,9 @@ api/                    FastAPI backend
     chunking.py         page text to deterministic chunks
     embedding.py        text to vectors, through a local model
     reranking.py        scoring passages against a query, through a local model
+    llm.py              the language model behind a replaceable interface
+    prompting.py        prompt templates, loaded by name and version
+    prompts/            the templates, one file per version, never edited
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints

@@ -68,6 +68,27 @@ export type Citation = {
   excerpt: string;
 };
 
+// One key point of a summary and the passages it rests on.
+export type SummaryPoint = {
+  text: string;
+  citations: Citation[];
+};
+
+// A summary of one document written by the local language model from the
+// document's own passages. model and prompt_versions record what produced
+// it. sections is how many parts a long document was read in (1 for most);
+// seconds is the model's time. Generated on request; not stored.
+export type DocumentSummary = {
+  document_id: string;
+  overview: string;
+  key_points: SummaryPoint[];
+  model: string;
+  prompt_versions: string[];
+  sections: number;
+  seconds: number;
+  generated_at: string;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.

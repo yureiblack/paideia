@@ -35,7 +35,8 @@ from app.config import settings
 from app.db import get_session, get_session_factory
 from app.main import app
 from app.routers.search import get_embedder, get_reranker
-from tests.fakes import FakeEmbedder, FakeReranker
+from app.routers.summaries import get_llm
+from tests.fakes import FakeEmbedder, FakeReranker, MockProvider
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -153,8 +154,15 @@ def reranker() -> FakeReranker:
 
 
 @pytest.fixture
+def llm() -> MockProvider:
+    """The language model the client's requests use: a scripted stand-in.
+    No test talks to a real model unless it asks for one."""
+    return MockProvider()
+
+
+@pytest.fixture
 def client(
-    connection: Connection, session_factory, embedder, reranker
+    connection: Connection, session_factory, embedder, reranker, llm
 ) -> Iterator[TestClient]:
     """An HTTP client whose requests all run inside the test transaction.
 
@@ -171,6 +179,7 @@ def client(
     app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.dependency_overrides[get_embedder] = lambda: embedder
     app.dependency_overrides[get_reranker] = lambda: reranker
+    app.dependency_overrides[get_llm] = lambda: llm
     try:
         yield TestClient(app)
     finally:
