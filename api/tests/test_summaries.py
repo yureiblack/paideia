@@ -17,6 +17,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app import storage
+from app.llm import ONE_AT_A_TIME
 from app.models import Document, DocumentChunk, Environment, GeneratedArtifact
 from app.schemas import EnvironmentCreate
 from app.services import documents as document_service
@@ -242,7 +243,7 @@ def test_summaries_are_written_one_at_a_time(session: Session, session_factory):
     held = []
 
     def answer(prompt, schema):
-        held.append(summaries._ONE_AT_A_TIME.locked())
+        held.append(ONE_AT_A_TIME.locked())
         return citing([1], [2], [3])(prompt, schema)
 
     summarize(session, session_factory, lecture, MockProvider(answer=answer))
