@@ -18,7 +18,14 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.db import engine
-from app.routers import documents, environments, search, sources, summaries
+from app.routers import (
+    documents,
+    environment_summaries,
+    environments,
+    search,
+    sources,
+    summaries,
+)
 from app.routers.deps import LLMDep
 
 # The application object. Every route and every piece of middleware attaches to
@@ -44,6 +51,7 @@ app.include_router(documents.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(summaries.router, prefix="/api")
+app.include_router(environment_summaries.router, prefix="/api")
 
 
 class Health(BaseModel):
