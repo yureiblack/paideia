@@ -246,8 +246,9 @@ class DocumentChunk(Base):
 class GeneratedArtifact(Base):
     """Something the language model wrote, kept with what it was written from.
 
-    Two kinds so far (artifact_type): a document's summary (Phase 09), and an
-    environment's master summary (Phase 10), which has no document_id. source_version fingerprints exactly what an artifact
+    Three kinds so far (artifact_type): a document's summary (Phase 09), an
+    environment's master summary (Phase 10), which has no document_id, and
+    the concepts extracted from a document (Phase 11). source_version fingerprints exactly what an artifact
     read: for a document summary, the document's file version and its chunk
     ids in reading order, so it changes exactly when the text changes.
     model_name and prompt_version record what wrote it.
@@ -277,7 +278,8 @@ class GeneratedArtifact(Base):
             "status IN ('pending', 'generating', 'ready', 'failed')", name="status"
         ),
         CheckConstraint(
-            "artifact_type IN ('document_summary', 'environment_summary')",
+            "artifact_type IN "
+            "('document_summary', 'environment_summary', 'concept_extraction')",
             name="artifact_type",
         ),
         # The key above never matches a row without a document, since NULLs
@@ -325,4 +327,78 @@ class GeneratedArtifact(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.statement_timestamp(),
+    )
+
+
+class Concept(Base):
+    """One concept an environment's material teaches, such as "Deadlock".
+
+    Concepts are proposed by the language model and validated by the backend
+    (decision record 11). Identity is normalized_name within an environment,
+    a deterministic cleaning of the name, so "Threads" in one lecture and
+    "Thread" in another are one concept. name, definition and aliases are
+    what is shown, taken from the document with the most evidence for it.
+    Concept ids stay stable while any document mentions the concept, so the
+    knowledge graph (Phase 12) can point at them.
+    """
+
+    __tablename__ = "concepts"
+    __table_args__ = (UniqueConstraint("environment_id", "normalized_name"),)
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(Text)
+    normalized_name: Mapped[str] = mapped_column(Text)
+    definition: Mapped[str] = mapped_column(Text)
+    aliases: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.statement_timestamp(),
+    )
+
+
+class DocumentConcept(Base):
+    """A concept as one document presents it: the name, definition and
+    aliases that document's extraction gave it."""
+
+    __tablename__ = "document_concepts"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    name: Mapped[str] = mapped_column(Text)
+    definition: Mapped[str] = mapped_column(Text)
+    aliases: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+
+
+class ConceptEvidence(Base):
+    """A passage that explains a concept: the evidence for it. Deleted with the
+    chunk, so evidence always points at text that exists."""
+
+    __tablename__ = "concept_evidence"
+
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Indexed on its own as well: every reprocess deletes chunks, and each
+    # deletion cascades here.
+    chunk_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_chunks.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )

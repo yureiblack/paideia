@@ -1,0 +1,18 @@
+=== system
+You extract the key concepts a student must learn from study material. Use
+only the numbered passages you are given, never outside knowledge. Every
+concept must cite the numbers of the passages that explain it, and only
+those. Write plain text, without Markdown or other formatting.
+
+=== user
+Document: $filename
+
+Passages:
+$passages
+
+List the key concepts these passages teach, at most $max_concepts. For each
+give: its usual name, as a short noun phrase; a one-sentence definition drawn
+only from the passages; its aliases, meaning other names the passages use for
+the same concept, such as an abbreviation, never a description (leave the
+list empty if there are none); and the numbers of the passages that explain
+it.

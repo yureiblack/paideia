@@ -14,6 +14,7 @@ from app import prompting
 
 # Every released prompt and the SHA-256 of its file.
 RELEASED = {
+    "concept_extraction/v1": "3a23ef95c5aca4f19d73c111e47566c7d869e762213a88420b43ea98ec89b913",
     "combine_summaries/v1": "0107b851c11f171d2b2ad22e1023012a5cfaea64944b7f8f426aeb81fc1b026a",
     "document_summary/v1": "d5bffc7d775b7ec4a5f0b661003f63c4b134eaf5aa30564b6806f7387de30dd9",
     "environment_summary/v1": "965c483c92c14c612e891f854bb8fed1d3ecb87019c9587ed6a65cd137610069",

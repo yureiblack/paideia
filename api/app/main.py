@@ -19,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.db import engine
 from app.routers import (
+    concepts,
     documents,
     environment_summaries,
     environments,
@@ -52,6 +53,7 @@ app.include_router(search.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(summaries.router, prefix="/api")
 app.include_router(environment_summaries.router, prefix="/api")
+app.include_router(concepts.router, prefix="/api")
 
 
 class Health(BaseModel):

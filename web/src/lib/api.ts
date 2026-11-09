@@ -5,6 +5,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type {
   Document,
   DocumentPage,
+  ConceptInventory,
   CurrentSummary,
   Environment,
   EnvironmentInput,
@@ -102,6 +103,12 @@ export const api = {
     request<EnvironmentSummaryState>(`${environmentPath(environmentId)}/summary`, {
       method: "POST",
     }),
+
+  getConcepts: (environmentId: string) =>
+    request<ConceptInventory>(`${environmentPath(environmentId)}/concepts`),
+
+  requestConcepts: (documentId: string) =>
+    request<unknown>(`${documentPath(documentId)}/concepts`, { method: "POST" }),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),

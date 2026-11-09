@@ -50,13 +50,35 @@ function KeyPoint({
   point: SummaryPoint;
   showFilename: boolean;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
-
   return (
     <div className="flex flex-col gap-1.5">
       <p className="text-sm">{point.text}</p>
+      <CitationChips
+        environmentId={environmentId}
+        citations={point.citations}
+        showFilename={showFilename}
+      />
+    </div>
+  );
+}
+
+// A chip per cited passage; a chip opens its passage in its page, one at a
+// time, below the chips.
+export function CitationChips({
+  environmentId,
+  citations,
+  showFilename = false,
+}: {
+  environmentId: string;
+  citations: Citation[];
+  showFilename?: boolean;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+
+  return (
+    <>
       <div className="flex flex-wrap gap-1.5">
-        {point.citations.map((citation) => {
+        {citations.map((citation) => {
           const isOpen = open === citation.chunk_id;
           return (
             <button
@@ -77,6 +99,6 @@ function KeyPoint({
         })}
       </div>
       {open && <SourcePanel environmentId={environmentId} chunkId={open} />}
-    </div>
+    </>
   );
 }
