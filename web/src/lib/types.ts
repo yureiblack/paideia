@@ -102,6 +102,53 @@ export type Summary = {
 // The current summary, and how many earlier ones are kept.
 export type CurrentSummary = Summary & { earlier_versions: number };
 
+// A document an environment summary was built from, as it was then.
+export type SourceDocument = {
+  document_id: string;
+  filename: string;
+  document_version: string;
+  summary_id: string;
+};
+
+// A document an environment summary leaves out, and why.
+export type NotIncluded = {
+  document_id: string;
+  filename: string;
+  reason: string;
+};
+
+// A summary of a whole environment, built from its documents' summaries.
+export type EnvironmentSummary = {
+  id: string;
+  environment_id: string;
+  status: SummaryStatus;
+  error: string | null;
+  overview: string | null;
+  key_points: SummaryPoint[];
+  model: string;
+  prompt_versions: string[];
+  source_version: string;
+  based_on: SourceDocument[];
+  seconds: number | null;
+  current: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+// Where an environment's summary stands. up_to_date: the summary covers the
+// material as it is now. updating: a new one is being written. waiting:
+// waiting_for documents are still being read or summarized. stale: the
+// material changed and no rebuild was asked for. failed: error says why.
+// none: nothing to summarize yet. summary is the newest ready one.
+export type EnvironmentSummaryState = {
+  state: "up_to_date" | "updating" | "waiting" | "stale" | "failed" | "none";
+  waiting_for: number;
+  error: string | null;
+  summary: EnvironmentSummary | null;
+  not_included: NotIncluded[];
+  earlier_versions: number;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.
