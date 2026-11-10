@@ -50,7 +50,18 @@ checks every proposal before keeping it: names are cleaned up the same way
 every time, so "Threads" and "Thread" are one concept, descriptions passed off
 as other names are dropped, and only passages the model was actually given
 count as evidence. The Knowledge map tab lists the environment's concepts,
-each opening the passages behind it; the map of how they relate comes next.
+each opening the passages behind it.
+
+The concepts are joined into a knowledge graph: which must be understood
+before which, which is a part of which, and which are related. The backend
+finds the pairs of concepts that a passage connects, in one lecture or
+across lectures, and the model only decides how each pair relates, or that
+it does not. Every relationship cites the passages it was found in, and
+there is at most one per pair of concepts. Decisions are remembered, so
+adding a lecture asks the model only about the new pairs, and deleting one
+asks nothing. On the Knowledge map tab, picking a concept shows what it
+builds on, all the way back, what builds on it, its parts and what it is
+related to, each a link to explore further.
 
 ## Stack
 
@@ -162,6 +173,9 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/environments/{id}/concepts` | Every concept in the environment, by name, with its `definition`, `aliases`, the `documents` it appears in and the `evidence` citations; and each document's extraction state (`proposed` and `kept` counts what passed validation). |
 | GET | `/api/documents/{id}/concepts` | One document's extraction state and the concepts it contributes. |
 | POST | `/api/documents/{id}/concepts` | Make sure the document's concepts are extracted, or try again after a failure: 200 if ready, 202 if waiting or being extracted. 409 if the document is not read yet, 422 if it has no text or is too long. |
+| GET | `/api/environments/{id}/graph` | The environment's knowledge graph: every concept as a `node`, every relationship as an `edge` (`source`, `target`, `relationship_type` `PREREQUISITE_OF`, `PART_OF` or `RELATED_TO`, and the model's `confidence`), and where it stands: `state` as for the environment's summary, with `waiting` for documents still being read or having their concepts extracted; `pairs` considered and how many the model was `asked` about in the last build. |
+| POST | `/api/environments/{id}/graph` | Bring the graph up to date, or try again after a failure: 200 if up to date, 202 if being built or waiting. It never asks the model twice about the same pair. 422 if no concepts are connected yet. |
+| GET | `/api/concepts/{id}/neighbourhood` | One concept and what is next to it: its `prerequisites` and `dependents`, all the way along with their `depth`, what it is `part_of`, its `parts`, and what it is `related` to, each direct relationship with its `confidence` and `evidence` citations. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -257,6 +271,7 @@ api/                    FastAPI backend
     prompting.py        prompt templates, loaded by name and version
     prompts/            the templates, one file per version, never edited
     concepts.py         concept names and the validation of the model's proposals
+    graph.py            candidate pairs of concepts, and what a decision means
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
