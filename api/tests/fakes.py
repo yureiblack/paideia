@@ -92,13 +92,28 @@ def allowed_numbers(schema) -> list[int]:
     return list(range(item["minimum"], item["maximum"] + 1))
 
 
+def pair_count(schema) -> int:
+    """How many pairs a relationship answer schema asks about."""
+    return schema.model_json_schema()["properties"]["decisions"]["maxItems"]
+
+
+def relationship_answer(schema, choice: int, confidence: float) -> list[dict]:
+    """The same choice for every pair a relationship schema asks about."""
+    return [
+        {"pair": n, "choice": choice, "confidence": confidence}
+        for n in range(1, pair_count(schema) + 1)
+    ]
+
+
 def simple_answer(prompt, schema) -> dict:
     """A valid answer of the shape the schema asks for. A summary: one key
     point per allowed number, as few as the schema allows, each citing its
     number. Concepts: one per passage, "Concept 1" and so on, each citing
-    its passage."""
-    numbers = allowed_numbers(schema)
+    its passage. Relationships: every pair related, with confidence 0.8."""
     properties = schema.model_json_schema()["properties"]
+    if "decisions" in properties:
+        return {"decisions": relationship_answer(schema, choice=5, confidence=0.8)}
+    numbers = allowed_numbers(schema)
     if "concepts" in properties:
         return {
             "concepts": [

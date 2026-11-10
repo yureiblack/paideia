@@ -355,6 +355,67 @@ class DocumentConceptsRead(BaseModel):
     concepts: list[ConceptRead]
 
 
+class GraphNode(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class GraphEdge(BaseModel):
+    """source PREREQUISITE_OF target: target builds on source. source
+    PART_OF target: source is a part, step or kind of target. RELATED_TO has
+    no direction."""
+
+    id: uuid.UUID
+    source: uuid.UUID
+    target: uuid.UUID
+    relationship_type: Literal["PREREQUISITE_OF", "RELATED_TO", "PART_OF"]
+    confidence: float
+
+
+class GraphState(BaseModel):
+    """An environment's knowledge graph and where its build stands. state as
+    for the environment summary: up_to_date, updating, waiting (for
+    waiting_for documents), stale, failed (error says why) or none. pairs is
+    how many candidate pairs the graph considered; asked how many of them
+    the model was asked about in the last build, the rest being remembered."""
+
+    state: Literal["up_to_date", "updating", "waiting", "stale", "failed", "none"]
+    waiting_for: int
+    error: str | None
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    pairs: int | None
+    asked: int | None
+    updated_at: datetime | None
+
+
+class Neighbour(BaseModel):
+    """A concept next to another in the graph. depth is how many steps away
+    along prerequisites (1 for a direct one). evidence lists the passages
+    showing the direct relationship, if this is one."""
+
+    id: uuid.UUID
+    name: str
+    depth: int
+    confidence: float | None
+    evidence: list[Citation]
+
+
+class Neighbourhood(BaseModel):
+    """A concept and everything next to it: what it builds on (all
+    prerequisites, transitively), what builds on it, what it is part of, its
+    parts, and what it is related to."""
+
+    concept: GraphNode
+    definition: str
+    aliases: list[str]
+    prerequisites: list[Neighbour]
+    dependents: list[Neighbour]
+    part_of: list[Neighbour]
+    parts: list[Neighbour]
+    related: list[Neighbour]
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

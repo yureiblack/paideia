@@ -1,0 +1,22 @@
+=== system
+You classify how pairs of concepts from a student's study material relate.
+Use only the numbered passages you are given. Choose the last statement when
+the passages do not show a relationship.
+
+=== user
+Passages:
+$passages
+
+For each pair below, choose the one statement the passages best support, by
+its number, and give your confidence from 0 to 1.
+
+$pairs
+
+=== pair
+Pair $number (passages $passages): $a: $a_definition | $b: $b_definition
+  1. $a must be understood before $b.
+  2. $b must be understood before $a.
+  3. $a is a part, step or kind of $b.
+  4. $b is a part, step or kind of $a.
+  5. $a and $b are closely related, but none of the above.
+  6. The passages do not show a relationship.

@@ -18,6 +18,7 @@ RELEASED = {
     "combine_summaries/v1": "0107b851c11f171d2b2ad22e1023012a5cfaea64944b7f8f426aeb81fc1b026a",
     "document_summary/v1": "d5bffc7d775b7ec4a5f0b661003f63c4b134eaf5aa30564b6806f7387de30dd9",
     "environment_summary/v1": "965c483c92c14c612e891f854bb8fed1d3ecb87019c9587ed6a65cd137610069",
+    "relationship/v1": "1990b4c79f86eed0f846939af9a0aafcd61e3b3b220b7a7251bd5510d3fd4925",
 }
 
 
@@ -49,6 +50,24 @@ def test_a_prompt_renders_with_its_version():
     assert "[1] Paging maps pages to frames." in prompt.user
     assert "between 3 and 7 key points" in prompt.user
     assert "$" not in prompt.system + prompt.user
+
+
+def test_a_prompt_can_hold_named_parts_besides_system_and_user():
+    pair = prompting.part("relationship", "v1", "pair").substitute(
+        number=1,
+        passages="2",
+        a="Deadlock",
+        a_definition="A state.",
+        b="Deadlock Avoidance",
+        b_definition="A strategy.",
+    )
+    prompt = prompting.render("relationship", "v1", passages="[2] ...", pairs=pair)
+
+    assert pair.startswith("Pair 1 (passages 2): Deadlock: A state. |")
+    assert "1. Deadlock must be understood before Deadlock Avoidance." in pair
+    assert "6. The passages do not show a relationship." in pair
+    assert prompt.user.endswith(pair)
+    assert "=== pair" not in prompt.user
 
 
 def test_every_placeholder_must_be_given():
