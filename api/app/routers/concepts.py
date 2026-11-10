@@ -22,6 +22,7 @@ from app.routers.environments import EnvironmentDep
 from app.schemas import ConceptInventory, DocumentConceptsRead
 from app.services import concepts as service
 from app.services import graph as graph_service
+from app.services import roadmap as roadmap_service
 from app.services import summaries as summary_service
 
 router = APIRouter(tags=["concepts"])
@@ -68,6 +69,12 @@ def request_concepts(
         background.add_task(service.write_extraction, session_factory, artifact.id, llm)
         background.add_task(
             graph_service.refresh_graph, session_factory, document.environment_id, llm
+        )
+        background.add_task(
+            roadmap_service.refresh_roadmap,
+            session_factory,
+            document.environment_id,
+            llm,
         )
     if artifact.status != "ready":
         response.status_code = status.HTTP_202_ACCEPTED

@@ -24,6 +24,7 @@ from app.routers import (
     environment_summaries,
     environments,
     graph,
+    roadmap,
     search,
     sources,
     summaries,
@@ -56,6 +57,7 @@ app.include_router(summaries.router, prefix="/api")
 app.include_router(environment_summaries.router, prefix="/api")
 app.include_router(concepts.router, prefix="/api")
 app.include_router(graph.router, prefix="/api")
+app.include_router(roadmap.router, prefix="/api")
 
 
 class Health(BaseModel):
