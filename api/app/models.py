@@ -24,6 +24,7 @@ from sqlalchemy import (
     CheckConstraint,
     Computed,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     MetaData,
@@ -246,9 +247,10 @@ class DocumentChunk(Base):
 class GeneratedArtifact(Base):
     """Something the language model wrote, kept with what it was written from.
 
-    Three kinds so far (artifact_type): a document's summary (Phase 09), an
-    environment's master summary (Phase 10), which has no document_id, and
-    the concepts extracted from a document (Phase 11). source_version fingerprints exactly what an artifact
+    Four kinds so far (artifact_type): a document's summary (Phase 09), an
+    environment's master summary (Phase 10), the concepts extracted from a
+    document (Phase 11), and the build of an environment's knowledge graph
+    (Phase 12). The environment-wide kinds have no document_id. source_version fingerprints exactly what an artifact
     read: for a document summary, the document's file version and its chunk
     ids in reading order, so it changes exactly when the text changes.
     model_name and prompt_version record what wrote it.
@@ -278,8 +280,8 @@ class GeneratedArtifact(Base):
             "status IN ('pending', 'generating', 'ready', 'failed')", name="status"
         ),
         CheckConstraint(
-            "artifact_type IN "
-            "('document_summary', 'environment_summary', 'concept_extraction')",
+            "artifact_type IN ('document_summary', 'environment_summary', "
+            "'concept_extraction', 'knowledge_graph')",
             name="artifact_type",
         ),
         # The key above never matches a row without a document, since NULLs
@@ -394,6 +396,112 @@ class ConceptEvidence(Base):
     )
     # Indexed on its own as well: every reprocess deletes chunks, and each
     # deletion cascades here.
+    chunk_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_chunks.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+
+
+class RelationshipDecision(Base):
+    """What the model decided about one candidate pair of concepts, kept so
+    the same pair is never asked about twice (decision record 12).
+
+    A pair is two concepts that one of the environment's passages connects,
+    found by the backend, never by the model. pair_key fingerprints the pair
+    as the model saw it: both normalized names and the content of its
+    passages. concept_a and concept_b are in normalized-name order, and
+    decision is read in that order.
+    """
+
+    __tablename__ = "relationship_decisions"
+    __table_args__ = (
+        UniqueConstraint("environment_id", "pair_key", "model_name", "prompt_version"),
+        CheckConstraint(
+            "decision IN ('a_before_b', 'b_before_a', 'a_part_of_b', 'b_part_of_a', "
+            "'related', 'none')",
+            name="decision",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE")
+    )
+    pair_key: Mapped[str] = mapped_column(String(64))
+    concept_a_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    )
+    concept_b_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    )
+    decision: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float)
+    model_name: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConceptRelationship(Base):
+    """An edge of the knowledge graph: source PREREQUISITE_OF target (target
+    builds on source), source PART_OF target (a part, step or kind of it), or
+    RELATED_TO. Derived from the decisions about the environment's current
+    candidate pairs, with at most one relationship per pair of concepts in
+    either direction, so contradictions and duplicates cannot be stored."""
+
+    __tablename__ = "concept_relationships"
+    __table_args__ = (
+        CheckConstraint(
+            "relationship_type IN ('PREREQUISITE_OF', 'RELATED_TO', 'PART_OF')",
+            name="relationship_type",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence"),
+        CheckConstraint("source_concept_id <> target_concept_id", name="no_self_edge"),
+        Index(
+            "uq_concept_relationships_pair",
+            func.least(text("source_concept_id"), text("target_concept_id")),
+            func.greatest(text("source_concept_id"), text("target_concept_id")),
+            unique=True,
+        ),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    source_concept_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    )
+    target_concept_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    )
+    relationship_type: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class RelationshipEvidence(Base):
+    """A passage that shows a relationship. Deleted with its chunk."""
+
+    __tablename__ = "relationship_evidence"
+
+    relationship_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concept_relationships.id", ondelete="CASCADE"), primary_key=True
+    )
     chunk_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("document_chunks.id", ondelete="CASCADE"),
         primary_key=True,
