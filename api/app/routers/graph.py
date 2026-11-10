@@ -28,6 +28,7 @@ from app.routers.deps import LLMDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import GraphState, Neighbourhood
 from app.services import graph as service
+from app.services import roadmap as roadmap_service
 
 router = APIRouter(tags=["knowledge graph"])
 
@@ -72,6 +73,9 @@ def request_graph(
     session.commit()  # end this read before the background task (record 09)
     if write_now:
         background.add_task(service.write_graph, session_factory, artifact.id, llm)
+        background.add_task(
+            roadmap_service.refresh_roadmap, session_factory, environment.id, llm
+        )
     if body.state != "up_to_date":
         response.status_code = status.HTTP_202_ACCEPTED
     return body

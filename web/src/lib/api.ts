@@ -13,6 +13,7 @@ import type {
   EnvironmentSummaryState,
   GraphState,
   Neighbourhood,
+  RoadmapState,
   SearchResponse,
   SourcePreview,
 } from "@/lib/types";
@@ -125,6 +126,15 @@ export const api = {
     request<Neighbourhood>(
       `/api/concepts/${encodeURIComponent(conceptId)}/neighbourhood`,
     ),
+
+  getRoadmap: (environmentId: string) =>
+    request<RoadmapState>(`${environmentPath(environmentId)}/roadmap`),
+
+  // Write the titles of the roadmap's current stages, or try again.
+  requestRoadmap: (environmentId: string) =>
+    request<RoadmapState>(`${environmentPath(environmentId)}/roadmap`, {
+      method: "POST",
+    }),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),

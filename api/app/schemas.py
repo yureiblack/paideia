@@ -416,6 +416,58 @@ class Neighbourhood(BaseModel):
     related: list[Neighbour]
 
 
+class ConceptRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class RoadmapConcept(BaseModel):
+    """One concept on the roadmap: what it builds on (its direct
+    prerequisites, all earlier on the roadmap unless in_cycle), whether it is
+    part of a loop of prerequisites, and the passages explaining it."""
+
+    id: uuid.UUID
+    name: str
+    definition: str
+    builds_on: list[ConceptRef]
+    in_cycle: bool
+    documents: list[ConceptDocument]
+    evidence: list[Citation]
+
+
+class RoadmapStage(BaseModel):
+    """One stage of the roadmap, its concepts in order. title and
+    description were written by the local model when written is true;
+    otherwise title is plain ("Deadlock and 6 more") and description null."""
+
+    number: int
+    title: str
+    description: str | None
+    written: bool
+    documents: list[ConceptDocument]
+    concepts: list[RoadmapConcept]
+
+
+class RoadmapCycle(BaseModel):
+    """Concepts whose prerequisites loop, so they are learned together."""
+
+    concepts: list[ConceptRef]
+
+
+class RoadmapState(BaseModel):
+    """An environment's learning roadmap. The stages and their order are
+    always those of the current concepts and graph, decided by fixed rules.
+    state is about the titles and descriptions the model writes: up_to_date,
+    updating, waiting (for the knowledge graph), stale, failed (error says
+    why) or none (no concepts yet)."""
+
+    state: Literal["up_to_date", "updating", "waiting", "stale", "failed", "none"]
+    error: str | None
+    stages: list[RoadmapStage]
+    cycles: list[RoadmapCycle]
+    updated_at: datetime | None
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

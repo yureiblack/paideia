@@ -2,12 +2,12 @@
 
 Purpose: the whole path, from an uploaded PDF through Ollama to a stored,
 cited summary, written by itself once the document is read, the
-environment's summary built from it, the document's concepts and the
-knowledge graph between them, with the configured model. It needs Ollama
-running with the model downloaded, so it is skipped where they are not,
-which includes CI: there, an 8B model on machines without a GPU would take
-minutes per summary. Run it locally after changing prompts, the model or the
-summary, concept or graph services.
+environment's summary built from it, the document's concepts, the
+knowledge graph between them and the learning roadmap, with the configured
+model. It needs Ollama running with the model downloaded, so it is skipped
+where they are not, which includes CI: there, an 8B model on machines
+without a GPU would take minutes per summary. Run it locally after changing
+prompts, the model or the summary, concept, graph or roadmap services.
 
 A real model's wording varies with the model, so the checks are about form
 and grounding, not words: plain text, every point cited, and every point
@@ -110,3 +110,21 @@ def test_the_real_model_summarizes_an_uploaded_document_by_itself(client: TestCl
             if n["id"] == edge["target"] and n["depth"] == 1
         ]
         assert direct and all(n["evidence"] for n in direct), (edge, near)
+
+    # And the roadmap: every concept exactly once, prerequisites first unless
+    # they loop, and stage titles in plain words.
+    plan = client.get(f"/api/environments/{env['id']}/roadmap").json()
+    assert plan["state"] == "up_to_date", plan
+    placed = [c["id"] for stage in plan["stages"] for c in stage["concepts"]]
+    assert sorted(placed) == sorted(nodes)
+    at = {concept_id: n for n, concept_id in enumerate(placed)}
+    for edge in graph["edges"]:
+        if edge["relationship_type"] == "PREREQUISITE_OF" and not any(
+            edge["source"] in {c["id"] for c in cycle["concepts"]}
+            for cycle in plan["cycles"]
+        ):
+            assert at[edge["source"]] < at[edge["target"]], edge
+    assert all(stage["written"] for stage in plan["stages"]), plan["stages"]
+    for stage in plan["stages"]:
+        assert len(stage["title"].split()) <= 8
+        assert not any(mark in stage["title"] + stage["description"] for mark in "*#`")

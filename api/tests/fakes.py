@@ -109,10 +109,23 @@ def simple_answer(prompt, schema) -> dict:
     """A valid answer of the shape the schema asks for. A summary: one key
     point per allowed number, as few as the schema allows, each citing its
     number. Concepts: one per passage, "Concept 1" and so on, each citing
-    its passage. Relationships: every pair related, with confidence 0.8."""
+    its passage. Relationships: every pair related, with confidence 0.8.
+    Roadmap stages: "Title 1" and so on."""
     properties = schema.model_json_schema()["properties"]
     if "decisions" in properties:
         return {"decisions": relationship_answer(schema, choice=5, confidence=0.8)}
+    if "stages" in properties:
+        count = properties["stages"]["maxItems"]
+        return {
+            "stages": [
+                {
+                    "stage": n,
+                    "title": f"Title {n}",
+                    "description": f"Learn what stage {n} covers.",
+                }
+                for n in range(1, count + 1)
+            ]
+        }
     numbers = allowed_numbers(schema)
     if "concepts" in properties:
         return {

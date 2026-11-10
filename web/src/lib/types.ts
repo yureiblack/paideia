@@ -232,6 +232,40 @@ export type Neighbourhood = {
   related: Neighbour[];
 };
 
+// The learning roadmap: the environment's concepts in stages, in the order
+// fixed rules give them from the knowledge graph. Only title and description
+// come from the local model (written is true); otherwise the title is plain
+// and description null. state is about those titles; waiting is for the
+// knowledge graph.
+export type ConceptRef = { id: string; name: string };
+
+export type RoadmapConcept = {
+  id: string;
+  name: string;
+  definition: string;
+  builds_on: ConceptRef[];
+  in_cycle: boolean;
+  documents: { document_id: string; filename: string }[];
+  evidence: Citation[];
+};
+
+export type RoadmapStage = {
+  number: number;
+  title: string;
+  description: string | null;
+  written: boolean;
+  documents: { document_id: string; filename: string }[];
+  concepts: RoadmapConcept[];
+};
+
+export type RoadmapState = {
+  state: "up_to_date" | "updating" | "waiting" | "stale" | "failed" | "none";
+  error: string | null;
+  stages: RoadmapStage[];
+  cycles: { concepts: ConceptRef[] }[];
+  updated_at: string | null;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.
