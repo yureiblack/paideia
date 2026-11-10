@@ -281,7 +281,7 @@ class GeneratedArtifact(Base):
         ),
         CheckConstraint(
             "artifact_type IN ('document_summary', 'environment_summary', "
-            "'concept_extraction', 'knowledge_graph')",
+            "'concept_extraction', 'knowledge_graph', 'learning_roadmap')",
             name="artifact_type",
         ),
         # The key above never matches a row without a document, since NULLs
