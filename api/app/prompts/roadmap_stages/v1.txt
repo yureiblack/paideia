@@ -1,0 +1,20 @@
+=== system
+You name the stages of a study plan built from a student's own material.
+Use only the concepts and definitions you are given, and add nothing of
+your own. Write plain text with no formatting.
+
+=== user
+These are the stages of the study plan, in order, with the concepts each
+one covers.
+
+$stages
+
+For each stage, by its number, write a title of at most six words that
+names what the stage is about, and one sentence of at most thirty words
+that tells the student what they will learn in it, starting with a verb
+such as "Learn", "See" or "Understand". Do not mention stage numbers or
+other stages.
+
+=== stage
+Stage $number:
+$concepts
