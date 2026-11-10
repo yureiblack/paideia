@@ -1,8 +1,15 @@
-import { ConceptInventory } from "@/components/concept-inventory";
+import { KnowledgeMap } from "@/components/knowledge-map";
 
 export default async function KnowledgeMapPage({
   params,
+  searchParams,
 }: PageProps<"/environments/[id]/knowledge-map">) {
   const { id } = await params;
-  return <ConceptInventory environmentId={id} />;
+  const { concept } = await searchParams;
+  return (
+    <KnowledgeMap
+      environmentId={id}
+      conceptId={typeof concept === "string" && concept ? concept : null}
+    />
+  );
 }

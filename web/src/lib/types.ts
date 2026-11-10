@@ -182,6 +182,56 @@ export type ConceptInventory = {
   documents: ExtractionState[];
 };
 
+// The knowledge graph: relationships between an environment's concepts,
+// found in passages that connect them and classified by the local model.
+// source PREREQUISITE_OF target: target builds on source. source PART_OF
+// target: source is a part, step or kind of target. RELATED_TO has no
+// direction.
+export type RelationshipType = "PREREQUISITE_OF" | "RELATED_TO" | "PART_OF";
+
+export type GraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  relationship_type: RelationshipType;
+  confidence: number;
+};
+
+// Where the graph stands, as for the environment's summary. pairs: how many
+// pairs of concepts the graph considered; asked: how many of them the model
+// was asked about in the last build, the rest being remembered.
+export type GraphState = {
+  state: "up_to_date" | "updating" | "waiting" | "stale" | "failed" | "none";
+  waiting_for: number;
+  error: string | null;
+  nodes: { id: string; name: string }[];
+  edges: GraphEdge[];
+  pairs: number | null;
+  asked: number | null;
+  updated_at: string | null;
+};
+
+// A concept next to another. depth: steps away along prerequisites (1 for a
+// direct one). evidence: the passages showing a direct relationship.
+export type Neighbour = {
+  id: string;
+  name: string;
+  depth: number;
+  confidence: number | null;
+  evidence: Citation[];
+};
+
+export type Neighbourhood = {
+  concept: { id: string; name: string };
+  definition: string;
+  aliases: string[];
+  prerequisites: Neighbour[];
+  dependents: Neighbour[];
+  part_of: Neighbour[];
+  parts: Neighbour[];
+  related: Neighbour[];
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.

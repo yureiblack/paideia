@@ -11,6 +11,8 @@ import type {
   EnvironmentInput,
   EnvironmentPatch,
   EnvironmentSummaryState,
+  GraphState,
+  Neighbourhood,
   SearchResponse,
   SourcePreview,
 } from "@/lib/types";
@@ -109,6 +111,20 @@ export const api = {
 
   requestConcepts: (documentId: string) =>
     request<unknown>(`${documentPath(documentId)}/concepts`, { method: "POST" }),
+
+  getGraph: (environmentId: string) =>
+    request<GraphState>(`${environmentPath(environmentId)}/graph`),
+
+  // Bring the graph up to date, or try again after a failure.
+  requestGraph: (environmentId: string) =>
+    request<GraphState>(`${environmentPath(environmentId)}/graph`, {
+      method: "POST",
+    }),
+
+  getNeighbourhood: (conceptId: string) =>
+    request<Neighbourhood>(
+      `/api/concepts/${encodeURIComponent(conceptId)}/neighbourhood`,
+    ),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),

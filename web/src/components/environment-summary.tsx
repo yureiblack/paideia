@@ -14,7 +14,9 @@ import {
 import { formatDateTime } from "@/lib/format";
 import type { EnvironmentSummaryState } from "@/lib/types";
 
-const BADGE: Record<
+// How each state of something derived, the summary or the knowledge graph,
+// is shown.
+export const STATE_BADGE: Record<
   EnvironmentSummaryState["state"],
   { label: string; style: string }
 > = {
@@ -42,7 +44,7 @@ export function EnvironmentSummary({ environmentId }: { environmentId: string })
   }
   const { state, waiting_for, error, summary, not_included, earlier_versions } =
     query.data;
-  const badge = BADGE[state];
+  const badge = STATE_BADGE[state];
 
   return (
     <div className="flex flex-col gap-6">
