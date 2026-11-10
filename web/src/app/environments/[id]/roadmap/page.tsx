@@ -1,10 +1,8 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { LearningRoadmap } from "@/components/learning-roadmap";
 
-export default function RoadmapPage() {
-  return (
-    <ComingSoon
-      title="Roadmap"
-      description="A learning order built from prerequisite links. Arrives in Phase 13."
-    />
-  );
+export default async function RoadmapPage({
+  params,
+}: PageProps<"/environments/[id]/roadmap">) {
+  const { id } = await params;
+  return <LearningRoadmap environmentId={id} />;
 }
