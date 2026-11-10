@@ -1,19 +1,32 @@
 "use client";
 
-// The Knowledge map tab, for now the concept inventory: every concept the
+// The concept inventory, on the Knowledge map tab: every concept the
 // environment's material teaches, as the language model proposed and the
 // backend validated it. Each shows its definition, other names, the
-// documents it appears in, and chips that open the passages explaining it.
-// Documents whose concepts are still coming, or could not be extracted, are
-// listed above, with Try again for failures.
+// documents it appears in, and chips that open the passages explaining it;
+// its name opens it in the explorer above, with how many relationships it
+// has. Documents whose concepts are still coming, or could not be
+// extracted, are listed above, with Try again for failures.
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
 import { useConcepts, useRequestConcepts } from "@/hooks/use-concepts";
 import type { Concept, ExtractionState } from "@/lib/types";
 
-export function ConceptInventory({ environmentId }: { environmentId: string }) {
+export function ConceptInventory({
+  environmentId,
+  selectedId = null,
+  relationships,
+  exploreHref,
+}: {
+  environmentId: string;
+  selectedId?: string | null;
+  // Relationships per concept id, once the graph has loaded.
+  relationships?: Record<string, number>;
+  exploreHref?: (id: string) => string;
+}) {
   const query = useConcepts(environmentId);
   const [filter, setFilter] = useState("");
 
@@ -66,7 +79,13 @@ export function ConceptInventory({ environmentId }: { environmentId: string }) {
           <ul className="flex flex-col gap-3" aria-label="Concepts">
             {shown.map((concept) => (
               <li key={concept.id}>
-                <ConceptCard environmentId={environmentId} concept={concept} />
+                <ConceptCard
+                  environmentId={environmentId}
+                  concept={concept}
+                  selected={concept.id === selectedId}
+                  relationships={relationships && (relationships[concept.id] ?? 0)}
+                  href={exploreHref?.(concept.id)}
+                />
               </li>
             ))}
           </ul>
@@ -79,14 +98,47 @@ export function ConceptInventory({ environmentId }: { environmentId: string }) {
 function ConceptCard({
   environmentId,
   concept,
+  selected,
+  relationships,
+  href,
 }: {
   environmentId: string;
   concept: Concept;
+  selected: boolean;
+  relationships?: number;
+  href?: string;
 }) {
   return (
-    <article className="flex flex-col gap-2 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+    <article
+      aria-current={selected || undefined}
+      className={`flex flex-col gap-2 rounded-xl border p-4 ${
+        selected
+          ? "border-zinc-900 dark:border-zinc-100"
+          : "border-zinc-200 dark:border-zinc-800"
+      }`}
+    >
       <div className="flex flex-col gap-0.5">
-        <h3 className="font-medium">{concept.name}</h3>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <h3 className="font-medium">
+            {href ? (
+              <Link
+                href={href}
+                className="underline decoration-zinc-400 underline-offset-4 hover:decoration-current dark:decoration-zinc-500"
+              >
+                {concept.name}
+              </Link>
+            ) : (
+              concept.name
+            )}
+          </h3>
+          {relationships !== undefined && (
+            <span className="text-xs text-zinc-500">
+              {relationships === 0
+                ? "No relationships"
+                : `${relationships} ${relationships === 1 ? "relationship" : "relationships"}`}
+            </span>
+          )}
+        </div>
         {concept.aliases.length > 0 && (
           <p className="text-xs text-zinc-500">
             Also: {concept.aliases.join(", ")}

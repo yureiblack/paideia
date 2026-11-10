@@ -21,6 +21,7 @@ from app.routers.documents import DocumentDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import ConceptInventory, DocumentConceptsRead
 from app.services import concepts as service
+from app.services import graph as graph_service
 from app.services import summaries as summary_service
 
 router = APIRouter(tags=["concepts"])
@@ -65,6 +66,9 @@ def request_concepts(
     session.commit()  # end this read before the background task (record 09)
     if write_now:
         background.add_task(service.write_extraction, session_factory, artifact.id, llm)
+        background.add_task(
+            graph_service.refresh_graph, session_factory, document.environment_id, llm
+        )
     if artifact.status != "ready":
         response.status_code = status.HTTP_202_ACCEPTED
     return body

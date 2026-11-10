@@ -47,6 +47,7 @@ from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import concepts as concept_service
 from app.services import documents as service
 from app.services import environment_summaries as environment_summary_service
+from app.services import graph as graph_service
 from app.services import summaries as summary_service
 
 router = APIRouter(tags=["documents"])
@@ -151,7 +152,9 @@ async def upload_document(
         service.process_document, session_factory, document.id, parser, embedder
     )
     # Concepts are queued at once so they show as waiting while the summary,
-    # which comes first, is written; then extracted.
+    # which comes first, is written. Each later step follows straight after
+    # the one it is built from, so no page sees a gap between them: the
+    # environment's summary after the document's, the graph after concepts.
     background.add_task(
         concept_service.queue_when_ready, session_factory, document.id, llm
     )
@@ -159,13 +162,16 @@ async def upload_document(
         summary_service.summarize_when_ready, session_factory, document.id, llm
     )
     background.add_task(
-        concept_service.extract_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
         environment_summary_service.refresh_environment_summary,
         session_factory,
         document.environment_id,
         llm,
+    )
+    background.add_task(
+        concept_service.extract_when_ready, session_factory, document.id, llm
+    )
+    background.add_task(
+        graph_service.refresh_graph, session_factory, document.environment_id, llm
     )
     return document
 
@@ -215,7 +221,9 @@ def reprocess_document(
         service.process_document, session_factory, document.id, parser, embedder
     )
     # Concepts are queued at once so they show as waiting while the summary,
-    # which comes first, is written; then extracted.
+    # which comes first, is written. Each later step follows straight after
+    # the one it is built from, so no page sees a gap between them: the
+    # environment's summary after the document's, the graph after concepts.
     background.add_task(
         concept_service.queue_when_ready, session_factory, document.id, llm
     )
@@ -223,13 +231,16 @@ def reprocess_document(
         summary_service.summarize_when_ready, session_factory, document.id, llm
     )
     background.add_task(
-        concept_service.extract_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
         environment_summary_service.refresh_environment_summary,
         session_factory,
         document.environment_id,
         llm,
+    )
+    background.add_task(
+        concept_service.extract_when_ready, session_factory, document.id, llm
+    )
+    background.add_task(
+        graph_service.refresh_graph, session_factory, document.environment_id, llm
     )
     return document
 
@@ -254,4 +265,9 @@ def delete_document(
         session_factory,
         environment_id,
         llm,
+    )
+    # Its concepts' relationships went with them; the graph is rebuilt from
+    # what is left, with remembered decisions only.
+    background.add_task(
+        graph_service.refresh_graph, session_factory, environment_id, llm
     )

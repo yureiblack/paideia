@@ -2,11 +2,12 @@
 
 Purpose: the whole path, from an uploaded PDF through Ollama to a stored,
 cited summary, written by itself once the document is read, the
-environment's summary built from it, and the document's concepts, with the
-configured model. It needs Ollama running with the model
-downloaded, so it is skipped where they are not, which includes CI: there,
-an 8B model on machines without a GPU would take minutes per summary. Run it
-locally after changing prompts, the model or the summary service.
+environment's summary built from it, the document's concepts and the
+knowledge graph between them, with the configured model. It needs Ollama
+running with the model downloaded, so it is skipped where they are not,
+which includes CI: there, an 8B model on machines without a GPU would take
+minutes per summary. Run it locally after changing prompts, the model or the
+summary, concept or graph services.
 
 A real model's wording varies with the model, so the checks are about form
 and grounding, not words: plain text, every point cited, and every point
@@ -92,3 +93,20 @@ def test_the_real_model_summarizes_an_uploaded_document_by_itself(client: TestCl
     assert len(found) >= 3
     assert all(c["evidence"] and c["definition"] for c in found)
     assert len({c["normalized_name"] for c in found}) == len(found)
+
+    # And the graph was built from them: every pair the backend found was
+    # decided, and every relationship rests on passages it cites.
+    graph = client.get(f"/api/environments/{env['id']}/graph").json()
+    assert graph["state"] == "up_to_date", graph
+    assert graph["pairs"] >= 1 and graph["asked"] == graph["pairs"]
+    nodes = {n["id"] for n in graph["nodes"]}
+    assert all({e["source"], e["target"]} <= nodes for e in graph["edges"])
+    for edge in graph["edges"]:
+        near = client.get(f"/api/concepts/{edge['source']}/neighbourhood").json()
+        direct = [
+            n
+            for group in ("prerequisites", "dependents", "part_of", "parts", "related")
+            for n in near[group]
+            if n["id"] == edge["target"] and n["depth"] == 1
+        ]
+        assert direct and all(n["evidence"] for n in direct), (edge, near)

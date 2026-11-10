@@ -14,6 +14,14 @@ import type { CurrentSummary, Document } from "@/lib/types";
 // Under the environment's own key, so deleting the environment clears these.
 const listKey = (environmentId: string) =>
   ["environments", environmentId, "documents"] as const;
+
+// Everything derived from the environment's documents: its summary, its
+// concepts and its graph. A document added, read again or deleted changes
+// them all, so they are all asked for afresh. One of them may have been
+// fetched just before the change arrived and look settled; asked again, it
+// shows that it is waiting, and keeps checking until it is done.
+const environmentKey = (environmentId: string) =>
+  ["environments", environmentId] as const;
 const pagesKey = (documentId: string) =>
   ["documents", documentId, "pages"] as const;
 
@@ -41,7 +49,7 @@ export function useUploadDocument(environmentId: string) {
   return useMutation({
     mutationFn: (file: File) => api.uploadDocument(environmentId, file),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: listKey(environmentId) }),
+      queryClient.invalidateQueries({ queryKey: environmentKey(environmentId) }),
   });
 }
 
@@ -51,7 +59,7 @@ export function useReprocessDocument(environmentId: string) {
     mutationFn: (documentId: string) => api.reprocessDocument(documentId),
     onSuccess: (_, documentId) => {
       queryClient.removeQueries({ queryKey: pagesKey(documentId) });
-      return queryClient.invalidateQueries({ queryKey: listKey(environmentId) });
+      return queryClient.invalidateQueries({ queryKey: environmentKey(environmentId) });
     },
   });
 }
@@ -62,7 +70,9 @@ export function useDeleteDocument(environmentId: string) {
     mutationFn: (documentId: string) => api.deleteDocument(documentId),
     onSuccess: (_, documentId) => {
       queryClient.removeQueries({ queryKey: pagesKey(documentId) });
-      return queryClient.invalidateQueries({ queryKey: listKey(environmentId) });
+      // Gone with it, so not asked for again below.
+      queryClient.removeQueries({ queryKey: summaryKey(environmentId, documentId) });
+      return queryClient.invalidateQueries({ queryKey: environmentKey(environmentId) });
     },
   });
 }
