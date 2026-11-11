@@ -13,6 +13,7 @@ import Link from "next/link";
 
 import { CitationChips } from "@/components/cited-points";
 import { STATE_BADGE } from "@/components/environment-summary";
+import { StagePractice } from "@/components/stage-practice";
 import { useRequestRoadmap, useRoadmap } from "@/hooks/use-roadmap";
 import type { RoadmapConcept, RoadmapStage, RoadmapState } from "@/lib/types";
 
@@ -151,6 +152,11 @@ function StageCard({
             : "Plain title, until the local model writes one."}{" "}
           From {stage.documents.map((d) => d.filename).join(", ")}.
         </p>
+        <StagePractice
+          environmentId={environmentId}
+          conceptIds={stage.concepts.map((c) => c.id)}
+          stageNumber={stage.number}
+        />
       </header>
       <ol className="flex flex-col gap-3" aria-label={`Concepts in stage ${stage.number}`}>
         {stage.concepts.map((concept) => (

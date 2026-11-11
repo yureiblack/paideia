@@ -21,12 +21,14 @@ from typing import Any, ClassVar
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Computed,
     DateTime,
     Float,
     ForeignKey,
     Index,
+    Integer,
     MetaData,
     String,
     Text,
@@ -281,7 +283,8 @@ class GeneratedArtifact(Base):
         ),
         CheckConstraint(
             "artifact_type IN ('document_summary', 'environment_summary', "
-            "'concept_extraction', 'knowledge_graph', 'learning_roadmap')",
+            "'concept_extraction', 'knowledge_graph', 'learning_roadmap', "
+            "'practice_set')",
             name="artifact_type",
         ),
         # The key above never matches a row without a document, since NULLs
@@ -510,3 +513,112 @@ class RelationshipEvidence(Base):
     document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
+
+
+class LearningItem(Base):
+    """A practice item about one concept, written by the model from the
+    concept's passages and checked by the backend (decision record 14).
+
+    kind is short_answer, multiple_choice, true_false or flashcard; content
+    holds what the learner sees and the key: question and answer;
+    question, options and correct (index from 0) with an explanation;
+    statement, truth and explanation; front and back. difficulty is effort
+    by kind, 1 to 3. evidence_key fingerprints the concept and its passages
+    as the model saw them: an item is practised only while it matches the
+    concept's current one, and is retired when a new set replaces it, kept
+    with its attempts. metadata_json records how it was made: the support
+    score of its passages, the generation it came from.
+    """
+
+    __tablename__ = "learning_items"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('short_answer', 'multiple_choice', 'true_false', 'flashcard')",
+            name="kind",
+        ),
+        CheckConstraint("difficulty BETWEEN 1 AND 3", name="difficulty"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    content: Mapped[dict] = mapped_column(JSONB)
+    difficulty: Mapped[int] = mapped_column(Integer)
+    evidence_key: Mapped[str] = mapped_column(String(64))
+    model_name: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    metadata_json: Mapped[dict] = mapped_column(
+        "metadata", JSONB, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LearningItemSource(Base):
+    """A passage a practice item's answer comes from. Deleted with its
+    chunk."""
+
+    __tablename__ = "learning_item_sources"
+
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("learning_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    chunk_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_chunks.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+
+
+class Attempt(Base):
+    """One answer to a practice item. graded_by is key when the backend
+    checked it against the item's stored answer (multiple choice,
+    true/false), learner when the learner marked it after seeing the answer
+    (short answer, flashcard). response holds what was answered."""
+
+    __tablename__ = "attempts"
+    __table_args__ = (
+        CheckConstraint("graded_by IN ('key', 'learner')", name="graded_by"),
+        CheckConstraint("seconds IS NULL OR seconds >= 0", name="seconds"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("learning_items.id", ondelete="CASCADE"), index=True
+    )
+    answered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    response: Mapped[dict] = mapped_column(JSONB)
+    correct: Mapped[bool] = mapped_column(Boolean)
+    graded_by: Mapped[str] = mapped_column(Text)
+    seconds: Mapped[float | None] = mapped_column(Float)
+
+
+class ReviewSchedule(Base):
+    """When a practice item comes back: its Leitner box (0 for a new item,
+    then 1 to 5) and the time it is due."""
+
+    __tablename__ = "review_schedule"
+    __table_args__ = (CheckConstraint("box BETWEEN 0 AND 5", name="box"),)
+
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("learning_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    box: Mapped[int] = mapped_column(Integer)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

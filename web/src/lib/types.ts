@@ -266,6 +266,64 @@ export type RoadmapState = {
   updated_at: string | null;
 };
 
+// Practice: items written from a concept's passages, checked by the backend.
+// state none: never prepared; outdated: its material changed since, so its
+// items are no longer practised. items: practised; due: due now.
+export type PracticeConcept = {
+  concept_id: string;
+  name: string;
+  state: "none" | "pending" | "generating" | "ready" | "failed" | "outdated";
+  error: string | null;
+  items: number;
+  due: number;
+};
+
+export type PracticeOverview = {
+  due: number;
+  items: number;
+  next_due_at: string | null;
+  concepts: PracticeConcept[];
+};
+
+// An item as shown before answering. prompt is the question, statement or
+// flashcard front. answer is sent only for the kinds the learner marks
+// themselves (short answer, flashcard), to reveal once they are ready.
+export type PracticeKind =
+  | "short_answer"
+  | "multiple_choice"
+  | "true_false"
+  | "flashcard";
+
+export type PracticeItem = {
+  id: string;
+  concept: ConceptRef;
+  kind: PracticeKind;
+  difficulty: number;
+  prompt: string;
+  options: string[] | null;
+  answer: string | null;
+  box: number;
+  due_at: string;
+};
+
+export type AttemptInput = {
+  choice?: number;
+  truth?: boolean;
+  text?: string;
+  knew?: boolean;
+  seconds?: number;
+};
+
+export type AttemptResult = {
+  correct: boolean;
+  graded_by: "key" | "learner";
+  answer: string;
+  explanation: string | null;
+  sources: Citation[];
+  box: number;
+  due_at: string;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.

@@ -468,6 +468,80 @@ class RoadmapState(BaseModel):
     updated_at: datetime | None
 
 
+class PracticeConcept(BaseModel):
+    """Where one concept's practice items stand. state: none (never
+    prepared), pending, generating, ready, failed (error says why), or
+    outdated (its material changed since its items were written; they are no
+    longer practised). items: how many are practised; due: how many of those
+    are due now."""
+
+    concept_id: uuid.UUID
+    name: str
+    state: Literal["none", "pending", "generating", "ready", "failed", "outdated"]
+    error: str | None
+    items: int
+    due: int
+
+
+class PracticeOverview(BaseModel):
+    """An environment's practice: how many items are due now, how many are
+    practised, when the next one is due, and each concept's state."""
+
+    due: int
+    items: int
+    next_due_at: datetime | None
+    concepts: list[PracticeConcept]
+
+
+class PrepareRequest(BaseModel):
+    concept_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+
+class PracticeItem(BaseModel):
+    """A practice item as the learner sees it before answering. prompt is
+    the question, the true/false statement or the flashcard's front. The key
+    is never sent, except answer for short answer and flashcard items, which
+    the learner marks themselves once the page reveals it. difficulty is
+    effort by kind, 1 to 3."""
+
+    id: uuid.UUID
+    concept: ConceptRef
+    kind: Literal["short_answer", "multiple_choice", "true_false", "flashcard"]
+    difficulty: int
+    prompt: str
+    options: list[str] | None
+    answer: str | None
+    box: int
+    due_at: datetime
+
+
+class AttemptCreate(BaseModel):
+    """An answer: choice (index from 0) for multiple choice, truth for
+    true/false, knew for short answer and flashcard (the learner's own mark,
+    with text optionally holding what they wrote). seconds is how long it
+    took, if the page measured it."""
+
+    choice: int | None = Field(default=None, ge=0, le=3)
+    truth: bool | None = None
+    text: str | None = Field(default=None, max_length=2000)
+    knew: bool | None = None
+    seconds: float | None = Field(default=None, ge=0, le=86_400)
+
+
+class AttemptResult(BaseModel):
+    """How an answer went: whether it was right, graded against the stored
+    key or by the learner, the right answer, why (for multiple choice and
+    true/false), the passages it comes from, and when the item comes back."""
+
+    correct: bool
+    graded_by: Literal["key", "learner"]
+    answer: str
+    explanation: str | None
+    sources: list[Citation]
+    box: int
+    due_at: datetime
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

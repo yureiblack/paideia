@@ -3,11 +3,12 @@
 Purpose: the whole path, from an uploaded PDF through Ollama to a stored,
 cited summary, written by itself once the document is read, the
 environment's summary built from it, the document's concepts, the
-knowledge graph between them and the learning roadmap, with the configured
-model. It needs Ollama running with the model downloaded, so it is skipped
-where they are not, which includes CI: there, an 8B model on machines
-without a GPU would take minutes per summary. Run it locally after changing
-prompts, the model or the summary, concept, graph or roadmap services.
+knowledge graph between them, the learning roadmap and practice items, with
+the configured model. It needs Ollama running with the model downloaded, so
+it is skipped where they are not, which includes CI: there, an 8B model on
+machines without a GPU would take minutes per summary. Run it locally after
+changing prompts, the model or the summary, concept, graph, roadmap or
+practice services.
 
 A real model's wording varies with the model, so the checks are about form
 and grounding, not words: plain text, every point cited, and every point
@@ -128,3 +129,18 @@ def test_the_real_model_summarizes_an_uploaded_document_by_itself(client: TestCl
     for stage in plan["stages"]:
         assert len(stage["title"].split()) <= 8
         assert not any(mark in stage["title"] + stage["description"] for mark in "*#`")
+
+    # And practice for the first concept: items in plain words, never
+    # mentioning passages, each supported by the passage it cites.
+    first = plan["stages"][0]["concepts"][0]
+    client.post(f"/api/concepts/{first['id']}/practice")
+    practice = client.get(f"/api/environments/{env['id']}/practice").json()
+    state = next(c for c in practice["concepts"] if c["concept_id"] == first["id"])
+    assert state["state"] == "ready" and state["items"] >= 2, state
+    items = client.get(
+        f"/api/environments/{env['id']}/practice/session",
+        params={"concept_id": first["id"]},
+    ).json()
+    for item in items:
+        assert "passage" not in item["prompt"].lower(), item
+        assert not any(mark in item["prompt"] for mark in "*#`"), item
