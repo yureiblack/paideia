@@ -13,7 +13,10 @@ with their attempts (decision record 14).
 
 Multiple choice and true/false answers are checked against the stored key;
 short answers and flashcards are marked by the learner after seeing the
-answer. Every answer is recorded, and moves the item between Leitner boxes.
+answer. Every answer is recorded. A concept's learner state, and when it
+comes back for review, are worked out from those answers (app/learner.py);
+each item's own Leitner box only decides which of a concept's items come
+first.
 """
 
 import hashlib
@@ -29,8 +32,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import learner, prompting
 from app import practice as rules
-from app import prompting
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
 from app.models import (
@@ -49,6 +52,7 @@ from app.reranking import Reranker
 from app.schemas import (
     AttemptCreate,
     AttemptResult,
+    ConceptNote,
     ConceptRef,
     PracticeConcept,
     PracticeItem,
@@ -440,13 +444,43 @@ def _practised(session: Session, environment_id: uuid.UUID, concept_ids=None):
     return concepts, keys, current, stale
 
 
+def answers(
+    session: Session, environment_id: uuid.UUID
+) -> dict[uuid.UUID, list[learner.Answer]]:
+    """Every answer given in the environment, by concept, in the order they
+    were made: the answers to all of a concept's items, retired ones too."""
+    found: dict[uuid.UUID, list[learner.Answer]] = defaultdict(list)
+    for concept_id, answered_at, correct in session.execute(
+        select(LearningItem.concept_id, Attempt.answered_at, Attempt.correct)
+        .join(LearningItem, LearningItem.id == Attempt.item_id)
+        .where(LearningItem.environment_id == environment_id)
+        .order_by(Attempt.answered_at, Attempt.id)
+    ):
+        found[concept_id].append(learner.Answer(answered_at, correct))
+    return found
+
+
+def learner_states(
+    session: Session, environment_id: uuid.UUID
+) -> dict[uuid.UUID, learner.State]:
+    """Each concept's learner state, from its answers (decision record 15)."""
+    return {
+        concept_id: learner.replay(given)
+        for concept_id, given in answers(session, environment_id).items()
+    }
+
+
 def overview(
     session: Session,
     environment: Environment,
     llm: LLMProvider,
     now: datetime | None = None,
+    until: datetime | None = None,
 ) -> PracticeOverview:
+    """Practice at a glance. until is the end of the learner's day: concepts
+    due by then count as due today."""
     now = now or datetime.now(UTC)
+    until = max(until or now, now)
     concepts, keys, current, stale = _practised(session, environment.id)
     generations = {
         a.source_version: a
@@ -460,33 +494,69 @@ def overview(
             )
         )
     }
-    items, due = defaultdict(int), defaultdict(int)
-    for item, schedule in current:
+    states = learner_states(session, environment.id)
+    items = defaultdict(int)
+    for item, _ in current:
         items[item.concept_id] += 1
-        due[item.concept_id] += schedule.due_at <= now
-    states = []
+    rows = []
     for concept in sorted(concepts.values(), key=lambda c: c.normalized_name):
         generation = generations.get(keys.get(concept.id))
         if generation is not None:
             state = generation.status
         else:
             state = "outdated" if concept.id in stale else "none"
-        states.append(
+        known = states.get(concept.id, learner.State())
+        rows.append(
             PracticeConcept(
                 concept_id=concept.id,
                 name=concept.name,
                 state=state,
                 error=generation.error if state == "failed" else None,
                 items=items[concept.id],
-                due=due[concept.id],
+                review=learner.review(known, until) if items[concept.id] else None,
+                exposures=known.exposures,
+                recalled=known.recalled,
+                failed=known.failed,
+                last_attempted_at=known.last_attempted_at,
+                last_recalled_at=known.last_recalled_at,
+                gap_days=known.gap_days,
+                next_review_at=known.next_review_at,
+                attention=learner.attention(known),
             )
         )
-    upcoming = [s.due_at for _, s in current if s.due_at > now]
+    practised = [r for r in rows if r.review is not None]
+    needing = sorted(
+        (r for r in practised if r.attention),
+        key=lambda r: r.last_attempted_at,
+        reverse=True,
+    )
+    strong = sorted(
+        (
+            r
+            for r in practised
+            if learner.strong(states.get(r.concept_id, learner.State()))
+        ),
+        key=lambda r: (-r.gap_days, -r.last_recalled_at.timestamp()),
+    )
+    later = [r.next_review_at for r in practised if r.review == "scheduled"]
     return PracticeOverview(
-        due=sum(due.values()),
         items=len(current),
-        next_due_at=min(upcoming) if upcoming else None,
-        concepts=states,
+        due_concepts=sum(r.review == "due" for r in practised),
+        new_concepts=sum(r.review == "new" for r in practised),
+        next_review_at=min(later) if later else None,
+        concepts=rows,
+        needs_attention=[
+            ConceptNote(concept_id=r.concept_id, name=r.name, note=r.attention)
+            for r in needing
+        ],
+        recently_strong=[
+            ConceptNote(
+                concept_id=r.concept_id,
+                name=r.name,
+                note=f"Recalled; next review in {r.gap_days} days.",
+            )
+            for r in strong[:5]
+        ],
     )
 
 
@@ -514,29 +584,60 @@ def session_items(
     environment: Environment,
     concept_ids=None,
     now: datetime | None = None,
+    until: datetime | None = None,
 ) -> list[PracticeItem]:
-    """A practice session: the due items, or with concept_ids (a stage) that
-    stage's items, due ones first; at most ten, interleaved."""
+    """A practice session of at most ten items, interleaved. Without
+    concept_ids: the concepts due by until (the end of the learner's day),
+    overdue first, then new ones, two items each (decision record 15). With
+    concept_ids (a stage): those concepts' items, due ones first."""
     now = now or datetime.now(UTC)
+    until = max(until or now, now)
     concepts, _, current, _ = _practised(session, environment.id, concept_ids)
     found = roadmap_service.material(session, environment.id)
     place = {i: n for n, i in enumerate(i for s in found.roadmap.stages for i in s)}
     by_id = {item.id: (item, schedule) for item, schedule in current}
-    chosen = rules.pick(
-        [
-            rules.Candidate(
-                item.id,
-                item.concept_id,
-                schedule.due_at,
-                place.get(item.concept_id, len(place)),
-                item.difficulty,
+    if concept_ids is None:
+        states = learner_states(session, environment.id)
+        practised = {item.concept_id for item, _ in current}
+        chosen_ids = [
+            option.id
+            for option in learner.session(
+                [
+                    (c, states.get(c, learner.State()), place.get(c, len(place)))
+                    for c in practised
+                ],
+                [
+                    learner.Option(
+                        item.id,
+                        item.concept_id,
+                        item.kind,
+                        schedule.box,
+                        schedule.last_answered_at,
+                    )
+                    for item, schedule in current
+                ],
+                until,
             )
-            for item, schedule in current
-        ],
-        now,
-        due_only=concept_ids is None,
-    )
-    return [_shown(*by_id[c.id], concepts[by_id[c.id][0].concept_id]) for c in chosen]
+        ]
+    else:
+        chosen_ids = [
+            c.id
+            for c in rules.pick(
+                [
+                    rules.Candidate(
+                        item.id,
+                        item.concept_id,
+                        schedule.due_at,
+                        place.get(item.concept_id, len(place)),
+                        item.difficulty,
+                    )
+                    for item, schedule in current
+                ],
+                now,
+                due_only=False,
+            )
+        ]
+    return [_shown(*by_id[i], concepts[by_id[i][0].concept_id]) for i in chosen_ids]
 
 
 def answer(
@@ -602,6 +703,8 @@ def answer(
             .order_by(DocumentChunk.document_id, DocumentChunk.ordinal)
         )
     )
+    session.flush()
+    state = learner_states(session, item.environment_id)[item.concept_id]
     result = AttemptResult(
         correct=correct,
         graded_by=graded_by,
@@ -609,7 +712,8 @@ def answer(
         explanation=explanation,
         sources=sources.cite_all(session, chunks),
         box=schedule.box,
-        due_at=schedule.due_at,
+        due_at=state.next_review_at,
+        gap_days=state.gap_days,
     )
     session.commit()
     return result

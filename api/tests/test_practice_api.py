@@ -3,10 +3,12 @@
 Purpose: the HTTP contract with a stand-in model. Preparing practice writes
 items in the background; a session never sends the key of an item the
 backend grades; answers come back graded, with sources identical to source
-previews; replaced items cannot be answered; bad requests are refused.
+previews; replaced items cannot be answered; bad requests are refused; "due
+today" follows the end of the learner's own day.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +51,7 @@ def test_preparing_practice_writes_items_in_the_background(client: TestClient, l
         "Thread": "pending",
         "Time Quantum": "pending",
     }
-    assert (body["items"], body["due"]) == (12, 12)
+    assert (body["items"], body["new_concepts"], body["due_concepts"]) == (12, 3, 0)
     assert {c["state"] for c in body["concepts"]} == {"ready"}
     again = client.post(f"/api/concepts/{ids['Thread']}/practice")
     assert again.status_code == 200
@@ -62,8 +64,13 @@ def test_a_session_hides_the_key_and_answers_come_back_graded(client: TestClient
     ids = concept_ids(client, env)
     client.post(f"/api/concepts/{ids['Thread']}/practice")
 
-    items = client.get(f"/api/environments/{env}/practice/session").json()
+    due = client.get(f"/api/environments/{env}/practice/session").json()
+    items = client.get(
+        f"/api/environments/{env}/practice/session",
+        params={"concept_id": ids["Thread"]},
+    ).json()
 
+    assert len(due) == 2  # one new concept: two items
     assert len(items) == 4
     by_kind = {i["kind"]: i for i in items}
     assert by_kind["multiple_choice"]["answer"] is None
@@ -106,7 +113,10 @@ def test_bad_answers_and_replaced_items_are_refused(client: TestClient):
     upload(client, env, "scheduling.pdf", SCHEDULING)
     ids = concept_ids(client, env)
     client.post(f"/api/concepts/{ids['Thread']}/practice")
-    items = client.get(f"/api/environments/{env}/practice/session").json()
+    items = client.get(
+        f"/api/environments/{env}/practice/session",
+        params={"concept_id": ids["Thread"]},
+    ).json()
     choice = next(i for i in items if i["kind"] == "multiple_choice")
 
     wrong_kind = client.post(
@@ -131,3 +141,34 @@ def test_bad_answers_and_replaced_items_are_refused(client: TestClient):
     assert replaced.status_code == 409
     thread = next(c for c in overview(client, env)["concepts"] if c["name"] == "Thread")
     assert thread["state"] == "outdated"
+
+
+def test_due_today_is_the_learners_own_day(client: TestClient):
+    env = environment(client)
+    upload(client, env, "scheduling.pdf", SCHEDULING)
+    ids = concept_ids(client, env)
+    client.post(f"/api/concepts/{ids['Thread']}/practice")
+    [first, second] = client.get(f"/api/environments/{env}/practice/session").json()
+    for item in (first, second):
+        client.post(
+            f"/api/learning-items/{item['id']}/attempts",
+            json={"knew": True, "choice": 0, "truth": True},
+        )
+
+    now = client.get(f"/api/environments/{env}/practice").json()
+    end_of_day = (datetime.now(UTC) + timedelta(days=1, hours=1)).isoformat()
+    tomorrow = client.get(
+        f"/api/environments/{env}/practice", params={"until": end_of_day}
+    ).json()
+    naive = client.get(
+        f"/api/environments/{env}/practice", params={"until": "2026-11-11T23:59:59"}
+    )
+
+    thread = next(c for c in now["concepts"] if c["name"] == "Thread")
+    assert (thread["review"], thread["exposures"], now["due_concepts"]) == (
+        "scheduled",
+        2,
+        0,
+    )
+    assert tomorrow["due_concepts"] == 1
+    assert naive.status_code == 422

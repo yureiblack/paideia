@@ -2,14 +2,16 @@
 
 Purpose
 -------
-    GET  /api/environments/{environment_id}/practice           what is due,
-                                                               and each
-                                                               concept's state
+    GET  /api/environments/{environment_id}/practice           what is due
+                                                               today, and each
+                                                               concept's
+                                                               learner state
     POST /api/environments/{environment_id}/practice           prepare items
                                                                for concepts
     POST /api/concepts/{concept_id}/practice                   prepare one
     GET  /api/environments/{environment_id}/practice/session   a session:
-                                                               due items, or a
+                                                               due concepts'
+                                                               items, or a
                                                                stage's
                                                                (?concept_id=)
     POST /api/learning-items/{item_id}/attempts                answer one
@@ -20,6 +22,7 @@ answering from memory, coming back at growing intervals, concepts mixed.
 """
 
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
@@ -60,11 +63,31 @@ def item_or_404(item_id: uuid.UUID, session: SessionDep) -> LearningItem:
 ItemDep = Annotated[LearningItem, Depends(item_or_404)]
 
 
+# The end of the learner's own day, from the page, so "due today" means their
+# today. Without it, due means due now.
+UntilQuery = Annotated[
+    datetime | None,
+    Query(description="The end of the learner's day, with its time zone"),
+]
+
+
 @router.get("/environments/{environment_id}/practice", response_model=PracticeOverview)
 def read_practice(
-    environment: EnvironmentDep, session: SessionDep, llm: LLMDep
+    environment: EnvironmentDep,
+    session: SessionDep,
+    llm: LLMDep,
+    until: UntilQuery = None,
 ) -> PracticeOverview:
-    return service.overview(session, environment, llm)
+    return service.overview(session, environment, llm, until=_aware(until))
+
+
+def _aware(until: datetime | None) -> datetime | None:
+    if until is not None and until.tzinfo is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="until needs a time zone, such as 2026-11-11T23:59:59+05:30.",
+        )
+    return until
 
 
 def _prepare(
@@ -148,8 +171,9 @@ def read_session(
     environment: EnvironmentDep,
     session: SessionDep,
     concept_id: Annotated[list[uuid.UUID] | None, Query()] = None,
+    until: UntilQuery = None,
 ) -> list[PracticeItem]:
-    return service.session_items(session, environment, concept_id)
+    return service.session_items(session, environment, concept_id, until=_aware(until))
 
 
 @router.post("/learning-items/{item_id}/attempts", response_model=AttemptResult)
