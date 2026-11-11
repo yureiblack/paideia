@@ -73,16 +73,23 @@ adding a lecture asks only about the stages it changed. Every concept on the
 roadmap links to its passages and to the Knowledge map.
 
 The Practice tab is evidence-informed study support: answering from memory,
-items coming back at growing intervals, and concepts mixed within a session.
-Practice is prepared stage by stage. For each concept the model writes a short
-answer, a multiple-choice, a true/false and a flashcard item from the
-concept's own passages, and the backend keeps an item only if it is plain,
-never talks about "the passages", and its answer is found in the passages it
-cites. Multiple choice and true/false are checked against the stored answer;
-short answers and flashcards are marked by the learner once the answer is
-shown. Every answer is recorded and decides when the item comes back, by a
-simple box system: 1, 2, 4, 8 then 16 days while recalled, back to 1 day when
-not. Nothing is a grade.
+concepts coming back at growing intervals, and concepts mixed within a
+session. Practice is prepared stage by stage. For each concept the model
+writes a short answer, a multiple-choice, a true/false and a flashcard item
+from the concept's own passages, and the backend keeps an item only if it is
+plain, never talks about "the passages", and its answer is found in the
+passages it cites. Multiple choice and true/false are checked against the
+stored answer; short answers and flashcards are marked by the learner once
+the answer is shown.
+
+How the learner stands on each concept is worked out from their answers,
+never stored apart from them: how often it was answered and recalled, when
+last, and when it comes back. Each time a concept is recalled its next
+review moves further away (1, 2, 4, 8, 16, then 32 days, at most one step a
+sitting); a miss brings it back the next day. The Practice tab shows what is
+due today, in the learner's own day, what needs attention and what is
+recently strong, each with why; the Knowledge map and the Roadmap show each
+concept's state in a line. Nothing is a grade.
 
 ## Stack
 
@@ -199,11 +206,11 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/concepts/{id}/neighbourhood` | One concept and what is next to it: its `prerequisites` and `dependents`, all the way along with their `depth`, what it is `part_of`, its `parts`, and what it is `related` to, each direct relationship with its `confidence` and `evidence` citations. |
 | GET | `/api/environments/{id}/roadmap` | The learning roadmap: its `stages` in order, each with a `title` and `description` (`written` by the local model, or a plain title until then), the `documents` it draws on, and its `concepts` in order, each with what it `builds_on`, whether it is `in_cycle`, and its `evidence` citations; the `cycles` of prerequisites; and the `state` of the titles, as for the environment's summary, with `waiting` for the knowledge graph. |
 | POST | `/api/environments/{id}/roadmap` | Write the titles of the current stages, or try again after a failure: 200 if up to date, 202 if being written or waiting for the graph. It never asks the model twice about the same stage. 422 if there are no concepts yet. |
-| GET | `/api/environments/{id}/practice` | Practice at a glance: how many items are `due` now and practised in all, when the next is due, and each concept's state (`none`, `pending`, `generating`, `ready`, `failed` with an `error`, or `outdated` when its material changed) with its item and due counts. |
+| GET | `/api/environments/{id}/practice?until=...` | Practice at a glance, with `until` the end of the learner's day (with its time zone): how many items are practised, how many concepts are `due_concepts` today and `new_concepts`, the next later review, the concepts that `needs_attention` and are `recently_strong` with why, and each concept: its items' `state` (`none`, `pending`, `generating`, `ready`, `failed` with an `error`, or `outdated` when its material changed) and the learner's state worked out from their answers (`review` new, due or scheduled; `exposures`, `recalled`, `failed`, last attempted and recalled, `gap_days`, `next_review_at`, `attention`). |
 | POST | `/api/environments/{id}/practice` | Prepare practice items for the concepts in `concept_ids`, in the background: 202 while they are written. Never writes twice for the same passages, model and prompt. |
 | POST | `/api/concepts/{id}/practice` | The same, for one concept. |
-| GET | `/api/environments/{id}/practice/session` | A session of up to 10 items, interleaved across concepts: the due ones, or with `concept_id` repeated (a stage) those concepts' items, due ones first. Items of the kinds the backend grades never carry their answer. |
-| POST | `/api/learning-items/{id}/attempts` | Answer an item: `choice` (multiple choice), `truth` (true/false) or `knew` (short answer, flashcard, after seeing the answer), with optional `text` and `seconds`. Returns whether it was right, the answer, why, the passages it comes from and when it comes back. 409 if the item was replaced, 422 for an answer of the wrong kind. |
+| GET | `/api/environments/{id}/practice/session?until=...` | A session of up to 10 items, interleaved: two items from each concept due by `until`, overdue first, then new ones in roadmap order; or with `concept_id` repeated (a stage) those concepts' items. Items of the kinds the backend grades never carry their answer. |
+| POST | `/api/learning-items/{id}/attempts` | Answer an item: `choice` (multiple choice), `truth` (true/false) or `knew` (short answer, flashcard, after seeing the answer), with optional `text` and `seconds`. Returns whether it was right, the answer, why, the passages it comes from, and when its concept comes back (`due_at`, `gap_days`). 409 if the item was replaced, 422 for an answer of the wrong kind. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -302,6 +309,7 @@ api/                    FastAPI backend
     graph.py            candidate pairs of concepts, and what a decision means
     roadmap.py          the roadmap's stages and order, by fixed rules
     practice.py         practice items' checks, review boxes and sessions
+    learner.py          learner state per concept, from the answers, and its schedule
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
