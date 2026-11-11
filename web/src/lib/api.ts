@@ -13,6 +13,10 @@ import type {
   EnvironmentSummaryState,
   GraphState,
   Neighbourhood,
+  AttemptInput,
+  AttemptResult,
+  PracticeItem,
+  PracticeOverview,
   RoadmapState,
   SearchResponse,
   SourcePreview,
@@ -135,6 +139,32 @@ export const api = {
     request<RoadmapState>(`${environmentPath(environmentId)}/roadmap`, {
       method: "POST",
     }),
+
+  getPractice: (environmentId: string) =>
+    request<PracticeOverview>(`${environmentPath(environmentId)}/practice`),
+
+  // Write practice items for these concepts, in the background.
+  preparePractice: (environmentId: string, conceptIds: string[]) =>
+    request<PracticeOverview>(
+      `${environmentPath(environmentId)}/practice`,
+      withJson("POST", { concept_ids: conceptIds }),
+    ),
+
+  // A session: the due items, or with concept ids (a stage) theirs.
+  getPracticeSession: (environmentId: string, conceptIds?: string[]) => {
+    const query = new URLSearchParams();
+    for (const id of conceptIds ?? []) query.append("concept_id", id);
+    const suffix = query.size ? `?${query}` : "";
+    return request<PracticeItem[]>(
+      `${environmentPath(environmentId)}/practice/session${suffix}`,
+    );
+  },
+
+  answerItem: (itemId: string, input: AttemptInput) =>
+    request<AttemptResult>(
+      `/api/learning-items/${encodeURIComponent(itemId)}/attempts`,
+      withJson("POST", input),
+    ),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),
