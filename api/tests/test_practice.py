@@ -289,27 +289,24 @@ def test_answers_are_graded_by_the_key_or_by_the_learner(
         practice.answer(session, mc, AttemptCreate(knew=True), NOW)
 
 
-def test_review_moves_items_up_the_boxes(session: Session, session_factory):
+def test_each_item_still_moves_up_its_own_box(session: Session, session_factory):
     llm = Practising(RULES, [SCHEDULING_CONCEPTS])
     env, _ = scheduling(session, session_factory, llm)
     prepare(session, session_factory, env, ["Thread"], llm)
     card = items_of(session, named(session, env, "Thread"))["flashcard"]
 
-    boxes = []
-    for days in (0, 1, 3):
-        result = practice.answer(
-            session, card, AttemptCreate(knew=True), NOW + timedelta(days=days)
-        )
-        boxes.append((result.box, result.due_at))
-
-    assert boxes == [
-        (1, NOW + timedelta(days=1)),
-        (2, NOW + timedelta(days=3)),
-        (3, NOW + timedelta(days=7)),
+    boxes = [
+        practice.answer(
+            session, card, AttemptCreate(knew=True), NOW + timedelta(days=d)
+        ).box
+        for d in (0, 1, 3)
     ]
 
+    assert boxes == [1, 2, 3]
+    assert session.get(ReviewSchedule, card.id).due_at == NOW + timedelta(days=7)
 
-def test_a_session_holds_due_items_interleaved_and_a_stage_holds_all(
+
+def test_a_session_holds_due_concepts_items_and_a_stage_holds_all(
     session: Session, session_factory
 ):
     llm = Practising(RULES, [SCHEDULING_CONCEPTS])
@@ -320,42 +317,95 @@ def test_a_session_holds_due_items_interleaved_and_a_stage_holds_all(
 
     due = practice.session_items(session, env, now=later)
 
-    assert len(due) == rules.SESSION_SIZE
+    # Three new concepts, two items each, of different kinds, interleaved.
+    assert len(due) == 6
+    assert sorted(i.concept.name for i in due) == sorted(names * 2)
     assert all(a.concept.id != b.concept.id for a, b in itertools.pairwise(due))
+    assert all(len({i.kind for i in due if i.concept.name == n}) == 2 for n in names)
     assert all(
         i.answer is None for i in due if i.kind in ("multiple_choice", "true_false")
     )
-    for item in due[:3]:
+    for item in (i for i in due if i.concept.name == "Thread"):
         practice.answer(
             session,
             session.get(LearningItem, item.id),
             AttemptCreate(knew=True, choice=0, truth=True),
             later,
         )
-    answered = {i.id for i in due[:3]}
-    assert answered.isdisjoint(
-        i.id for i in practice.session_items(session, env, now=later)
+    # Thread was reviewed: it comes back tomorrow, not in this day's session.
+    again = practice.session_items(session, env, now=later)
+    assert {i.concept.name for i in again} == {"Round Robin", "Time Quantum"}
+    tomorrow = practice.session_items(
+        session, env, now=later, until=later + timedelta(days=1)
     )
+    assert "Thread" in {i.concept.name for i in tomorrow}
     thread = named(session, env, "Thread")
     stage = practice.session_items(session, env, [thread.id], now=later)
     assert {i.concept.name for i in stage} == {"Thread"}
     assert len(stage) == 4  # due or not
 
 
-def test_the_overview_counts_what_is_due(session: Session, session_factory):
+def test_the_overview_gives_each_concepts_learner_state(
+    session: Session, session_factory
+):
+    llm = Practising(RULES, [SCHEDULING_CONCEPTS])
+    env, _ = scheduling(session, session_factory, llm)
+    prepare(session, session_factory, env, ["Thread", "Round Robin"], llm)
+    thread = items_of(session, named(session, env, "Thread"))
+    later = datetime.now(UTC) + timedelta(minutes=1)  # new items are due at once
+    missed_at = later + timedelta(minutes=1)
+    practice.answer(session, thread["flashcard"], AttemptCreate(knew=True), later)
+    practice.answer(
+        session, thread["short_answer"], AttemptCreate(knew=False), missed_at
+    )
+
+    view = practice.overview(session, env, llm, now=later + timedelta(hours=1))
+    concepts = {c.name: c for c in view.concepts}
+
+    assert (view.items, view.due_concepts, view.new_concepts) == (8, 0, 1)
+    assert view.next_review_at == missed_at + timedelta(days=1)
+    t = concepts["Thread"]
+    assert (t.review, t.exposures, t.recalled, t.failed, t.gap_days) == (
+        "scheduled",
+        2,
+        1,
+        1,
+        1,
+    )
+    assert (t.last_attempted_at, t.last_recalled_at) == (missed_at, later)
+    assert t.attention == "Missed on its last answer."
+    assert concepts["Round Robin"].review == "new"
+    assert concepts["Time Quantum"].review is None  # no items
+    assert [n.name for n in view.needs_attention] == ["Thread"]
+    assert view.recently_strong == []
+    tomorrow = practice.overview(
+        session, env, llm, now=later, until=later + timedelta(days=1, hours=1)
+    )
+    assert tomorrow.due_concepts == 1
+
+
+def test_a_concept_recalled_over_days_becomes_recently_strong(
+    session: Session, session_factory
+):
     llm = Practising(RULES, [SCHEDULING_CONCEPTS])
     env, _ = scheduling(session, session_factory, llm)
     prepare(session, session_factory, env, ["Thread"], llm)
     card = items_of(session, named(session, env, "Thread"))["flashcard"]
-    later = datetime.now(UTC) + timedelta(minutes=1)  # new items are due at once
-    practice.answer(session, card, AttemptCreate(knew=True), later)
+    start = datetime.now(UTC) + timedelta(minutes=1)
 
-    view = practice.overview(session, env, llm, now=later + timedelta(hours=1))
+    results = [
+        practice.answer(
+            session, card, AttemptCreate(knew=True), start + timedelta(days=d)
+        )
+        for d in (0, 1, 3)
+    ]
 
-    assert (view.items, view.due, view.next_due_at) == (4, 3, later + timedelta(days=1))
-    states = {c.name: (c.state, c.items, c.due) for c in view.concepts}
-    assert states == {
-        "Round Robin": ("none", 0, 0),
-        "Thread": ("ready", 4, 3),
-        "Time Quantum": ("none", 0, 0),
-    }
+    assert [(r.gap_days, r.due_at) for r in results] == [
+        (1, start + timedelta(days=1)),
+        (2, start + timedelta(days=3)),
+        (4, start + timedelta(days=7)),
+    ]
+    view = practice.overview(session, env, llm, now=start + timedelta(days=3))
+    assert [(n.name, n.note) for n in view.recently_strong] == [
+        ("Thread", "Recalled; next review in 4 days.")
+    ]
