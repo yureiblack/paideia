@@ -469,28 +469,55 @@ class RoadmapState(BaseModel):
 
 
 class PracticeConcept(BaseModel):
-    """Where one concept's practice items stand. state: none (never
+    """One concept's practice. state is about its items: none (never
     prepared), pending, generating, ready, failed (error says why), or
     outdated (its material changed since its items were written; they are no
-    longer practised). items: how many are practised; due: how many of those
-    are due now."""
+    longer practised). items: how many are practised.
+
+    The rest is the learner's state, worked out from their answers to the
+    concept's items: review is new (items, no answers yet), due (its next
+    review comes by the end of the learner's day) or scheduled, and null
+    without items; exposures, recalled and failed count answers; gap_days is
+    the current gap between reviews; attention says why it needs attention,
+    if it does."""
 
     concept_id: uuid.UUID
     name: str
     state: Literal["none", "pending", "generating", "ready", "failed", "outdated"]
     error: str | None
     items: int
-    due: int
+    review: Literal["new", "due", "scheduled"] | None
+    exposures: int
+    recalled: int
+    failed: int
+    last_attempted_at: datetime | None
+    last_recalled_at: datetime | None
+    gap_days: int | None
+    next_review_at: datetime | None
+    attention: str | None
+
+
+class ConceptNote(BaseModel):
+    """A concept and a short note about it."""
+
+    concept_id: uuid.UUID
+    name: str
+    note: str
 
 
 class PracticeOverview(BaseModel):
-    """An environment's practice: how many items are due now, how many are
-    practised, when the next one is due, and each concept's state."""
+    """An environment's practice: how many items are practised; how many
+    concepts are due by the end of the learner's day and how many are new;
+    when the next later review is; each concept; the concepts needing
+    attention, and those recently strong, each with why."""
 
-    due: int
     items: int
-    next_due_at: datetime | None
+    due_concepts: int
+    new_concepts: int
+    next_review_at: datetime | None
     concepts: list[PracticeConcept]
+    needs_attention: list[ConceptNote]
+    recently_strong: list[ConceptNote]
 
 
 class PrepareRequest(BaseModel):
@@ -531,7 +558,8 @@ class AttemptCreate(BaseModel):
 class AttemptResult(BaseModel):
     """How an answer went: whether it was right, graded against the stored
     key or by the learner, the right answer, why (for multiple choice and
-    true/false), the passages it comes from, and when the item comes back."""
+    true/false), and the passages it comes from. box is the item's own box;
+    due_at and gap_days say when its concept comes back for review."""
 
     correct: bool
     graded_by: Literal["key", "learner"]
@@ -540,6 +568,7 @@ class AttemptResult(BaseModel):
     sources: list[Citation]
     box: int
     due_at: datetime
+    gap_days: int
 
 
 class SearchResult(BaseModel):
