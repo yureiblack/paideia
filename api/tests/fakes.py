@@ -105,15 +105,45 @@ def relationship_answer(schema, choice: int, confidence: float) -> list[dict]:
     ]
 
 
+def practice_answer(prompt) -> dict:
+    """Practice items that pass every check: built from the first passage's
+    own words, so the fake reranker finds them supported, and with the truth
+    the prompt asks for."""
+    passage = re.search(
+        r"^\[1\] (.+?)\n\n(?:\[\d+\]|Write)", prompt.user, re.MULTILINE | re.DOTALL
+    )
+    text = " ".join(passage.group(1).split())[:140].rstrip(" .") + "."
+    truth = "that is true according to" in prompt.user
+    return {
+        "short_answer": {"question": "Explain this.", "answer": text, "sources": [1]},
+        "multiple_choice": {
+            "question": "Which is right?",
+            "options": [text, "Something else.", "Another thing.", "None of these."],
+            "correct": 1,
+            "explanation": text,
+            "sources": [1],
+        },
+        "true_false": {
+            "statement": text,
+            "true": truth,
+            "explanation": text,
+            "sources": [1],
+        },
+        "flashcard": {"front": "Recall this.", "back": text, "sources": [1]},
+    }
+
+
 def simple_answer(prompt, schema) -> dict:
     """A valid answer of the shape the schema asks for. A summary: one key
     point per allowed number, as few as the schema allows, each citing its
     number. Concepts: one per passage, "Concept 1" and so on, each citing
     its passage. Relationships: every pair related, with confidence 0.8.
-    Roadmap stages: "Title 1" and so on."""
+    Roadmap stages: "Title 1" and so on. Practice items: practice_answer."""
     properties = schema.model_json_schema()["properties"]
     if "decisions" in properties:
         return {"decisions": relationship_answer(schema, choice=5, confidence=0.8)}
+    if "short_answer" in properties:
+        return practice_answer(prompt)
     if "stages" in properties:
         count = properties["stages"]["maxItems"]
         return {

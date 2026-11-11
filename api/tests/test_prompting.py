@@ -18,6 +18,7 @@ RELEASED = {
     "combine_summaries/v1": "0107b851c11f171d2b2ad22e1023012a5cfaea64944b7f8f426aeb81fc1b026a",
     "document_summary/v1": "d5bffc7d775b7ec4a5f0b661003f63c4b134eaf5aa30564b6806f7387de30dd9",
     "environment_summary/v1": "965c483c92c14c612e891f854bb8fed1d3ecb87019c9587ed6a65cd137610069",
+    "practice_items/v1": "548781c5f829fc7171162eb425fca9f15e1059860be7cc540735a43374eacad8",
     "relationship/v1": "1990b4c79f86eed0f846939af9a0aafcd61e3b3b220b7a7251bd5510d3fd4925",
     "roadmap_stages/v1": "28d49ca8cffcb2a49b6102a51353291ebe1b867b5814e15f2b48e7508e583b33",
 }
