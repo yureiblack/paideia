@@ -64,7 +64,7 @@ export function PracticeSession({
     );
   }
   if (index >= items.length) {
-    const tomorrow = results.filter((r) => r.box <= 1).length;
+    const tomorrow = results.filter((r) => r.gap_days <= 1).length;
     return (
       <section aria-labelledby="done-heading" className="flex flex-col gap-3">
         <h2 id="done-heading" className="text-lg font-semibold">
@@ -72,12 +72,12 @@ export function PracticeSession({
         </h2>
         <p className="text-sm">
           You practised {items.length} {items.length === 1 ? "item" : "items"}.{" "}
-          {tomorrow === items.length
-            ? "They all come back tomorrow."
+          {tomorrow === results.length
+            ? "Their concepts all come back tomorrow."
             : tomorrow > 0
-              ? `${tomorrow} come back tomorrow, the rest later.`
-              : "They come back later."}{" "}
-          Each time you recall an item, it comes back further apart.
+              ? `${tomorrow} of your answers bring their concept back tomorrow; the rest later.`
+              : "Their concepts come back later."}{" "}
+          Each time you recall a concept, it comes back further apart.
         </p>
         {back}
       </section>
@@ -263,7 +263,11 @@ function ItemCard({
           </p>
           {result.explanation && <p>{result.explanation}</p>}
           <CitationChips environmentId={environmentId} citations={result.sources} showFilename />
-          <p className="text-xs text-zinc-500">Comes back {formatDateTime(result.due_at)}.</p>
+          <p className="text-xs text-zinc-500">
+            {item.concept.name} comes back for review{" "}
+            {result.gap_days === 1 ? "tomorrow" : `in ${result.gap_days} days`},{" "}
+            {formatDateTime(result.due_at)}.
+          </p>
           <button
             type="button"
             onClick={onNext}

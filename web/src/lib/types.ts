@@ -267,22 +267,39 @@ export type RoadmapState = {
 };
 
 // Practice: items written from a concept's passages, checked by the backend.
-// state none: never prepared; outdated: its material changed since, so its
-// items are no longer practised. items: practised; due: due now.
+// state is about the items: none (never prepared), outdated (its material
+// changed, so its items are no longer practised), and so on. The rest is
+// the learner's state, worked out from their answers: review is new (items,
+// no answers), due (by the end of the learner's day) or scheduled, and null
+// without items; gap_days is the gap between reviews; attention says why it
+// needs attention, if it does.
 export type PracticeConcept = {
   concept_id: string;
   name: string;
   state: "none" | "pending" | "generating" | "ready" | "failed" | "outdated";
   error: string | null;
   items: number;
-  due: number;
+  review: "new" | "due" | "scheduled" | null;
+  exposures: number;
+  recalled: number;
+  failed: number;
+  last_attempted_at: string | null;
+  last_recalled_at: string | null;
+  gap_days: number | null;
+  next_review_at: string | null;
+  attention: string | null;
 };
 
+export type ConceptNote = { concept_id: string; name: string; note: string };
+
 export type PracticeOverview = {
-  due: number;
   items: number;
-  next_due_at: string | null;
+  due_concepts: number;
+  new_concepts: number;
+  next_review_at: string | null;
   concepts: PracticeConcept[];
+  needs_attention: ConceptNote[];
+  recently_strong: ConceptNote[];
 };
 
 // An item as shown before answering. prompt is the question, statement or
@@ -321,7 +338,9 @@ export type AttemptResult = {
   explanation: string | null;
   sources: Citation[];
   box: number;
+  // When the item's concept comes back for review, and the gap until then.
   due_at: string;
+  gap_days: number;
 };
 
 // One passage that matched a search. score is the reranker's judgement of how

@@ -140,8 +140,11 @@ export const api = {
       method: "POST",
     }),
 
-  getPractice: (environmentId: string) =>
-    request<PracticeOverview>(`${environmentPath(environmentId)}/practice`),
+  // until: the end of the learner's day, so "due today" is their today.
+  getPractice: (environmentId: string, until: string) =>
+    request<PracticeOverview>(
+      `${environmentPath(environmentId)}/practice?until=${encodeURIComponent(until)}`,
+    ),
 
   // Write practice items for these concepts, in the background.
   preparePractice: (environmentId: string, conceptIds: string[]) =>
@@ -150,11 +153,12 @@ export const api = {
       withJson("POST", { concept_ids: conceptIds }),
     ),
 
-  // A session: the due items, or with concept ids (a stage) theirs.
-  getPracticeSession: (environmentId: string, conceptIds?: string[]) => {
-    const query = new URLSearchParams();
+  // A session: the items of the concepts due today, or with concept ids (a
+  // stage) theirs.
+  getPracticeSession: (environmentId: string, until: string, conceptIds?: string[]) => {
+    const query = new URLSearchParams({ until });
     for (const id of conceptIds ?? []) query.append("concept_id", id);
-    const suffix = query.size ? `?${query}` : "";
+    const suffix = `?${query}`;
     return request<PracticeItem[]>(
       `${environmentPath(environmentId)}/practice/session${suffix}`,
     );

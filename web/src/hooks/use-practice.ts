@@ -11,10 +11,17 @@ import type { AttemptInput } from "@/lib/types";
 const key = (environmentId: string) =>
   ["environments", environmentId, "practice"] as const;
 
+// The end of the learner's own day, as an instant the API understands.
+export function endOfToday(): string {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return end.toISOString();
+}
+
 export function usePractice(environmentId: string) {
   return useQuery({
     queryKey: key(environmentId),
-    queryFn: () => api.getPractice(environmentId),
+    queryFn: () => api.getPractice(environmentId, endOfToday()),
     refetchInterval: (query) =>
       query.state.data?.concepts.some(
         (c) => c.state === "pending" || c.state === "generating",
@@ -41,7 +48,8 @@ export function usePracticeSession(
 ) {
   return useQuery({
     queryKey: [...key(environmentId), "session", conceptIds, started],
-    queryFn: () => api.getPracticeSession(environmentId, conceptIds ?? undefined),
+    queryFn: () =>
+      api.getPracticeSession(environmentId, endOfToday(), conceptIds ?? undefined),
     enabled: started !== null,
     staleTime: Infinity,
     refetchOnWindowFocus: false,

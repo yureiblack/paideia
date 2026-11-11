@@ -12,6 +12,7 @@ import Link from "next/link";
 
 import { CitationChips } from "@/components/cited-points";
 import { ConceptInventory } from "@/components/concept-inventory";
+import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
 import {
   graphVersion,
@@ -225,6 +226,7 @@ function ConceptExplorer({
           <p className="text-xs text-zinc-500">Also: {near.aliases.join(", ")}</p>
         )}
         <p className="text-sm">{near.definition}</p>
+        <ConceptProgress environmentId={environmentId} conceptId={near.concept.id} />
       </div>
 
       {nothing ? (

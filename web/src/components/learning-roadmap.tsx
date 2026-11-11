@@ -12,6 +12,7 @@
 import Link from "next/link";
 
 import { CitationChips } from "@/components/cited-points";
+import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
 import { StagePractice } from "@/components/stage-practice";
 import { useRequestRoadmap, useRoadmap } from "@/hooks/use-roadmap";
@@ -191,6 +192,7 @@ function ConceptStep({
         {concept.name}
       </Link>
       <p className="text-sm">{concept.definition}</p>
+      <ConceptProgress environmentId={environmentId} conceptId={concept.id} />
       {concept.builds_on.length > 0 && (
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
           Builds on{" "}

@@ -34,7 +34,7 @@ export function StagePractice({
     (c) => c.state === "none" || c.state === "failed" || c.state === "outdated",
   );
   const items = concepts.reduce((n, c) => n + c.items, 0);
-  const due = concepts.reduce((n, c) => n + c.due, 0);
+  const due = concepts.filter((c) => c.review === "due" || c.review === "new").length;
 
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -43,7 +43,7 @@ export function StagePractice({
           {busy.length > 0
             ? `Writing practice items… ${concepts.length - busy.length - missing.length} of ${concepts.length} concepts ready`
             : items > 0
-              ? `${items} practice ${items === 1 ? "item" : "items"}${due ? `, ${due} due now` : ""}`
+              ? `${items} practice ${items === 1 ? "item" : "items"}${due ? `, ${due} of ${concepts.length} concepts due today` : ""}`
               : "No practice items yet"}
         </span>
         {missing.length > 0 && busy.length === 0 && (
