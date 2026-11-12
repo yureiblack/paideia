@@ -1,7 +1,9 @@
-// One environment on the dashboard. The whole card is a link to it.
+// One environment on the dashboard, with today's plan in a line. The whole
+// card is a link to it.
 
 import Link from "next/link";
 
+import { PlanLine } from "@/components/plan-line";
 import { formatDate } from "@/lib/format";
 import type { Environment } from "@/lib/types";
 
@@ -17,6 +19,7 @@ export function EnvironmentCard({ environment }: { environment: Environment }) {
           {environment.description}
         </p>
       )}
+      <PlanLine environmentId={environment.id} />
       <p className="mt-auto text-xs text-zinc-500">
         Created {formatDate(environment.created_at)}
       </p>

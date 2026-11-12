@@ -9,7 +9,8 @@
 // At the top, the concepts due today (in the learner's own day), those that
 // need attention and those recently strong, each with why; below, each
 // roadmap stage with Prepare practice and Practise this stage. A session replaces the page until it is done.
-// ?stage= (from the Roadmap tab) starts that stage's session at once.
+// ?stage= (from the Roadmap tab) starts that stage's session at once, and
+// ?concepts= (from today's plan) a session for those concepts.
 
 import Link from "next/link";
 import { useState } from "react";
@@ -26,14 +27,18 @@ type Session = { conceptIds: string[] | null; title: string; started: number };
 export function Practice({
   environmentId,
   stage,
+  focus = null,
 }: {
   environmentId: string;
   stage: number | null;
+  // From today's plan: a session for these concepts at once.
+  focus?: { conceptIds: string[]; title: string } | null;
 }) {
   const practice = usePractice(environmentId);
   const roadmap = useRoadmap(environmentId);
   const [session, setSession] = useState<Session | null>(null);
   const [fromLink, setFromLink] = useState(stage);
+  const [planned, setPlanned] = useState(focus);
 
   if (practice.isPending || roadmap.isPending) {
     return <p className="text-zinc-500">Loading practice…</p>;
@@ -49,6 +54,7 @@ export function Practice({
   const linked = fromLink !== null ? stages.find((s) => s.number === fromLink) : undefined;
   const active =
     session ??
+    (planned ? { ...planned, started: 0 } : null) ??
     (linked
       ? {
           conceptIds: linked.concepts.map((c) => c.id),
@@ -66,6 +72,7 @@ export function Practice({
         onDone={() => {
           setSession(null);
           setFromLink(null);
+          setPlanned(null);
         }}
       />
     );

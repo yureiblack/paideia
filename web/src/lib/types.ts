@@ -343,6 +343,28 @@ export type AttemptResult = {
   gap_days: number;
 };
 
+// Today's study plan, worked out by fixed rules. kind: strengthen (concepts
+// needing attention), review (due today), learn (the next roadmap stage;
+// needs_preparing when its practice items are not written yet) or skim (a
+// recently added document's summary). minutes is the estimated effort.
+export type PlanSession = {
+  kind: "strengthen" | "review" | "learn" | "skim";
+  title: string;
+  minutes: number;
+  rationale: string;
+  concepts: ConceptRef[];
+  stage: number | null;
+  document: { document_id: string; filename: string } | null;
+  needs_preparing: boolean;
+};
+
+export type StudyPlan = {
+  sessions: PlanSession[];
+  later: PlanSession[];
+  minutes: number;
+  budget: number | null;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.

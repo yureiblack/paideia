@@ -91,6 +91,16 @@ due today, in the learner's own day, what needs attention and what is
 recently strong, each with why; the Knowledge map and the Roadmap show each
 concept's state in a line. Nothing is a grade.
 
+Each environment's Overview tab shows today's recommended study plan, and the
+dashboard a line of it per environment. It is worked out by fixed rules,
+never by the model: first the concepts missed lately, to strengthen while the
+miss is fresh; then the concepts due for review today; then the next roadmap
+stage not yet practised; then a skim of material added in the last week.
+Every session says why, how long it should take (reading at 200 words a
+minute, answering at the learner's own pace once known) and which concepts it
+covers, and opens what it needs. An optional time budget, remembered in the
+browser, moves what does not fit to "With more time".
+
 ## Stack
 
 | Layer | Choice |
@@ -211,6 +221,7 @@ by default, since it assumes the API is at http://localhost:8000.
 | POST | `/api/concepts/{id}/practice` | The same, for one concept. |
 | GET | `/api/environments/{id}/practice/session?until=...` | A session of up to 10 items, interleaved: two items from each concept due by `until`, overdue first, then new ones in roadmap order; or with `concept_id` repeated (a stage) those concepts' items. Items of the kinds the backend grades never carry their answer. |
 | POST | `/api/learning-items/{id}/attempts` | Answer an item: `choice` (multiple choice), `truth` (true/false) or `knew` (short answer, flashcard, after seeing the answer), with optional `text` and `seconds`. Returns whether it was right, the answer, why, the passages it comes from, and when its concept comes back (`due_at`, `gap_days`). 409 if the item was replaced, 422 for an answer of the wrong kind. |
+| GET | `/api/environments/{id}/plan?until=...&minutes=...` | Today's study plan, worked out afresh: `sessions` in order, each with its `kind` (`strengthen`, `review`, `learn` or `skim`), `title`, estimated `minutes`, `rationale`, `concepts`, and the roadmap `stage` or `document` it opens; with an optional time budget `minutes` (5 to 600), the sessions that did not fit in `later`. `until` is the end of the learner's day, with its time zone. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -310,6 +321,7 @@ api/                    FastAPI backend
     roadmap.py          the roadmap's stages and order, by fixed rules
     practice.py         practice items' checks, review boxes and sessions
     learner.py          learner state per concept, from the answers, and its schedule
+    planner.py          today's study plan, by fixed rules
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
