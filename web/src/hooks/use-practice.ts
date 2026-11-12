@@ -61,7 +61,10 @@ export function useAnswer(environmentId: string) {
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: AttemptInput }) =>
       api.answerItem(itemId, input),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: key(environmentId), exact: true }),
+    onSuccess: () => {
+      // An answer changes what is due, and so today's plan.
+      queryClient.invalidateQueries({ queryKey: key(environmentId), exact: true });
+      queryClient.invalidateQueries({ queryKey: ["environments", environmentId, "plan"] });
+    },
   });
 }

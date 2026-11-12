@@ -18,6 +18,7 @@ import type {
   PracticeItem,
   PracticeOverview,
   RoadmapState,
+  StudyPlan,
   SearchResponse,
   SourcePreview,
 } from "@/lib/types";
@@ -169,6 +170,14 @@ export const api = {
       `/api/learning-items/${encodeURIComponent(itemId)}/attempts`,
       withJson("POST", input),
     ),
+
+  // Today's plan; until is the end of the learner's day, minutes an
+  // optional time budget.
+  getPlan: (environmentId: string, until: string, minutes: number | null) => {
+    const query = new URLSearchParams({ until });
+    if (minutes) query.set("minutes", String(minutes));
+    return request<StudyPlan>(`${environmentPath(environmentId)}/plan?${query}`);
+  },
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),
