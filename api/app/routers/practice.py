@@ -78,10 +78,10 @@ def read_practice(
     llm: LLMDep,
     until: UntilQuery = None,
 ) -> PracticeOverview:
-    return service.overview(session, environment, llm, until=_aware(until))
+    return service.overview(session, environment, llm, until=aware_until(until))
 
 
-def _aware(until: datetime | None) -> datetime | None:
+def aware_until(until: datetime | None) -> datetime | None:
     if until is not None and until.tzinfo is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -173,7 +173,9 @@ def read_session(
     concept_id: Annotated[list[uuid.UUID] | None, Query()] = None,
     until: UntilQuery = None,
 ) -> list[PracticeItem]:
-    return service.session_items(session, environment, concept_id, until=_aware(until))
+    return service.session_items(
+        session, environment, concept_id, until=aware_until(until)
+    )
 
 
 @router.post("/learning-items/{item_id}/attempts", response_model=AttemptResult)

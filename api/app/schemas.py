@@ -571,6 +571,34 @@ class AttemptResult(BaseModel):
     gap_days: int
 
 
+class PlanSession(BaseModel):
+    """One session of today's plan. kind: strengthen (concepts needing
+    attention), review (due today), learn (the next roadmap stage; stage is
+    its number, needs_preparing when its practice items are not written yet)
+    or skim (a recently added document's summary; document is which).
+    minutes is the estimated effort; rationale says why, in plain words;
+    concepts are the concepts it covers."""
+
+    kind: Literal["strengthen", "review", "learn", "skim"]
+    title: str
+    minutes: int
+    rationale: str
+    concepts: list[ConceptRef]
+    stage: int | None
+    document: ConceptDocument | None
+    needs_preparing: bool
+
+
+class StudyPlan(BaseModel):
+    """Today's recommended study plan, in order. With a budget, the sessions
+    that did not fit are in later. minutes is the total of sessions."""
+
+    sessions: list[PlanSession]
+    later: list[PlanSession]
+    minutes: int
+    budget: int | None
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 
