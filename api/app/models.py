@@ -227,7 +227,8 @@ class DocumentChunk(Base):
     char_end: Mapped[int]
     heading: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text)
-    content_hash: Mapped[str] = mapped_column(String(64))
+    # Indexed: identical text elsewhere gives its embedding (record 17).
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
     # Computed and stored by Postgres itself from heading and content, so it
     # can never drift from the text. Deferred: loaded only when asked for.
     search_vector: Mapped[str] = mapped_column(
@@ -418,6 +419,10 @@ class RelationshipDecision(Base):
     as the model saw it: both normalized names and the content of its
     passages. concept_a and concept_b are in normalized-name order, and
     decision is read in that order.
+
+    A decision outlives its concepts (decision record 17): it belongs to its
+    key, not to the concept rows, so deleting a document and adding it again
+    finds every decision about its pairs. The concept links are then empty.
     """
 
     __tablename__ = "relationship_decisions"
@@ -439,11 +444,11 @@ class RelationshipDecision(Base):
         ForeignKey("environments.id", ondelete="CASCADE")
     )
     pair_key: Mapped[str] = mapped_column(String(64))
-    concept_a_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    concept_a_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("concepts.id", ondelete="SET NULL"), index=True
     )
-    concept_b_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("concepts.id", ondelete="CASCADE"), index=True
+    concept_b_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("concepts.id", ondelete="SET NULL"), index=True
     )
     decision: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float)
@@ -622,3 +627,42 @@ class ReviewSchedule(Base):
     box: Mapped[int] = mapped_column(Integer)
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     last_answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MaterialUpdate(Base):
+    """One change to an environment's material, followed step by step so the
+    page can show its progress, and what it changed (decision record 17).
+
+    kind is added, new_version, reprocessed or deleted; filename is kept so
+    an update about a deleted document still reads well. steps lists each
+    step's name, label, state (waiting, running, done, failed or skipped)
+    and a detail; report is what changed, written when the update finishes;
+    before is the snapshot of the environment the report compares with.
+    """
+
+    __tablename__ = "material_updates"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('added', 'new_version', 'reprocessed', 'deleted')", name="kind"
+        ),
+        CheckConstraint("status IN ('running', 'done', 'failed')", name="status"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), index=True
+    )
+    filename: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    steps: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    before: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    report: Mapped[dict | None] = mapped_column(JSONB)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
