@@ -272,7 +272,8 @@ export type RoadmapState = {
 // the learner's state, worked out from their answers: review is new (items,
 // no answers), due (by the end of the learner's day) or scheduled, and null
 // without items; gap_days is the gap between reviews; attention says why it
-// needs attention, if it does.
+// needs attention, if it does; strong: recalled on its last answer after a
+// gap of four days or more (the backend's rule, also a stage's progress).
 export type PracticeConcept = {
   concept_id: string;
   name: string;
@@ -288,6 +289,18 @@ export type PracticeConcept = {
   gap_days: number | null;
   next_review_at: string | null;
   attention: string | null;
+  strong: boolean;
+};
+
+// One practice session, worked out by the backend from the answers: answers
+// less than 30 minutes apart are one session. started_at and ended_at are
+// its first and last answers; concepts are in the order first answered.
+export type PracticeSession = {
+  started_at: string;
+  ended_at: string;
+  answers: number;
+  recalled: number;
+  concepts: ConceptRef[];
 };
 
 export type ConceptNote = { concept_id: string; name: string; note: string };

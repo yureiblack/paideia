@@ -24,7 +24,7 @@ import logging
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -57,6 +57,7 @@ from app.schemas import (
     PracticeConcept,
     PracticeItem,
     PracticeOverview,
+    PracticeSessionRead,
 )
 from app.services import roadmap as roadmap_service
 from app.services import sources, summaries
@@ -67,6 +68,11 @@ ARTIFACT_TYPE = "practice_set"
 PROMPT = ("practice_items", "v1")
 MIN_SUPPORT = 0.5  # the reranker's score of an answer against its passages
 CHANGED = "The material changed before the practice items were written."
+# Nothing records a practice session: answers less than SESSION_GAP apart
+# belong to the same one (decision record 19). The history shows the last
+# HISTORY sessions.
+SESSION_GAP = timedelta(minutes=30)
+HISTORY = 20
 
 
 class NotPractised(Exception):
@@ -558,6 +564,7 @@ def overview(
                 gap_days=known.gap_days,
                 next_review_at=known.next_review_at,
                 attention=learner.attention(known),
+                strong=learner.strong(known),
             )
         )
     practised = [r for r in rows if r.review is not None]
@@ -567,11 +574,7 @@ def overview(
         reverse=True,
     )
     strong = sorted(
-        (
-            r
-            for r in practised
-            if learner.strong(states.get(r.concept_id, learner.State()))
-        ),
+        (r for r in practised if r.strong),
         key=lambda r: (-r.gap_days, -r.last_recalled_at.timestamp()),
     )
     later = [r.next_review_at for r in practised if r.review == "scheduled"]
@@ -593,6 +596,44 @@ def overview(
             )
             for r in strong[:5]
         ],
+    )
+
+
+def history(
+    session: Session, environment_id: uuid.UUID, limit: int = HISTORY
+) -> list[PracticeSessionRead]:
+    """The learner's practice sessions, newest first: their answers grouped
+    into sessions wherever SESSION_GAP or more passes between two answers.
+    Answers to retired items count; a concept's answers go when the concept
+    does, with its items."""
+    rows = session.execute(
+        select(Attempt.answered_at, Attempt.correct, Concept.id, Concept.name)
+        .join(LearningItem, LearningItem.id == Attempt.item_id)
+        .join(Concept, Concept.id == LearningItem.concept_id)
+        .where(LearningItem.environment_id == environment_id)
+        .order_by(Attempt.answered_at, Attempt.id)
+    ).all()
+    sittings: list[list] = []
+    for row in rows:
+        if (
+            not sittings
+            or row.answered_at - sittings[-1][-1].answered_at >= SESSION_GAP
+        ):
+            sittings.append([])
+        sittings[-1].append(row)
+    return [_sitting(rows) for rows in reversed(sittings[-limit:])]
+
+
+def _sitting(rows: list) -> PracticeSessionRead:
+    concepts: dict[uuid.UUID, str] = {}
+    for row in rows:
+        concepts.setdefault(row.id, row.name)
+    return PracticeSessionRead(
+        started_at=rows[0].answered_at,
+        ended_at=rows[-1].answered_at,
+        answers=len(rows),
+        recalled=sum(row.correct for row in rows),
+        concepts=[ConceptRef(id=i, name=name) for i, name in concepts.items()],
     )
 
 

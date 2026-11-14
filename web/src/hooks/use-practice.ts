@@ -1,7 +1,8 @@
-// Practice: what is due, preparing items, sessions and answers. The overview
-// is checked every two seconds while any concept's items are being written,
-// so the page follows along. A session is fetched once when it starts and
-// kept as it was, so answering items does not reshuffle it.
+// Practice: what is due, preparing items, sessions, answers and the history
+// of past sessions. The overview is checked every two seconds while any
+// concept's items are being written, so the page follows along. A session is
+// fetched once when it starts and kept as it was, so answering items does
+// not reshuffle it.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -28,6 +29,17 @@ export function usePractice(environmentId: string) {
       )
         ? 2000
         : false,
+  });
+}
+
+// Past sessions, worked out from the answers; an answer refreshes them.
+const historyKey = (environmentId: string) =>
+  ["environments", environmentId, "practice-history"] as const;
+
+export function usePracticeHistory(environmentId: string) {
+  return useQuery({
+    queryKey: historyKey(environmentId),
+    queryFn: () => api.getPracticeHistory(environmentId),
   });
 }
 
@@ -65,6 +77,7 @@ export function useAnswer(environmentId: string) {
       // An answer changes what is due, and so today's plan.
       queryClient.invalidateQueries({ queryKey: key(environmentId), exact: true });
       queryClient.invalidateQueries({ queryKey: ["environments", environmentId, "plan"] });
+      queryClient.invalidateQueries({ queryKey: historyKey(environmentId) });
     },
   });
 }

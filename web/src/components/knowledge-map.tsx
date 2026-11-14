@@ -14,6 +14,7 @@ import { CitationChips } from "@/components/cited-points";
 import { ConceptInventory } from "@/components/concept-inventory";
 import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
+import { Loading, LoadError } from "@/components/query-states";
 import {
   graphVersion,
   useGraph,
@@ -77,14 +78,15 @@ function GraphStatus({
 }) {
   const update = useRequestGraph(environmentId);
 
-  if (graph.isPending) {
-    return <p className="text-zinc-500">Loading the knowledge graph…</p>;
-  }
+  if (graph.isPending) return <Loading what="the knowledge graph" lines={3} />;
   if (graph.isError) {
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not load the knowledge graph: {graph.error.message}
-      </p>
+      <LoadError
+        what="the knowledge graph"
+        error={graph.error}
+        onRetry={() => void graph.refetch()}
+        retrying={graph.isFetching}
+      />
     );
   }
   const { state, edges, nodes } = graph.data;
@@ -186,17 +188,22 @@ function ConceptExplorer({
     </Link>
   );
 
-  if (query.isPending) {
-    return <p className="text-zinc-500">Loading the concept…</p>;
-  }
+  if (query.isPending) return <Loading what="the concept" lines={3} />;
   if (query.isError) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {query.error.message === "Concept not found"
-            ? "This concept is no longer in the material."
-            : `Could not load the concept: ${query.error.message}`}
-        </p>
+        {query.error.message === "Concept not found" ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            This concept is no longer in the material.
+          </p>
+        ) : (
+          <LoadError
+            what="the concept"
+            error={query.error}
+            onRetry={() => void query.refetch()}
+            retrying={query.isFetching}
+          />
+        )}
         {close}
       </div>
     );

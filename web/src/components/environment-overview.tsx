@@ -1,8 +1,20 @@
 "use client";
 
-// The Overview tab: today's recommended study plan, then the environment's
-// details, read from the cache the shell already filled.
+// The Overview tab, the environment's dashboard (decision record 19): the
+// numbers at a glance first, then today's study plan, each roadmap stage's
+// progress, the opening of the summary, the knowledge map in words, recent
+// material and how recent background work ended. Every section reads data
+// its own tab fetches too, and loads, fails and tries again on its own. One
+// column on a phone; two below the plan on a wide screen.
 
+import {
+  AtAGlance,
+  MapPreview,
+  ProcessingActivity,
+  RecentMaterial,
+  RoadmapProgress,
+  SummaryPreview,
+} from "@/components/overview-sections";
 import { TodayPlan } from "@/components/today-plan";
 import { useEnvironment } from "@/hooks/use-environments";
 import { formatDateTime } from "@/lib/format";
@@ -13,20 +25,20 @@ export function EnvironmentOverview({ id }: { id: string }) {
   if (!environment) return null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
+      <AtAGlance environmentId={id} />
       <TodayPlan environmentId={id} />
-      <dl className="grid gap-4 sm:grid-cols-[10rem_1fr]">
-      <dt className="text-sm text-zinc-500">Description</dt>
-      <dd>
-        {environment.description ?? (
-          <span className="text-zinc-500">No description yet.</span>
-        )}
-      </dd>
-      <dt className="text-sm text-zinc-500">Created</dt>
-      <dd>{formatDateTime(environment.created_at)}</dd>
-      <dt className="text-sm text-zinc-500">Last updated</dt>
-      <dd>{formatDateTime(environment.updated_at)}</dd>
-      </dl>
+      <div className="grid gap-10 lg:grid-cols-2">
+        <RoadmapProgress environmentId={id} />
+        <SummaryPreview environmentId={id} />
+        <MapPreview environmentId={id} />
+        <RecentMaterial environmentId={id} />
+        <ProcessingActivity environmentId={id} />
+      </div>
+      <p className="text-xs text-zinc-500">
+        Created {formatDateTime(environment.created_at)} · last changed{" "}
+        {formatDateTime(environment.updated_at)}
+      </p>
     </div>
   );
 }

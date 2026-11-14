@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { EnvironmentCard } from "@/components/environment-card";
 import { EnvironmentForm } from "@/components/environment-form";
+import { Loading, LoadError } from "@/components/query-states";
 import {
   useCreateEnvironment,
   useEnvironments,
@@ -63,20 +64,14 @@ export function Dashboard() {
       )}
 
       {environments.isPending ? (
-        <p className="text-zinc-500">Loading environments…</p>
+        <Loading what="environments" lines={3} />
       ) : environments.isError ? (
-        <div role="alert" className="flex flex-col items-start gap-2">
-          <p className="text-red-600 dark:text-red-400">
-            Could not load environments: {environments.error.message}
-          </p>
-          <button
-            type="button"
-            onClick={() => environments.refetch()}
-            className="text-sm font-medium underline"
-          >
-            Try again
-          </button>
-        </div>
+        <LoadError
+          what="environments"
+          error={environments.error}
+          onRetry={() => void environments.refetch()}
+          retrying={environments.isFetching}
+        />
       ) : environments.data.length === 0 ? (
         <p className="text-zinc-500">
           No environments yet. Create one to get started.

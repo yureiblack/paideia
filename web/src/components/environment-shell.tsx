@@ -2,15 +2,18 @@
 
 // The frame around every tab of an environment: its name, the edit and delete
 // actions, and the tabs. It loads the environment once; the tabs below share
-// that cached copy instead of fetching it again.
+// that cached copy instead of fetching it again. The browser tab's title
+// names the tab and the environment: React places this <title> in the
+// page's head, and no other title competes with it (app/layout.tsx).
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { EnvironmentForm } from "@/components/environment-form";
 import { BackgroundWork } from "@/components/background-work";
-import { EnvironmentTabs } from "@/components/environment-tabs";
+import { EnvironmentTabs, tabLabel } from "@/components/environment-tabs";
+import { Loading } from "@/components/query-states";
 import {
   useDeleteEnvironment,
   useEnvironment,
@@ -27,35 +30,66 @@ export function EnvironmentShell({
   children: ReactNode;
 }) {
   const environment = useEnvironment(id);
+  const pathname = usePathname();
+  const error = environment.error;
+  // 404: no such environment. 422: the id in the URL is not even a UUID.
+  const isMissing =
+    error instanceof ApiError && (error.status === 404 || error.status === 422);
+  const title = (
+    <title>
+      {environment.data
+        ? `${tabLabel(id, pathname)} · ${environment.data.name} · Paideia`
+        : isMissing
+          ? "Environment not found · Paideia"
+          : "Paideia"}
+    </title>
+  );
 
   if (environment.isPending) {
-    return <p className="text-zinc-500">Loading environment…</p>;
+    return (
+      <>
+        {title}
+        <Loading what="the environment" lines={3} />
+      </>
+    );
   }
 
   if (environment.isError) {
-    const error = environment.error;
-    // 404: no such environment. 422: the id in the URL is not even a UUID.
-    const isMissing =
-      error instanceof ApiError && (error.status === 404 || error.status === 422);
     return (
-      <div role="alert" className="flex flex-col items-start gap-3">
-        <h1 className="text-xl font-semibold">
-          {isMissing ? "Environment not found" : "Could not load environment"}
-        </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
-          {isMissing
-            ? "It may have been deleted, or the link is wrong."
-            : error.message}
-        </p>
-        <Link href="/" className="text-sm font-medium underline">
-          Back to all environments
-        </Link>
-      </div>
+      <>
+        {title}
+        <div role="alert" className="flex flex-col items-start gap-3">
+          <h1 className="text-xl font-semibold">
+            {isMissing ? "Environment not found" : "Could not load environment"}
+          </h1>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            {isMissing
+              ? "It may have been deleted, or the link is wrong."
+              : environment.error.message}
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            {!isMissing && (
+              <button
+                type="button"
+                onClick={() => void environment.refetch()}
+                disabled={environment.isFetching}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+              >
+                {environment.isFetching ? "Trying again…" : "Try again"}
+              </button>
+            )}
+            <Link href="/" className="text-sm font-medium underline">
+              Back to all environments
+            </Link>
+          </div>
+        </div>
+      </>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
+      {title}
       <EnvironmentHeader environment={environment.data} />
       <EnvironmentTabs id={id} />
       <BackgroundWork environmentId={id} />
