@@ -3,12 +3,15 @@
 // The Materials tab: upload PDFs into an environment, or a new version of
 // one, watch each change go through step by step and what it changed, retry
 // failures, delete documents, read the extracted text page by page, and ask
-// the local language model for a cited summary of any document.
+// the local language model for a cited summary of any document. Each
+// document shows the opening of its summary, and the step its background
+// work is at while it runs.
 
 import { useRef, useState, type ChangeEvent } from "react";
 
 import { DocumentSummaryPanel } from "@/components/document-summary";
 import { MaterialUpdates } from "@/components/material-updates";
+import { Empty, Loading, LoadError } from "@/components/query-states";
 import {
   useDeleteDocument,
   useDocuments,
@@ -18,12 +21,14 @@ import {
   useSummary,
   useUploadDocument,
 } from "@/hooks/use-documents";
-import { useNewVersion } from "@/hooks/use-updates";
+import { useJobs } from "@/hooks/use-jobs";
+import { useNewVersion, useUpdates } from "@/hooks/use-updates";
 import { formatBytes, formatDate } from "@/lib/format";
 import {
   MAX_UPLOAD_MB,
   type CurrentSummary,
   type Document,
+  type Job,
 } from "@/lib/types";
 
 export function Materials({ environmentId }: { environmentId: string }) {
@@ -32,6 +37,7 @@ export function Materials({ environmentId }: { environmentId: string }) {
   const input = useRef<HTMLInputElement>(null);
   const [tooLarge, setTooLarge] = useState<string | null>(null);
   const [reading, setReading] = useState<string | null>(null);
+  const working = useActiveJobs(environmentId);
 
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -85,15 +91,18 @@ export function Materials({ environmentId }: { environmentId: string }) {
       <MaterialUpdates environmentId={environmentId} />
 
       {documents.isPending ? (
-        <p className="text-zinc-500">Loading materials…</p>
+        <Loading what="materials" lines={3} />
       ) : documents.isError ? (
-        <p role="alert" className="text-red-600 dark:text-red-400">
-          Could not load materials: {documents.error.message}
-        </p>
+        <LoadError
+          what="materials"
+          error={documents.error}
+          onRetry={() => void documents.refetch()}
+          retrying={documents.isFetching}
+        />
       ) : documents.data.length === 0 ? (
-        <p className="text-zinc-500">
-          No materials yet. Upload a PDF to get started.
-        </p>
+        <Empty>
+          No materials yet. Upload lecture notes or readings as PDFs to get started.
+        </Empty>
       ) : (
         <ul className="flex flex-col gap-3">
           {documents.data.map((document) => (
@@ -101,6 +110,7 @@ export function Materials({ environmentId }: { environmentId: string }) {
               <DocumentRow
                 document={document}
                 environmentId={environmentId}
+                job={working.get(document.id)}
                 isReading={reading === document.id}
                 onToggleReading={() =>
                   setReading(reading === document.id ? null : document.id)
@@ -114,14 +124,35 @@ export function Materials({ environmentId }: { environmentId: string }) {
   );
 }
 
+// Each document's queued or running job, if any. A job names the material
+// update it carries out, and the update names its document. Both lists are
+// already fetched and followed by the strip above the tabs.
+function useActiveJobs(environmentId: string): Map<string, Job> {
+  const jobs = useJobs(environmentId);
+  const updates = useUpdates(environmentId);
+  const documentOf = new Map(
+    (updates.data ?? []).map((u) => [u.id, u.document_id] as const),
+  );
+  const found = new Map<string, Job>();
+  for (const job of jobs.data ?? []) {
+    if (job.status !== "queued" && job.status !== "running") continue;
+    const documentId = job.update_id ? documentOf.get(job.update_id) : null;
+    // The list puts the newest first: keep the first job found for each.
+    if (documentId && !found.has(documentId)) found.set(documentId, job);
+  }
+  return found;
+}
+
 function DocumentRow({
   document,
   environmentId,
+  job,
   isReading,
   onToggleReading,
 }: {
   document: Document;
   environmentId: string;
+  job: Job | undefined;
   isReading: boolean;
   onToggleReading: () => void;
 }) {
@@ -171,6 +202,16 @@ function DocumentRow({
       </div>
 
       <Notes document={document} />
+
+      {job && <JobLine job={job} />}
+
+      {!showingSummary &&
+        summary.data?.status === "ready" &&
+        summary.data.overview && (
+          <p className="line-clamp-2 text-sm text-zinc-700 dark:text-zinc-300">
+            {summary.data.overview}
+          </p>
+        )}
 
       <div className="flex flex-wrap gap-2">
         {document.status === "ready" && (
@@ -244,6 +285,8 @@ function DocumentRow({
           environmentId={environmentId}
           summary={summary.data}
           loadError={summary.error}
+          onReload={() => void summary.refetch()}
+          reloading={summary.isFetching}
           onTryAgain={() => askForSummary.mutate()}
           retrying={askForSummary.isPending}
           retryError={askForSummary.error}
@@ -252,6 +295,36 @@ function DocumentRow({
 
       {isReading && <PageReader documentId={document.id} />}
     </article>
+  );
+}
+
+// The step a document's background work is at, while it runs.
+function JobLine({ job }: { job: Job }) {
+  const running = job.status === "running";
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+        {job.title}:{" "}
+        {job.cancel_requested
+          ? "stopping after this step…"
+          : running
+            ? `${job.step ?? "starting"} · ${job.progress}%`
+            : "queued"}
+      </p>
+      <div
+        role="progressbar"
+        aria-label={job.title}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={job.progress}
+        className="h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+      >
+        <div
+          className="h-full rounded-full bg-zinc-900 transition-[width] dark:bg-zinc-100"
+          style={{ width: `${running ? Math.max(job.progress, 3) : 0}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -277,7 +350,7 @@ const BADGE = {
   failed: { label: "Failed", style: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
 };
 
-function StatusBadge({ document }: { document: Document }) {
+export function StatusBadge({ document }: { document: Document }) {
   const { label, style } = BADGE[document.status];
   const pages =
     document.status === "ready" && document.page_count !== null
@@ -317,14 +390,15 @@ function Notes({ document }: { document: Document }) {
 function PageReader({ documentId }: { documentId: string }) {
   const pages = usePages(documentId);
 
-  if (pages.isPending) {
-    return <p className="text-sm text-zinc-500">Loading text…</p>;
-  }
+  if (pages.isPending) return <Loading what="the text" lines={4} />;
   if (pages.isError) {
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        Could not load the text: {pages.error.message}
-      </p>
+      <LoadError
+        what="the text"
+        error={pages.error}
+        onRetry={() => void pages.refetch()}
+        retrying={pages.isFetching}
+      />
     );
   }
   return (
