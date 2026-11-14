@@ -16,8 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// No title here: the home page sets "Paideia", and an environment's pages
+// set their own once its name has loaded (environment-shell.tsx). A title
+// here would compete with theirs.
 export const metadata: Metadata = {
-  title: "Paideia",
   description: "An adaptive learning workspace",
 };
 

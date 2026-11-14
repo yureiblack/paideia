@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+export const TABS = [
   { label: "Overview", segment: "" },
   { label: "Materials", segment: "materials" },
   { label: "Search", segment: "search" },
@@ -15,6 +15,13 @@ const TABS = [
   { label: "Summary", segment: "summary" },
   { label: "Practice", segment: "practice" },
 ];
+
+// The name of the tab a path is on, for the page's title.
+export function tabLabel(id: string, pathname: string): string {
+  const base = `/environments/${id}`;
+  const tab = TABS.find(({ segment }) => (segment ? `${base}/${segment}` : base) === pathname);
+  return tab?.label ?? "Overview";
+}
 
 export function EnvironmentTabs({ id }: { id: string }) {
   const pathname = usePathname();
@@ -33,7 +40,9 @@ export function EnvironmentTabs({ id }: { id: string }) {
             key={label}
             href={href}
             aria-current={isActive ? "page" : undefined}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+            // The row scrolls sideways on a phone, which clips anything drawn
+            // outside it, so the focus ring is drawn just inside the tab.
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium focus-visible:-outline-offset-2 ${
               isActive
                 ? "border-zinc-900 dark:border-zinc-100"
                 : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
