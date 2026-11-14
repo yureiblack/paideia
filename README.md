@@ -102,6 +102,13 @@ version, a reprocess or a deletion, is followed step by step on the Materials
 tab, then shown as what changed: concepts and relationships added and
 removed, what was updated, and what was left as it was.
 
+Reading documents and everything the language model writes run as
+background jobs, in a worker process of their own: a restart of the API
+loses nothing, a job that crashes or whose worker stops is run again, up to
+three times, and any job can be cancelled. The jobs live in Postgres; Redis
+only wakes the worker. Every environment page shows its background work as
+it runs, with progress, the step it is on, and Cancel.
+
 Each environment's Overview tab shows today's recommended study plan, and the
 dashboard a line of it per environment. It is worked out by fixed rules,
 never by the model: first the concepts missed lately, to strengthen while the
@@ -168,7 +175,19 @@ summaries, Ollama (on a Mac: `brew install ollama`).
    `data/models/`. Those two moments need an internet connection; after that
    everything runs offline.
 
-4. Frontend, in another:
+4. The background worker, in another terminal, from `api/` with the same
+   environment active:
+
+   ```sh
+   python -m app.worker
+   ```
+
+   It reads uploaded documents and does all the language model's work,
+   outside the API, so restarting the API loses nothing. Without it, uploads
+   wait in the queue; the header says so. Stop it with Ctrl+C: it finishes
+   the step it is on and puts its job back for the next worker.
+
+5. Frontend, in another:
 
    ```sh
    cd web
@@ -176,7 +195,7 @@ summaries, Ollama (on a Mac: `brew install ollama`).
    pnpm dev
    ```
 
-5. For summaries, start Ollama and download the model once, about 6 GB:
+6. For summaries, start Ollama and download the model once, about 6 GB:
 
    ```sh
    brew services start ollama
@@ -188,8 +207,9 @@ summaries, Ollama (on a Mac: `brew install ollama`).
    about 7.5 GB of memory while it works. Everything else in the app runs
    without it.
 
-Open http://localhost:3000. The header shows whether the API, the database and
-the language model are ready; hover over one that is down to see why. The API's generated documentation is at
+Open http://localhost:3000. The header shows whether the API, the database,
+the language model and the worker are ready; hover over one that is down to
+see why. The API's generated documentation is at
 http://localhost:8000/docs.
 
 The frontend reads the same root `.env` as the backend. It needs nothing from it
@@ -201,6 +221,7 @@ by default, since it assumes the API is at http://localhost:8000.
 |---|---|---|
 | GET | `/health` | Is the API process alive. Touches nothing else. |
 | GET | `/health/db` | Can the API reach Postgres, and is pgvector available. Returns 503 if not. |
+| GET | `/health/worker` | Is a background worker running. Returns 503 with what to do if not. |
 | GET | `/health/llm` | Is Ollama answering, with the configured model downloaded. Returns 503 with the reason if not. |
 | GET | `/api/environments` | Every environment, newest first. |
 | POST | `/api/environments` | Create one. Body: `name`, optional `description`. Returns 201. |
@@ -236,6 +257,9 @@ by default, since it assumes the API is at http://localhost:8000.
 | POST | `/api/documents/{id}/versions` | Upload a new version of a document as the raw PDF body. The document keeps its id, name and place; only what changed is redone. Returns 202. 409 if the file is the current version, another document's file, or the document is being read. |
 | GET | `/api/environments/{id}/updates` | Every change to the environment's material, newest first: its `kind` (`added`, `new_version`, `reprocessed`, `deleted`), `status`, `steps` with their state and what each did, and once done its `report`: concepts and relationships new and removed, passages new, kept and removed, embeddings computed and reused, what was updated and what was left unchanged. |
 | GET | `/api/updates/{id}` | One update. |
+| GET | `/api/environments/{id}/jobs` | The environment's background jobs, queued and running first: each with its `title`, `lane` (`read` or `model`), `status` (`queued`, `running`, `succeeded`, `failed`, `cancelled`), `progress` (0 to 100) and current `step`, `error`, `attempts` and when it may run again (`not_before`). |
+| GET | `/api/jobs/{id}` | One job. |
+| POST | `/api/jobs/{id}/cancel` | Cancel a job: a queued one at once, a running one before its next step. A finished job is left as it is. |
 | DELETE | `/api/documents/{id}` | Delete one, with its pages and file. Returns 204. |
 | POST | `/api/search` | Search one environment by keywords and meaning, fused and reranked. Body: `environment_id`, `query`, optional `top_k` (1 to 50, default 10), optional `debug`. Returns the best passages first, each as a `citation` (environment, document, `document_version`, the file's SHA-256, filename, chunk, pages, heading and `excerpt`) and a `score`, the reranker's judgement from 0 to 1. With `debug: true` it also returns every candidate with its keyword, semantic, fusion and rerank scores. |
 | GET | `/api/chunks/{id}/preview` | A cited passage in its place: its citation, and every page it touches with the part it covers (`highlight_start` to `highlight_end`). 404 if the passage is no longer in its document. |
@@ -336,6 +360,7 @@ api/                    FastAPI backend
     practice.py         practice items' checks, review boxes and sessions
     learner.py          learner state per concept, from the answers, and its schedule
     planner.py          today's study plan, by fixed rules
+    worker.py           the background job worker: python -m app.worker
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
