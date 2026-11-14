@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -378,6 +378,7 @@ def write_practice(
                     model_name=llm.model_name,
                     prompt_version=_prompt_id(),
                     metadata_json={
+                        "sources": len(dict.fromkeys(draft.sources)),
                         "support": round(support, 3),
                         "generation_id": str(artifact.id),
                     },
@@ -422,9 +423,31 @@ def _current_keys(session: Session, concepts: list[Concept]) -> dict[uuid.UUID, 
     return {c.id: evidence_key(c, chunks[c.id]) for c in concepts if chunks[c.id]}
 
 
+def _intact(session: Session, items: list[LearningItem]) -> set[uuid.UUID]:
+    """The items whose cited passages are all still there, unchanged. A
+    passage's id comes from its text, so a changed passage is a deleted one,
+    and its source row goes with it. Items written before the count was kept
+    need at least one."""
+    counts = dict(
+        session.execute(
+            select(LearningItemSource.item_id, func.count())
+            .where(LearningItemSource.item_id.in_([i.id for i in items]))
+            .group_by(LearningItemSource.item_id)
+        ).all()
+    )
+    return {
+        i.id
+        for i in items
+        if counts.get(i.id, 0) > 0
+        and counts[i.id] == (i.metadata_json or {}).get("sources", counts[i.id])
+    }
+
+
 def _practised(session: Session, environment_id: uuid.UUID, concept_ids=None):
-    """The items practised now, with their schedules: not retired, and
-    written from their concept's current passages."""
+    """The items practised now, with their schedules: not retired, and with
+    every passage they cite still there, unchanged (decision record 17). New
+    passages for a concept do not retire its items: adding a lecture that
+    mentions a concept leaves its practice as it was."""
     query = select(Concept).where(Concept.environment_id == environment_id)
     if concept_ids is not None:
         query = query.where(Concept.id.in_(list(concept_ids)))
@@ -439,8 +462,9 @@ def _practised(session: Session, environment_id: uuid.UUID, concept_ids=None):
             LearningItem.retired_at.is_(None),
         )
     ).all()
-    current = [(i, s) for i, s in rows if keys.get(i.concept_id) == i.evidence_key]
-    stale = {i.concept_id for i, _ in rows if keys.get(i.concept_id) != i.evidence_key}
+    intact = _intact(session, [i for i, _ in rows])
+    current = [(i, s) for i, s in rows if i.id in intact]
+    stale = {i.concept_id for i, _ in rows if i.id not in intact}
     return concepts, keys, current, stale
 
 
@@ -503,6 +527,8 @@ def overview(
         generation = generations.get(keys.get(concept.id))
         if generation is not None:
             state = generation.status
+        elif items[concept.id]:
+            state = "ready"  # written from earlier passages, all still there
         else:
             state = "outdated" if concept.id in stale else "none"
         known = states.get(concept.id, learner.State())
@@ -650,9 +676,7 @@ def answer(
     NotPractised for an item no longer practised, ValueError for an answer
     of the wrong kind."""
     now = now or datetime.now(UTC)
-    concept = session.get(Concept, item.concept_id)
-    key = _current_keys(session, [concept]).get(concept.id)
-    if item.retired_at is not None or item.evidence_key != key:
+    if item.retired_at is not None or item.id not in _intact(session, [item]):
         raise NotPractised("This item was replaced and is no longer practised.")
     content, kind = item.content, item.kind
     if kind == "multiple_choice":

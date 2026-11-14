@@ -113,6 +113,11 @@ def build(session, session_factory, env, llm) -> GeneratedArtifact | None:
     )
 
 
+def written(meta: dict) -> dict:
+    """A build's details without the time it was written."""
+    return {k: v for k, v in meta.items() if k != "written_at"}
+
+
 def edges(session, env) -> set[tuple[str, str, str]]:
     """(source, type, target) by concept name."""
     names = {
@@ -155,7 +160,7 @@ def test_the_model_classifies_the_pairs_the_backend_found(
     assert "  1. Round Robin must be understood before Thread." in prompt.user
     assert "  2. Thread must be understood before Round Robin." in prompt.user
     assert artifact.status == "ready"
-    assert artifact.metadata_json == {"pairs": 3, "asked": 3, "remembered": 0}
+    assert written(artifact.metadata_json) == {"pairs": 3, "asked": 3, "remembered": 0}
     assert artifact.content == {"edges": {"PART_OF": 1, "PREREQUISITE_OF": 1}}
     assert edges(session, env) == {
         ("Thread", "PREREQUISITE_OF", "Round Robin"),
@@ -202,7 +207,7 @@ def test_a_new_lecture_asks_only_about_its_new_pairs(session: Session, session_f
         ("Critical Section", "Thread"),
         ("Mutex", "Thread"),
     ]
-    assert artifact.metadata_json == {"pairs": 6, "asked": 3, "remembered": 3}
+    assert written(artifact.metadata_json) == {"pairs": 6, "asked": 3, "remembered": 3}
     assert edges(session, env) == {
         ("Thread", "PREREQUISITE_OF", "Round Robin"),
         ("Time Quantum", "PART_OF", "Round Robin"),
@@ -548,3 +553,49 @@ def test_a_neighbourhood_sorts_neighbours_by_relationship(session: Session):
         ("Round Robin", 1, 0.9),
         ("Thread", 2, None),  # not a direct relationship: no evidence of its own
     ]
+
+
+def test_a_document_deleted_and_added_again_finds_every_decision(
+    session: Session, session_factory
+):
+    llm = Deciding(
+        RULES, [SCHEDULING_CONCEPTS, SYNCHRONIZATION_CONCEPTS, SYNCHRONIZATION_CONCEPTS]
+    )
+    env, _, _ = scheduling_graph(session, session_factory, llm)
+    sync = add(session, session_factory, env, "sync.pdf", SYNCHRONIZATION)
+    extract(session, session_factory, sync, llm)
+    build(session, session_factory, env, llm)
+    full = edges(session, env)
+    document_service.delete_document(session, sync)
+    concepts.refresh_concepts(session, env.id)
+    session.commit()
+    build(session, session_factory, env, llm)
+    asked = len(llm.relationship_calls())
+
+    # Its concepts were deleted with it; the decisions about its pairs were
+    # not, so adding it again asks the model nothing and the map is whole.
+    again = add(session, session_factory, env, "sync.pdf", SYNCHRONIZATION)
+    extract(session, session_factory, again, llm)
+    build(session, session_factory, env, llm)
+
+    assert len(llm.relationship_calls()) == asked
+    assert edges(session, env) == full
+    assert ("Thread", "PREREQUISITE_OF", "Mutex") in full
+
+
+def test_a_ready_build_missing_decisions_asks_only_for_those(
+    session: Session, session_factory
+):
+    llm = Deciding(RULES, [SCHEDULING_CONCEPTS])
+    env, _, first = scheduling_graph(session, session_factory, llm)
+    lost = session.scalars(select(RelationshipDecision)).first()
+    session.delete(lost)
+    session.commit()
+
+    again = build(session, session_factory, env, llm)
+
+    _, second = llm.relationship_calls()
+    assert len(asked_pairs(second)) == 1
+    assert again.id == first.id
+    assert again.metadata_json["asked"] == 1
+    assert len(edges(session, env)) == 2

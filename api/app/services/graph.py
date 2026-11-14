@@ -194,6 +194,13 @@ def request_graph(
         session.commit()
         return artifact, True
     if artifact.status == "ready":
+        known = _remembered(session, environment.id, {p.key for p in pairs}, llm)
+        if len(known) < len({p.key for p in pairs}):
+            # A finished build whose decisions are not all remembered (lost
+            # before decisions outlived their concepts): ask only for those.
+            artifact.status = "pending"
+            session.commit()
+            return artifact, True
         # The same pairs as a finished build: make the edges say so again, in
         # case a newer build changed them and its material was later undone.
         _rebuild_edges(session, environment.id, pairs, llm)
@@ -401,6 +408,7 @@ def write_graph(
                 **artifact.metadata_json,
                 "asked": len(unseen),
                 "remembered": len(pairs) - len(unseen),
+                "written_at": datetime.now(UTC).isoformat(),
             }
             session.commit()
 

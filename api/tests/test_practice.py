@@ -3,7 +3,8 @@
 Purpose: items are written from a concept's own passages and checked before
 anything is stored; items failing a check, or not supported by their
 passages, are dropped and counted; the same passages never write twice;
-changed material retires items, kept with their attempts; answers are
+new passages keep a concept's items, a changed cited passage retires them,
+kept with their attempts; answers are
 graded by the key or by the learner and move items between boxes; sessions
 hold due items, interleaved, or a stage's items.
 """
@@ -19,14 +20,17 @@ from app import practice as rules
 from app.models import (
     Attempt,
     Concept,
+    Document,
     GeneratedArtifact,
     LearningItem,
     LearningItemSource,
     ReviewSchedule,
 )
 from app.schemas import AttemptCreate
+from app.services import documents as document_service
 from app.services import practice
-from tests.fakes import FailingProvider, FakeReranker, practice_answer
+from tests.fakes import FailingProvider, FakeEmbedder, FakeReranker, practice_answer
+from tests.parsed import H, P, Returns, document
 from tests.test_concepts import add, chunks_of, concept, environment, extract
 from tests.test_graph import (
     RULES,
@@ -202,25 +206,46 @@ def test_a_failure_is_recorded_and_preparing_again_retries(
     assert len(items_of(session, named(session, env, "Thread"))) == 4
 
 
-def test_changed_material_retires_items_and_keeps_their_attempts(
+def test_new_passages_keep_items_and_changed_ones_retire_them(
     session: Session, session_factory
 ):
-    llm = Practising(RULES, [SCHEDULING_CONCEPTS, [concept("Thread", [1])]])
-    env, _ = scheduling(session, session_factory, llm)
+    llm = Practising(
+        RULES, [SCHEDULING_CONCEPTS, [concept("Thread", [1])], SCHEDULING_CONCEPTS]
+    )
+    env, doc = scheduling(session, session_factory, llm)
     prepare(session, session_factory, env, ["Thread"], llm)
     thread = named(session, env, "Thread")
     old = items_of(session, thread)["flashcard"]
     practice.answer(session, old, AttemptCreate(knew=True), NOW)
 
-    # A second lecture explains threads too: Thread's passages change.
+    # A second lecture explains threads too: new passages for Thread, but the
+    # ones its items cite are unchanged, so they are still practised.
     sync = add(session, session_factory, env, "sync.pdf", SYNCHRONIZATION)
     extract(session, session_factory, sync, llm)
     session.expire_all()
-    outdated = practice.overview(session, env, llm)
+    still = next(
+        c for c in practice.overview(session, env, llm).concepts if c.name == "Thread"
+    )
+    assert (still.state, still.items) == ("ready", 4)
+    assert practice.answer(session, old, AttemptCreate(knew=True), NOW).correct
 
-    state = next(c for c in outdated.concepts if c.name == "Thread")
-    assert (state.state, state.items) == ("outdated", 0)
-    assert practice.session_items(session, env) == []
+    # Its own passage is rewritten: the cited passage is gone, so its items
+    # are no longer practised until prepared again.
+    edited = document(
+        [H("Threads"), P("A thread is the smallest unit the scheduler runs.")],
+        [H("Round robin"), P("Round robin gives every thread a time quantum in turn.")],
+    )
+    document_service.request_reprocess(session, doc)
+    document_service.process_document(
+        session_factory, doc.id, Returns(edited), FakeEmbedder()
+    )
+    session.expire_all()  # read again by another session
+    extract(session, session_factory, session.get(Document, doc.id), llm)
+    session.expire_all()
+    outdated = next(
+        c for c in practice.overview(session, env, llm).concepts if c.name == "Thread"
+    )
+    assert (outdated.state, outdated.items) == ("outdated", 0)
     with pytest.raises(practice.NotPractised):
         practice.answer(session, old, AttemptCreate(knew=True), NOW)
 
@@ -228,15 +253,7 @@ def test_changed_material_retires_items_and_keeps_their_attempts(
 
     assert len(items_of(session, thread)) == 4
     assert old.id in {i.id for i in items_of(session, thread, retired=True).values()}
-    assert session.scalar(select(func.count()).where(Attempt.item_id == old.id)) == 1
-    assert (
-        next(
-            c
-            for c in practice.overview(session, env, llm).concepts
-            if c.name == "Thread"
-        ).state
-        == "ready"
-    )
+    assert session.scalar(select(func.count()).where(Attempt.item_id == old.id)) == 2
 
 
 def test_answers_are_graded_by_the_key_or_by_the_learner(
@@ -409,3 +426,36 @@ def test_a_concept_recalled_over_days_becomes_recently_strong(
     assert [(n.name, n.note) for n in view.recently_strong] == [
         ("Thread", "Recalled; next review in 4 days.")
     ]
+
+
+def test_an_item_is_retired_when_any_passage_it_cites_changes(
+    session: Session, session_factory
+):
+    def two_sources(prompt):
+        answer = practice_answer(prompt)
+        for item in answer.values():
+            item["sources"] = [1, 2]
+        return answer
+
+    both = [concept("Thread", [1, 2]), *SCHEDULING_CONCEPTS[1:]]
+    llm = Practising(RULES, [both, both], items=two_sources)
+    env, doc = scheduling(session, session_factory, llm)
+    prepare(session, session_factory, env, ["Thread"], llm)
+    thread = named(session, env, "Thread")
+    assert len(items_of(session, thread)) == 4
+
+    # Only the round robin passage changes; every item cites it too.
+    edited = document(
+        [H("Threads"), P("A thread is a sequence of execution within a process.")],
+        [H("Round robin"), P("Round robin hands out the processor in equal turns.")],
+    )
+    document_service.request_reprocess(session, doc)
+    document_service.process_document(
+        session_factory, doc.id, Returns(edited), FakeEmbedder()
+    )
+    session.expire_all()
+
+    state = next(
+        c for c in practice.overview(session, env, llm).concepts if c.name == "Thread"
+    )
+    assert (state.state, state.items) == ("outdated", 0)
