@@ -37,7 +37,7 @@ from fastapi import (
 
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Environment, LearningItem
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.routers.graph import ConceptDep
 from app.routers.search import RerankerDep
@@ -48,6 +48,7 @@ from app.schemas import (
     PracticeOverview,
     PrepareRequest,
 )
+from app.services import jobs
 from app.services import practice as service
 
 router = APIRouter(tags=["practice"])
@@ -97,14 +98,31 @@ def _prepare(
     session_factory,
     llm,
     reranker,
+    dispatcher,
     background,
     response,
 ) -> PracticeOverview:
     pending = service.prepare(session, environment, concept_ids, llm)
     body = service.overview(session, environment, llm)
-    session.commit()  # end this read before the background task (record 09)
+    session.commit()  # end this read before the job is queued (record 09)
     if pending:
-        background.add_task(service.write_all, session_factory, pending, llm, reranker)
+        names = service.generation_names(session, pending)
+        jobs.queue_model_work(
+            session,
+            environment.id,
+            "practice",
+            f"Preparing practice for {len(pending)} "
+            + ("concept" if len(pending) == 1 else "concepts"),
+            [
+                jobs.step("write_practice", f"Practice for {names[a]}", artifact_id=a)
+                for a in pending
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
+            reranker=reranker,
+        )
         response.status_code = status.HTTP_202_ACCEPTED
     return body
 
@@ -121,6 +139,7 @@ def prepare_practice(
     session_factory: SessionFactoryDep,
     llm: LLMDep,
     reranker: RerankerDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> PracticeOverview:
@@ -131,6 +150,7 @@ def prepare_practice(
         session_factory,
         llm,
         reranker,
+        dispatcher,
         background,
         response,
     )
@@ -147,6 +167,7 @@ def prepare_concept_practice(
     session_factory: SessionFactoryDep,
     llm: LLMDep,
     reranker: RerankerDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> PracticeOverview:
@@ -158,6 +179,7 @@ def prepare_concept_practice(
         session_factory,
         llm,
         reranker,
+        dispatcher,
         background,
         response,
     )

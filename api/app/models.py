@@ -645,7 +645,9 @@ class MaterialUpdate(Base):
         CheckConstraint(
             "kind IN ('added', 'new_version', 'reprocessed', 'deleted')", name="kind"
         ),
-        CheckConstraint("status IN ('running', 'done', 'failed')", name="status"),
+        CheckConstraint(
+            "status IN ('running', 'done', 'failed', 'cancelled')", name="status"
+        ),
     )
     __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
 
@@ -665,4 +667,62 @@ class MaterialUpdate(Base):
     before: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     report: Mapped[dict | None] = mapped_column(JSONB)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Job(Base):
+    """A piece of background work, done by the worker process outside any
+    request (decision record 18). Postgres is the queue's truth; Redis only
+    wakes the worker.
+
+    lane is read (reading documents, which comes first) or model (work for
+    the language model, one task at a time). steps is the list the job runs,
+    each a named step with its arguments and label; step and progress (0 to
+    100) say where it is. after names a job this one waits for. attempts
+    counts runs; a job that crashed, or whose worker stopped, is tried again
+    after not_before, up to max_attempts. update_id links a job to the
+    material update it carries out, if any.
+    """
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
+            name="status",
+        ),
+        CheckConstraint("lane IN ('read', 'model')", name="lane"),
+        CheckConstraint("progress BETWEEN 0 AND 100", name="progress"),
+        CheckConstraint("attempts >= 0", name="attempts"),
+        Index("ix_jobs_claim", "lane", "status", "created_at"),
+    )
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    update_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("material_updates.id", ondelete="SET NULL")
+    )
+    after_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL")
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    lane: Mapped[str] = mapped_column(Text)
+    steps: Mapped[list] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text)
+    progress: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    step: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    max_attempts: Mapped[int] = mapped_column(Integer, server_default=text("3"))
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    worker: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

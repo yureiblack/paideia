@@ -15,10 +15,10 @@ waiting or being written, and starts writing one that is missing or failed.
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 
 from app.db import SessionDep, SessionFactoryDep
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.documents import DocumentDep
 from app.schemas import CurrentSummaryRead, SummaryRead
-from app.services import environment_summaries as environment_summary_service
+from app.services import jobs
 from app.services import summaries as service
 
 router = APIRouter(tags=["summaries"])
@@ -51,6 +51,7 @@ def request_summary(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> CurrentSummaryRead:
@@ -69,13 +70,26 @@ def request_summary(
     # sit idle on its connection for as long as the summary takes to write.
     session.commit()
     if write_now:
-        background.add_task(service.write_summary, session_factory, artifact.id, llm)
         # A new document summary may change the environment's summary.
-        background.add_task(
-            environment_summary_service.refresh_environment_summary,
-            session_factory,
+        jobs.queue_model_work(
+            session,
             document.environment_id,
-            llm,
+            "document_summary",
+            f"Writing the summary of {document.filename}",
+            [
+                jobs.step(
+                    "write_summary", "Writing the summary", artifact_id=artifact.id
+                ),
+                jobs.step(
+                    "environment_summary",
+                    "Updating the environment summary",
+                    environment_id=document.environment_id,
+                ),
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
         )
     if artifact.status != "ready":
         response.status_code = status.HTTP_202_ACCEPTED

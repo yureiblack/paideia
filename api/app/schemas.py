@@ -655,11 +655,36 @@ class MaterialUpdateRead(BaseModel):
     kind: Literal["added", "new_version", "reprocessed", "deleted"]
     document_id: uuid.UUID | None
     filename: str
-    status: Literal["running", "done", "failed"]
+    status: Literal["running", "done", "failed", "cancelled"]
     steps: list[UpdateStep]
     report: UpdateReport | None
     started_at: datetime
     finished_at: datetime | None
+
+
+class JobRead(BaseModel):
+    """A piece of background work (decision record 18): what it is, in which
+    lane (read, or model work), how far it got (progress 0 to 100, at step),
+    how it ended (error says why it failed), how many attempts it took, and
+    when it may run again (not_before) if it is waiting to be retried.
+    update_id links it to the material update it carries out."""
+
+    id: uuid.UUID
+    kind: str
+    title: str
+    lane: Literal["read", "model"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    progress: int
+    step: str | None
+    error: str | None
+    attempts: int
+    max_attempts: int
+    cancel_requested: bool
+    update_id: uuid.UUID | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    not_before: datetime | None
 
 
 class SearchResult(BaseModel):

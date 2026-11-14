@@ -401,11 +401,34 @@ export type MaterialUpdate = {
   kind: "added" | "new_version" | "reprocessed" | "deleted";
   document_id: string | null;
   filename: string;
-  status: "running" | "done" | "failed";
+  status: "running" | "done" | "failed" | "cancelled";
   steps: UpdateStep[];
   report: UpdateReport | null;
   started_at: string;
   finished_at: string | null;
+};
+
+// A piece of background work, run by the worker process: reading a
+// document (the read lane) or work for the language model. progress is 0 to
+// 100, at step; error says why it failed, or that it is being tried again
+// (not_before says when).
+export type Job = {
+  id: string;
+  kind: string;
+  title: string;
+  lane: "read" | "model";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  progress: number;
+  step: string | null;
+  error: string | null;
+  attempts: number;
+  max_attempts: number;
+  cancel_requested: boolean;
+  update_id: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  not_before: string | null;
 };
 
 // One passage that matched a search. score is the reranker's judgement of how

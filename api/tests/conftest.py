@@ -34,8 +34,9 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_session, get_session_factory
 from app.main import app
-from app.routers.deps import get_llm
+from app.routers.deps import get_dispatcher, get_llm
 from app.routers.search import get_embedder, get_reranker
+from app.services.jobs import InlineDispatcher
 from tests.fakes import FakeEmbedder, FakeReranker, MockProvider
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -180,6 +181,7 @@ def client(
     app.dependency_overrides[get_embedder] = lambda: embedder
     app.dependency_overrides[get_reranker] = lambda: reranker
     app.dependency_overrides[get_llm] = lambda: llm
+    app.dependency_overrides[get_dispatcher] = InlineDispatcher
     try:
         yield TestClient(app)
     finally:

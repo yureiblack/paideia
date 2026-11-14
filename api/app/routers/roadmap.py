@@ -19,9 +19,10 @@ the same stage, and does nothing while the graph is still on its way.
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 
 from app.db import SessionDep, SessionFactoryDep
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import RoadmapState
+from app.services import jobs
 from app.services import roadmap as service
 
 router = APIRouter(tags=["learning roadmap"])
@@ -44,6 +45,7 @@ def request_roadmap(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> RoadmapState:
@@ -56,7 +58,21 @@ def request_roadmap(
         )
     session.commit()  # end this read before the background task (record 09)
     if write_now:
-        background.add_task(service.write_roadmap, session_factory, artifact.id, llm)
+        jobs.queue_model_work(
+            session,
+            environment.id,
+            "roadmap",
+            "Writing the roadmap's stage titles",
+            [
+                jobs.step(
+                    "write_roadmap", "Writing stage titles", artifact_id=artifact.id
+                )
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
+        )
     if body.state != "up_to_date":
         response.status_code = status.HTTP_202_ACCEPTED
     return body

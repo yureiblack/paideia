@@ -99,7 +99,7 @@ function UpdateCard({ update, open }: { update: MaterialUpdate; open: boolean })
         <span className="text-xs text-zinc-500">
           {running
             ? "Updating…"
-            : `${update.status === "failed" ? "Finished with a problem" : "Done"} · ${formatDateTime(update.finished_at ?? update.started_at)}`}
+            : `${{ failed: "Finished with a problem", cancelled: "Cancelled", done: "Done", running: "Updating" }[update.status]} · ${formatDateTime(update.finished_at ?? update.started_at)}`}
         </span>
       </div>
       {open ? (

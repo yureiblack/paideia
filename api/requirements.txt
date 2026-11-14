@@ -134,6 +134,8 @@ pyyaml==6.0.3
     # via
     #   huggingface-hub
     #   uvicorn
+redis==8.1.0
+    # via -r requirements.in
 requests==2.34.2
     # via fastembed
 ruff==0.16.7

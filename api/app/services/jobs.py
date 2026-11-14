@@ -1,0 +1,566 @@
+"""Background jobs: work done outside any request, by the worker process.
+
+Purpose
+-------
+Reading documents and everything the language model writes take seconds to
+minutes. They used to run in the API process after each response, and died
+with it. Now each piece of such work is a job (decision record 18): a row in
+Postgres saying which steps to run, where it has got to, and how it ended.
+The worker process (app/worker.py) claims jobs and runs them; Redis only
+wakes it when a job is queued, and the worker also checks the table every
+few seconds, so a lost signal never strands a job.
+
+A job runs the same functions the requests used to queue, as named steps.
+Steps that carry out a material update record themselves on it, as before
+(app/services/updates.py). Jobs move through queued, running, then
+succeeded, failed or cancelled:
+
+- A step's own failure (the model unreachable, an unreadable PDF) is
+  recorded where it always was, and the job ends failed with that message;
+  trying again starts a new job.
+- A job that crashes, or whose worker stops (no heartbeat for STALE), is run
+  again later, up to max_attempts, from its first step not done.
+- Cancelling a queued job ends it at once; a running one stops before its
+  next step.
+"""
+
+import logging
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Protocol
+
+import redis
+from sqlalchemy import or_, select, update
+from sqlalchemy.orm import Session
+
+from app.db import SessionFactory
+from app.llm import LLMProvider
+from app.models import Document, GeneratedArtifact, Job, MaterialUpdate
+from app.schemas import JobRead
+from app.services import concepts as concept_service
+from app.services import documents as document_service
+from app.services import environment_summaries as environment_summary_service
+from app.services import graph as graph_service
+from app.services import practice as practice_service
+from app.services import roadmap as roadmap_service
+from app.services import summaries as summary_service
+from app.services import updates
+
+logger = logging.getLogger(__name__)
+
+LANES = ("read", "model")
+RETRY_AFTER = (timedelta(seconds=30), timedelta(minutes=2))
+STALE = timedelta(minutes=2)  # no heartbeat for this long: its worker stopped
+SIGNAL = "paideia:jobs:{lane}"  # Redis list a queued job's id is pushed to
+WORKER_KEY = "paideia:workers:"  # prefix of each live worker's key in Redis
+ACTIVE = ("queued", "running")
+
+
+@dataclass
+class Tools:
+    """What jobs' steps work with: sessions, the models and the parser."""
+
+    session_factory: SessionFactory
+    llm: LLMProvider
+    embedder: Any = None
+    parser: Any = None
+    reranker: Any = None
+    # Set when the worker is stopping: a running job is put back in the
+    # queue at its next step, without counting as an attempt.
+    stopping: Any = None
+
+
+def _id(value) -> uuid.UUID:
+    return uuid.UUID(str(value))
+
+
+# Every step a job can run, by name, with its arguments (decision record 18).
+# A job's steps are stored as names and arguments, never as code.
+STEPS: dict[str, Callable[[Tools, dict], object]] = {
+    "process_document": lambda t, a: document_service.process_document(
+        t.session_factory, _id(a["document_id"]), t.parser, t.embedder
+    ),
+    "queue_concepts": lambda t, a: concept_service.queue_when_ready(
+        t.session_factory, _id(a["document_id"]), t.llm
+    ),
+    "summarize": lambda t, a: summary_service.summarize_when_ready(
+        t.session_factory, _id(a["document_id"]), t.llm
+    ),
+    "write_summary": lambda t, a: summary_service.write_summary(
+        t.session_factory, _id(a["artifact_id"]), t.llm
+    ),
+    "environment_summary": lambda t, a: (
+        environment_summary_service.refresh_environment_summary(
+            t.session_factory, _id(a["environment_id"]), t.llm
+        )
+    ),
+    "write_environment_summary": lambda t, a: (
+        environment_summary_service.write_environment_summary(
+            t.session_factory, _id(a["artifact_id"]), t.llm
+        )
+    ),
+    "extract": lambda t, a: concept_service.extract_when_ready(
+        t.session_factory, _id(a["document_id"]), t.llm
+    ),
+    "write_extraction": lambda t, a: concept_service.write_extraction(
+        t.session_factory, _id(a["artifact_id"]), t.llm
+    ),
+    "graph": lambda t, a: graph_service.refresh_graph(
+        t.session_factory, _id(a["environment_id"]), t.llm
+    ),
+    "write_graph": lambda t, a: graph_service.write_graph(
+        t.session_factory, _id(a["artifact_id"]), t.llm
+    ),
+    "roadmap": lambda t, a: roadmap_service.refresh_roadmap(
+        t.session_factory, _id(a["environment_id"]), t.llm
+    ),
+    "write_roadmap": lambda t, a: roadmap_service.write_roadmap(
+        t.session_factory, _id(a["artifact_id"]), t.llm
+    ),
+    "write_practice": lambda t, a: practice_service.write_practice(
+        t.session_factory, _id(a["artifact_id"]), t.llm, t.reranker
+    ),
+    "finish_update": lambda t, a: updates.finish(
+        t.session_factory, _id(a["update_id"]), t.llm
+    ),
+}
+
+
+def step(call: str, label: str, update_step: str | None = None, **args) -> dict:
+    """One step of a job: a function from STEPS, a label for the page, and,
+    for a material update, the update step it records itself as."""
+    if call not in STEPS:
+        raise ValueError(f"unknown step {call!r}")
+    return {
+        "call": call,
+        "label": label,
+        "update_step": update_step,
+        "args": {k: str(v) for k, v in args.items()},
+    }
+
+
+def document_steps(document_id, environment_id, update_id) -> tuple[list, list]:
+    """A document added, read again or replaced: reading it (read lane), then
+    everything derived from it (model lane), each step recorded on its
+    update."""
+    read = [
+        step(
+            "process_document", "Reading the document", "read", document_id=document_id
+        )
+    ]
+    derive = [
+        step("queue_concepts", "Queuing its concepts", document_id=document_id),
+        step(
+            "summarize",
+            "Writing its summary",
+            "document_summary",
+            document_id=document_id,
+        ),
+        step(
+            "environment_summary",
+            "Updating the environment summary",
+            "environment_summary",
+            environment_id=environment_id,
+        ),
+        step("extract", "Extracting concepts", "concepts", document_id=document_id),
+        step(
+            "graph",
+            "Updating the knowledge map",
+            "knowledge_graph",
+            environment_id=environment_id,
+        ),
+        step(
+            "roadmap", "Updating the roadmap", "roadmap", environment_id=environment_id
+        ),
+        step("finish_update", "Summing up what changed", update_id=update_id),
+    ]
+    return read, derive
+
+
+def deletion_steps(environment_id, update_id) -> list:
+    return [
+        step(
+            "environment_summary",
+            "Updating the environment summary",
+            "environment_summary",
+            environment_id=environment_id,
+        ),
+        step(
+            "graph",
+            "Updating the knowledge map",
+            "knowledge_graph",
+            environment_id=environment_id,
+        ),
+        step(
+            "roadmap", "Updating the roadmap", "roadmap", environment_id=environment_id
+        ),
+        step("finish_update", "Summing up what changed", update_id=update_id),
+    ]
+
+
+# --- dispatching ---------------------------------------------------------------
+
+
+class Dispatcher(Protocol):
+    def dispatch(self, job: Job, background, tools: Tools) -> None:
+        """Make sure a newly queued job gets run."""
+
+    def workers(self) -> int | None:
+        """How many workers are running; None when that cannot be known."""
+
+
+class RedisDispatcher:
+    """Wakes the worker through Redis. If Redis cannot be reached the job is
+    still queued in Postgres, and the worker finds it within seconds."""
+
+    def __init__(self, url: str):
+        self.url = url
+
+    def _client(self) -> redis.Redis:
+        return redis.Redis.from_url(
+            self.url, socket_timeout=2, socket_connect_timeout=2
+        )
+
+    def dispatch(self, job: Job, background, tools: Tools) -> None:
+        try:
+            self._client().lpush(SIGNAL.format(lane=job.lane), str(job.id))
+        except redis.RedisError:
+            logger.warning("Could not signal job %s through Redis", job.id)
+
+    def workers(self) -> int | None:
+        try:
+            return sum(1 for _ in self._client().scan_iter(f"{WORKER_KEY}*"))
+        except redis.RedisError:
+            return None
+
+
+class InlineDispatcher:
+    """Runs each job in this process right after the response, as the
+    background tasks before jobs did. For tests, which need no Redis and no
+    worker."""
+
+    def dispatch(self, job: Job, background, tools: Tools) -> None:
+        background.add_task(run_now, tools, job.id)
+
+    def workers(self) -> int | None:
+        return 1
+
+
+def start(
+    session: Session,
+    *,
+    environment_id: uuid.UUID,
+    kind: str,
+    title: str,
+    lane: str,
+    steps: list,
+    tools: Tools,
+    dispatcher: Dispatcher,
+    background,
+    update_id: uuid.UUID | None = None,
+    after: Job | None = None,
+) -> Job:
+    """Queue a job and have it run. Commits."""
+    job = Job(
+        environment_id=environment_id,
+        update_id=update_id,
+        after_id=after.id if after else None,
+        kind=kind,
+        title=title,
+        lane=lane,
+        steps=steps,
+        status="queued",
+        progress=0,
+        created_at=datetime.now(UTC),
+    )
+    session.add(job)
+    session.commit()
+    dispatcher.dispatch(job, background, tools)
+    return job
+
+
+def queue_model_work(
+    session: Session,
+    environment_id: uuid.UUID,
+    kind: str,
+    title: str,
+    steps: list,
+    *,
+    session_factory: SessionFactory,
+    llm: LLMProvider,
+    dispatcher: Dispatcher,
+    background,
+    reranker=None,
+) -> Job:
+    """Queue work for the language model, asked for by a request."""
+    return start(
+        session,
+        environment_id=environment_id,
+        kind=kind,
+        title=title,
+        lane="model",
+        steps=steps,
+        tools=Tools(session_factory, llm, reranker=reranker),
+        dispatcher=dispatcher,
+        background=background,
+    )
+
+
+# --- claiming and running -----------------------------------------------------
+
+
+def claim(
+    session: Session,
+    lane: str,
+    worker: str,
+    now: datetime | None = None,
+    job_id: uuid.UUID | None = None,
+) -> Job | None:
+    """Take the oldest queued job of a lane that may run now, marking it
+    running. A job waiting for another runs once that one has ended; if
+    that one was cancelled, so is this. Rows other workers hold are skipped.
+    Commits."""
+    now = now or datetime.now(UTC)
+    query = (
+        select(Job)
+        .where(
+            Job.lane == lane,
+            Job.status == "queued",
+            or_(Job.not_before.is_(None), Job.not_before <= now),
+        )
+        .order_by(Job.created_at, Job.id)
+        .limit(20)
+        .with_for_update(skip_locked=True)
+    )
+    if job_id is not None:
+        query = query.where(Job.id == job_id)
+    for job in session.scalars(query):
+        before = session.get(Job, job.after_id) if job.after_id else None
+        if before is not None and before.status in ACTIVE:
+            continue
+        if before is not None and before.status == "cancelled":
+            _end_cancelled(session, job, now)
+            continue
+        job.status = "running"
+        job.attempts += 1
+        job.worker = worker
+        job.started_at = now
+        job.heartbeat_at = now
+        job.error = None
+        session.commit()
+        return job
+    session.commit()
+    return None
+
+
+def _end_cancelled(session: Session, job: Job, now: datetime) -> None:
+    job.status = "cancelled"
+    job.step = None
+    job.finished_at = now
+    if job.update_id:
+        updates.cancel(session, job.update_id, now)
+    for waiting in session.scalars(
+        select(Job).where(Job.after_id == job.id, Job.status == "queued")
+    ):
+        _end_cancelled(session, waiting, now)
+
+
+def _outcome(session: Session, job: Job) -> str | None:
+    """Why a job that ran to its end failed, from what its steps recorded:
+    the update it carried out, the document it read, or the results it was
+    to write. None if nothing failed."""
+    if job.update_id and job.lane == "model":
+        record = session.get(MaterialUpdate, job.update_id)
+        if record is not None:
+            failed = [s for s in record.steps if s["state"] == "failed"]
+            if failed:
+                return f"{failed[0]['label']}: {failed[0]['detail']}"
+    problems, written = [], 0
+    for spec in job.steps:
+        args = spec["args"]
+        if spec["call"] == "process_document":
+            document = session.get(Document, _id(args["document_id"]))
+            if document is not None and document.status == "failed":
+                problems.append(document.error)
+        if "artifact_id" in args:
+            written += 1
+            artifact = session.get(GeneratedArtifact, _id(args["artifact_id"]))
+            if artifact is not None and artifact.status == "failed":
+                problems.append(artifact.error)
+    if not problems:
+        return None
+    if written > 1:
+        return f"{len(problems)} of {written} could not be written: {problems[0]}"
+    return problems[0]
+
+
+def run(tools: Tools, job_id: uuid.UUID) -> None:
+    """Run a claimed job's steps in order, recording progress, then how it
+    ended. Each step is marked done as it completes, so a job run again,
+    after a crash or a worker's stop, starts at its first step not done. A
+    crash is retried later, up to the job's attempts."""
+    factory = tools.session_factory
+    with factory() as session:
+        job = session.get(Job, job_id)
+        steps, update_id = list(job.steps), job.update_id
+    try:
+        for index, spec in enumerate(steps):
+            if spec.get("done"):
+                continue
+            with factory() as session:
+                job = session.get(Job, job_id, with_for_update=True)
+                if job.cancel_requested:
+                    _end_cancelled(session, job, datetime.now(UTC))
+                    session.commit()
+                    return
+                if tools.stopping is not None and tools.stopping.is_set():
+                    # The worker is stopping: the next one carries on from
+                    # this step, and this run does not count as an attempt.
+                    job.status, job.worker, job.step = "queued", None, None
+                    job.attempts -= 1
+                    session.commit()
+                    return
+                job.step = spec["label"]
+                job.progress = 100 * index // len(steps)
+                job.heartbeat_at = datetime.now(UTC)
+                session.commit()
+            work = STEPS[spec["call"]]
+            if spec.get("update_step") and update_id:
+                updates.run_step(
+                    factory,
+                    update_id,
+                    spec["update_step"],
+                    tools.llm,
+                    work,
+                    tools,
+                    spec["args"],
+                )
+            else:
+                work(tools, spec["args"])
+            steps[index] = {**spec, "done": True}
+            with factory() as session:
+                job = session.get(Job, job_id, with_for_update=True)
+                job.steps = list(steps)
+                session.commit()
+    except Exception:
+        logger.exception("Job %s failed", job_id)
+        with factory() as session:
+            job = session.get(Job, job_id, with_for_update=True)
+            _retry_or_fail(
+                job, datetime.now(UTC), "An unexpected error stopped this job."
+            )
+            session.commit()
+        return
+    with factory() as session:
+        job = session.get(Job, job_id, with_for_update=True)
+        error = _outcome(session, job)
+        job.status = "failed" if error else "succeeded"
+        job.error = error
+        job.progress = 100
+        job.step = None
+        job.finished_at = datetime.now(UTC)
+        session.commit()
+
+
+def _retry_or_fail(job: Job, now: datetime, why: str) -> None:
+    if job.attempts < job.max_attempts:
+        job.status = "queued"
+        job.not_before = now + RETRY_AFTER[min(job.attempts, len(RETRY_AFTER)) - 1]
+        job.error = f"{why} Trying again."
+        job.worker = None
+    else:
+        job.status = "failed"
+        job.error = why
+        job.finished_at = now
+    job.step = None
+
+
+def run_now(tools: Tools, job_id: uuid.UUID) -> None:
+    """Claim one job and run it, here and now (the inline dispatcher)."""
+    with tools.session_factory() as session:
+        job = session.get(Job, job_id)
+        if job is None:
+            return
+        claimed = claim(session, job.lane, "inline", job_id=job_id)
+    if claimed is not None:
+        run(tools, job_id)
+
+
+def recover(session: Session, now: datetime | None = None) -> int:
+    """Jobs left running by a worker that stopped (no heartbeat for STALE):
+    run again later, or failed after their last attempt. Commits. Returns
+    how many were found."""
+    now = now or datetime.now(UTC)
+    stale = list(
+        session.scalars(
+            select(Job)
+            .where(Job.status == "running", Job.heartbeat_at < now - STALE)
+            .with_for_update(skip_locked=True)
+        )
+    )
+    for job in stale:
+        _retry_or_fail(job, now, "Its worker stopped while running it.")
+    session.commit()
+    return len(stale)
+
+
+def beat(session: Session, worker: str, now: datetime | None = None) -> None:
+    """Mark a worker's running jobs as alive. Commits."""
+    session.execute(
+        update(Job)
+        .where(Job.worker == worker, Job.status == "running")
+        .values(heartbeat_at=now or datetime.now(UTC))
+    )
+    session.commit()
+
+
+def cancel(session: Session, job: Job, now: datetime | None = None) -> Job:
+    """Cancel a job: a queued one at once, a running one before its next
+    step. A finished job is left as it is. Commits."""
+    now = now or datetime.now(UTC)
+    if job.status == "queued":
+        _end_cancelled(session, job, now)
+    elif job.status == "running":
+        job.cancel_requested = True
+    session.commit()
+    return job
+
+
+# --- reading -------------------------------------------------------------------
+
+
+def recent(session: Session, environment_id: uuid.UUID, limit: int = 20) -> list[Job]:
+    """An environment's jobs: those queued or running first, then the rest,
+    newest first."""
+    jobs = list(
+        session.scalars(
+            select(Job)
+            .where(Job.environment_id == environment_id)
+            .order_by(Job.created_at.desc(), Job.id)
+            .limit(limit)
+        )
+    )
+    return sorted(jobs, key=lambda j: j.status not in ACTIVE)
+
+
+def to_read(job: Job) -> JobRead:
+    return JobRead(
+        id=job.id,
+        kind=job.kind,
+        title=job.title,
+        lane=job.lane,
+        status=job.status,
+        progress=job.progress,
+        step=job.step,
+        error=job.error,
+        attempts=job.attempts,
+        max_attempts=job.max_attempts,
+        cancel_requested=job.cancel_requested,
+        update_id=job.update_id,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        not_before=job.not_before,
+    )

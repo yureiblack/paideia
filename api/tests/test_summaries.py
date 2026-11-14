@@ -83,11 +83,14 @@ def summarize(session, session_factory, doc: Document, llm) -> GeneratedArtifact
 def written_earlier(session: Session, artifact: GeneratedArtifact) -> None:
     """Date a summary a minute back. created_at defaults to Postgres's now(),
     which is frozen for a whole transaction, and each test is one transaction,
-    so summaries written in one test would otherwise share a creation time."""
+    so summaries written in one test would otherwise share a creation time.
+    It is moved back from its own time, never from this machine's clock: the
+    database's clock may differ from it (Docker's drifts after the Mac
+    sleeps)."""
     session.execute(
         update(GeneratedArtifact)
         .where(GeneratedArtifact.id == artifact.id)
-        .values(created_at=datetime.now(UTC) - timedelta(minutes=1))
+        .values(created_at=GeneratedArtifact.created_at - timedelta(minutes=1))
     )
 
 

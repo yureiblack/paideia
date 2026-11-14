@@ -296,6 +296,11 @@ def _describe_graph(session, update, result, llm):
         )
     if how == "new" and artifact is not None:
         meta = artifact.metadata_json or {}
+        if not meta.get("asked"):
+            return "done", (
+                f"Built from remembered decisions only ({meta.get('remembered', 0)} "
+                "pairs); nothing new asked."
+            )
         return "done", (
             f"The model was asked about {meta.get('asked', 0)} new pairs; "
             f"{meta.get('remembered', 0)} were remembered."
@@ -476,6 +481,20 @@ def finish(
         update.status = "failed" if failed else "done"
         update.finished_at = datetime.now(UTC)
         session.commit()
+
+
+def cancel(session: Session, update_id: uuid.UUID, now: datetime) -> None:
+    """Close an update whose job was cancelled: the steps it did not reach
+    are skipped. Does not commit."""
+    update = session.get(MaterialUpdate, update_id, with_for_update=True)
+    if update is None or update.status != "running":
+        return
+    update.steps = [
+        {**s, "state": "skipped"} if s["state"] in ("waiting", "running") else s
+        for s in update.steps
+    ]
+    update.status = "cancelled"
+    update.finished_at = now
 
 
 def to_read(update: MaterialUpdate) -> MaterialUpdateRead:

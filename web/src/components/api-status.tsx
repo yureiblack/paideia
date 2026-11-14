@@ -24,12 +24,19 @@ export function ApiStatus() {
   const [api, setApi] = useState<Probe>({ status: "checking" });
   const [db, setDb] = useState<Probe>({ status: "checking" });
   const [model, setModel] = useState<Probe>({ status: "checking" });
+  const [worker, setWorker] = useState<Probe>({ status: "checking" });
 
   useEffect(() => {
     probe("/health").then(setApi);
     probe("/health/db").then(setDb);
-    // The language model, needed only for summaries.
+    // The language model, needed for everything it writes.
     probe("/health/llm").then(setModel);
+    // The background worker, which reads documents and runs the model's
+    // work. Checked again every half minute: it is started separately.
+    const check = () => probe("/health/worker").then(setWorker);
+    check();
+    const timer = window.setInterval(check, 30_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (
@@ -37,6 +44,7 @@ export function ApiStatus() {
       <StatusRow label="API" {...api} />
       <StatusRow label="Database" {...db} />
       <StatusRow label="Model" {...model} />
+      <StatusRow label="Worker" {...worker} />
     </dl>
   );
 }

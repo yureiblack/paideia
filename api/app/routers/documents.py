@@ -44,17 +44,13 @@ from app.config import settings
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
 from app.parsing import Parser, PyMuPDFParser
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.routers.search import EmbedderDep
 from app.schemas import ChunkRead, DocumentRead, PageRead
 from app.services import concepts as concept_service
 from app.services import documents as service
-from app.services import environment_summaries as environment_summary_service
-from app.services import graph as graph_service
-from app.services import roadmap as roadmap_service
-from app.services import summaries as summary_service
-from app.services import updates
+from app.services import jobs, updates
 
 router = APIRouter(tags=["documents"])
 
@@ -147,6 +143,7 @@ async def upload_document(
     parser: ParserDep,
     embedder: EmbedderDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
 ) -> Document:
     name = _display_name(filename)
@@ -160,7 +157,15 @@ async def upload_document(
 
     # Reading happens after the response is sent; the client polls the update.
     _queue_chain(
-        background, session, session_factory, document, parser, embedder, llm, "added"
+        background,
+        session,
+        session_factory,
+        document,
+        parser,
+        embedder,
+        llm,
+        "added",
+        dispatcher,
     )
     return document
 
@@ -200,6 +205,7 @@ def reprocess_document(
     parser: ParserDep,
     embedder: EmbedderDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
 ) -> Document:
     try:
@@ -215,6 +221,7 @@ def reprocess_document(
         embedder,
         llm,
         "reprocessed",
+        dispatcher,
     )
     return document
 
@@ -225,6 +232,7 @@ def delete_document(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
 ) -> None:
     environment_id = document.environment_id
@@ -239,41 +247,18 @@ def delete_document(
     # what is left, or leave it as history if nothing is. Its concepts'
     # relationships went with them; the graph is rebuilt from what is left,
     # with remembered decisions only; then the roadmap.
-    step, factory = updates.run_step, session_factory
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "environment_summary",
-        llm,
-        environment_summary_service.refresh_environment_summary,
-        factory,
-        environment_id,
-        llm,
+    jobs.start(
+        session,
+        environment_id=environment_id,
+        kind="derive",
+        title=f"Updating after removing {update.filename}",
+        lane="model",
+        steps=jobs.deletion_steps(environment_id, update.id),
+        tools=jobs.Tools(session_factory, llm),
+        dispatcher=dispatcher,
+        background=background,
+        update_id=update.id,
     )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "knowledge_graph",
-        llm,
-        graph_service.refresh_graph,
-        factory,
-        environment_id,
-        llm,
-    )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "roadmap",
-        llm,
-        roadmap_service.refresh_roadmap,
-        factory,
-        environment_id,
-        llm,
-    )
-    background.add_task(updates.finish, factory, update.id, llm)
 
 
 @router.post(
@@ -290,6 +275,7 @@ async def upload_new_version(
     parser: ParserDep,
     embedder: EmbedderDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
 ) -> Document:
     """A new version of a document, as the raw PDF body: the document keeps
@@ -312,6 +298,7 @@ async def upload_new_version(
         embedder,
         llm,
         "new_version",
+        dispatcher,
     )
     return document
 
@@ -325,87 +312,41 @@ def _queue_chain(
     embedder,
     llm,
     kind: str,
+    dispatcher,
 ) -> None:
     """Record an update for a document added, read again or replaced, and
-    queue its steps, each recording itself. Concepts are queued at once so
-    they show as waiting while the summary, which comes first, is written.
-    Each later step follows straight after the one it is built from, so no
-    page sees a gap between them: the environment's summary after the
-    document's, the graph after concepts, the roadmap after the graph."""
+    queue it as two jobs (decision record 18): reading it, then, once read,
+    everything derived from it, each step recording itself on the update.
+    Concepts are queued first so they show as waiting while the summary is
+    written; each later step follows straight after what it is built from:
+    the environment's summary after the document's, the graph after
+    concepts, the roadmap after the graph."""
     update = updates.begin(
         session, document.environment_id, kind, document, llm, updates.DOCUMENT_STEPS
     )
-    step, factory, environment_id = (
-        updates.run_step,
-        session_factory,
-        document.environment_id,
+    tools = jobs.Tools(session_factory, llm, embedder, parser)
+    read, derive = jobs.document_steps(document.id, document.environment_id, update.id)
+    common = {
+        "environment_id": document.environment_id,
+        "tools": tools,
+        "dispatcher": dispatcher,
+        "background": background,
+        "update_id": update.id,
+    }
+    reading = jobs.start(
+        session,
+        kind="read",
+        title=f"Reading {document.filename}",
+        lane="read",
+        steps=read,
+        **common,
     )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "read",
-        llm,
-        service.process_document,
-        factory,
-        document.id,
-        parser,
-        embedder,
+    jobs.start(
+        session,
+        kind="derive",
+        title=f"Updating from {document.filename}",
+        lane="model",
+        steps=derive,
+        after=reading,
+        **common,
     )
-    background.add_task(concept_service.queue_when_ready, factory, document.id, llm)
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "document_summary",
-        llm,
-        summary_service.summarize_when_ready,
-        factory,
-        document.id,
-        llm,
-    )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "environment_summary",
-        llm,
-        environment_summary_service.refresh_environment_summary,
-        factory,
-        environment_id,
-        llm,
-    )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "concepts",
-        llm,
-        concept_service.extract_when_ready,
-        factory,
-        document.id,
-        llm,
-    )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "knowledge_graph",
-        llm,
-        graph_service.refresh_graph,
-        factory,
-        environment_id,
-        llm,
-    )
-    background.add_task(
-        step,
-        factory,
-        update.id,
-        "roadmap",
-        llm,
-        roadmap_service.refresh_roadmap,
-        factory,
-        environment_id,
-        llm,
-    )
-    background.add_task(updates.finish, factory, update.id, llm)
