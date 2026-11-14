@@ -24,11 +24,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Concept
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import GraphState, Neighbourhood
 from app.services import graph as service
-from app.services import roadmap as roadmap_service
+from app.services import jobs
 
 router = APIRouter(tags=["knowledge graph"])
 
@@ -60,6 +60,7 @@ def request_graph(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> GraphState:
@@ -72,9 +73,23 @@ def request_graph(
         )
     session.commit()  # end this read before the background task (record 09)
     if write_now:
-        background.add_task(service.write_graph, session_factory, artifact.id, llm)
-        background.add_task(
-            roadmap_service.refresh_roadmap, session_factory, environment.id, llm
+        jobs.queue_model_work(
+            session,
+            environment.id,
+            "graph",
+            "Building the knowledge map",
+            [
+                jobs.step(
+                    "write_graph", "Building the knowledge map", artifact_id=artifact.id
+                ),
+                jobs.step(
+                    "roadmap", "Updating the roadmap", environment_id=environment.id
+                ),
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
         )
     if body.state != "up_to_date":
         response.status_code = status.HTTP_202_ACCEPTED

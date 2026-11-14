@@ -16,13 +16,12 @@ prompt, and answers 200 when ready, 202 when waiting or being extracted.
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 
 from app.db import SessionDep, SessionFactoryDep
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.documents import DocumentDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import ConceptInventory, DocumentConceptsRead
 from app.services import concepts as service
-from app.services import graph as graph_service
-from app.services import roadmap as roadmap_service
+from app.services import jobs
 from app.services import summaries as summary_service
 
 router = APIRouter(tags=["concepts"])
@@ -52,6 +51,7 @@ def request_concepts(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> DocumentConceptsRead:
@@ -66,15 +66,30 @@ def request_concepts(
     body = service.document_concepts(session, document, llm)
     session.commit()  # end this read before the background task (record 09)
     if write_now:
-        background.add_task(service.write_extraction, session_factory, artifact.id, llm)
-        background.add_task(
-            graph_service.refresh_graph, session_factory, document.environment_id, llm
-        )
-        background.add_task(
-            roadmap_service.refresh_roadmap,
-            session_factory,
+        jobs.queue_model_work(
+            session,
             document.environment_id,
-            llm,
+            "concepts",
+            f"Extracting concepts from {document.filename}",
+            [
+                jobs.step(
+                    "write_extraction", "Extracting concepts", artifact_id=artifact.id
+                ),
+                jobs.step(
+                    "graph",
+                    "Updating the knowledge map",
+                    environment_id=document.environment_id,
+                ),
+                jobs.step(
+                    "roadmap",
+                    "Updating the roadmap",
+                    environment_id=document.environment_id,
+                ),
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
         )
     if artifact.status != "ready":
         response.status_code = status.HTTP_202_ACCEPTED

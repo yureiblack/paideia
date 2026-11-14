@@ -16,10 +16,11 @@ summarized.
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 
 from app.db import SessionDep, SessionFactoryDep
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.schemas import EnvironmentSummaryRead, EnvironmentSummaryState
 from app.services import environment_summaries as service
+from app.services import jobs
 
 router = APIRouter(tags=["environment summaries"])
 
@@ -43,6 +44,7 @@ def request_environment_summary(
     session: SessionDep,
     session_factory: SessionFactoryDep,
     llm: LLMDep,
+    dispatcher: DispatcherDep,
     background: BackgroundTasks,
     response: Response,
 ) -> EnvironmentSummaryState:
@@ -56,8 +58,22 @@ def request_environment_summary(
     # End this request's read before the background task starts (record 09).
     session.commit()
     if write_now:
-        background.add_task(
-            service.write_environment_summary, session_factory, artifact.id, llm
+        jobs.queue_model_work(
+            session,
+            environment.id,
+            "environment_summary",
+            "Writing the environment summary",
+            [
+                jobs.step(
+                    "write_environment_summary",
+                    "Writing the environment summary",
+                    artifact_id=artifact.id,
+                )
+            ],
+            session_factory=session_factory,
+            llm=llm,
+            dispatcher=dispatcher,
+            background=background,
         )
     if body.state != "up_to_date":
         response.status_code = status.HTTP_202_ACCEPTED

@@ -24,6 +24,7 @@ from app.routers import (
     environment_summaries,
     environments,
     graph,
+    jobs,
     plan,
     practice,
     roadmap,
@@ -32,7 +33,7 @@ from app.routers import (
     summaries,
     updates,
 )
-from app.routers.deps import LLMDep
+from app.routers.deps import DispatcherDep, LLMDep
 
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".
@@ -64,6 +65,7 @@ app.include_router(roadmap.router, prefix="/api")
 app.include_router(practice.router, prefix="/api")
 app.include_router(plan.router, prefix="/api")
 app.include_router(updates.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 
 
 class Health(BaseModel):
@@ -129,6 +131,32 @@ def health_db() -> DatabaseHealth:
         raise HTTPException(status_code=503, detail="database unavailable") from exc
 
     return DatabaseHealth(status="ok", pgvector_available=found == 1)
+
+
+class WorkerHealth(BaseModel):
+    """Response shape for GET /health/worker."""
+
+    status: str
+    workers: int
+
+
+@app.get("/health/worker", response_model=WorkerHealth)
+def health_worker(dispatcher: DispatcherDep) -> WorkerHealth:
+    """Report whether a background worker is running (decision record 18).
+
+    Answers 503 with what to do, rather than failing, so the header can say
+    so: without a worker, jobs wait in the queue."""
+    count = dispatcher.workers()
+    if count is None:
+        raise HTTPException(
+            status_code=503, detail="Redis is not reachable, so no worker can be seen."
+        )
+    if count == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="No worker is running. Start one with: python -m app.worker",
+        )
+    return WorkerHealth(status="ok", workers=count)
 
 
 @app.get("/health/llm", response_model=LLMHealth)

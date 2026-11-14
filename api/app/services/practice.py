@@ -404,6 +404,16 @@ def write_practice(
             session.commit()
 
 
+def generation_names(session: Session, artifact_ids) -> dict[uuid.UUID, str]:
+    """The concept each practice generation is for, by generation id."""
+    names = {}
+    for artifact_id in artifact_ids:
+        artifact = session.get(GeneratedArtifact, artifact_id)
+        concept = session.get(Concept, uuid.UUID(artifact.metadata_json["concept_id"]))
+        names[artifact_id] = concept.name if concept else "a concept"
+    return names
+
+
 def write_all(
     session_factory: SessionFactory,
     artifact_ids: list[uuid.UUID],
