@@ -13,7 +13,11 @@ Everything about one document lives at its own id:
     GET    /api/documents/{document_id}/pages
     GET    /api/documents/{document_id}/chunks
     POST   /api/documents/{document_id}/reprocess
+    POST   /api/documents/{document_id}/versions   a new version, raw PDF body
     DELETE /api/documents/{document_id}
+
+Each upload, new version, reprocess and deletion records an update (record
+17) whose steps follow the background work.
 
 The upload is the raw PDF as the request body, not a multipart form. FastAPI
 writes a form-uploaded file to disk in full before any of this code runs, so a
@@ -50,6 +54,7 @@ from app.services import environment_summaries as environment_summary_service
 from app.services import graph as graph_service
 from app.services import roadmap as roadmap_service
 from app.services import summaries as summary_service
+from app.services import updates
 
 router = APIRouter(tags=["documents"])
 
@@ -100,6 +105,31 @@ UPLOAD_BODY = {
 }
 
 
+async def _stage(request: Request) -> storage.StagedUpload:
+    """Receive a PDF sent as the raw request body, refusing it early when it
+    is too large or not a PDF."""
+    # Browsers announce a file's size before sending it, so an oversized file
+    # can be refused before a single byte of it travels.
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > settings.max_upload_bytes:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"The file is larger than the {settings.max_upload_mb} MB limit.",
+        )
+
+    try:
+        staged = await storage.stage_upload(
+            request.stream(), max_bytes=settings.max_upload_bytes
+        )
+    except storage.UploadTooLarge as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+    except storage.NotAPdf as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+        ) from exc
+    return staged
+
+
 @router.post(
     "/environments/{environment_id}/documents",
     response_model=DocumentRead,
@@ -121,62 +151,16 @@ async def upload_document(
 ) -> Document:
     name = _display_name(filename)
 
-    # Browsers announce a file's size before sending it, so an oversized file
-    # can be refused before a single byte of it travels.
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > settings.max_upload_bytes:
-        raise HTTPException(
-            status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"The file is larger than the {settings.max_upload_mb} MB limit.",
-        )
-
-    try:
-        staged = await storage.stage_upload(
-            request.stream(), max_bytes=settings.max_upload_bytes
-        )
-    except storage.UploadTooLarge as exc:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
-    except storage.NotAPdf as exc:
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
-        ) from exc
+    staged = await _stage(request)
 
     try:
         document = service.create_document(session, environment, staged, name)
     except service.DuplicateDocument as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    # Parsing happens after the response is sent; the client polls the status.
-    # Background tasks run in order, so the summary is asked for once parsing
-    # has finished.
-    background.add_task(
-        service.process_document, session_factory, document.id, parser, embedder
-    )
-    # Concepts are queued at once so they show as waiting while the summary,
-    # which comes first, is written. Each later step follows straight after
-    # the one it is built from, so no page sees a gap between them: the
-    # environment's summary after the document's, the graph after concepts,
-    # the roadmap after the graph.
-    background.add_task(
-        concept_service.queue_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        summary_service.summarize_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        environment_summary_service.refresh_environment_summary,
-        session_factory,
-        document.environment_id,
-        llm,
-    )
-    background.add_task(
-        concept_service.extract_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        graph_service.refresh_graph, session_factory, document.environment_id, llm
-    )
-    background.add_task(
-        roadmap_service.refresh_roadmap, session_factory, document.environment_id, llm
+    # Reading happens after the response is sent; the client polls the update.
+    _queue_chain(
+        background, session, session_factory, document, parser, embedder, llm, "added"
     )
     return document
 
@@ -222,34 +206,15 @@ def reprocess_document(
         service.request_reprocess(session, document)
     except service.StillProcessing as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    background.add_task(
-        service.process_document, session_factory, document.id, parser, embedder
-    )
-    # Concepts are queued at once so they show as waiting while the summary,
-    # which comes first, is written. Each later step follows straight after
-    # the one it is built from, so no page sees a gap between them: the
-    # environment's summary after the document's, the graph after concepts,
-    # the roadmap after the graph.
-    background.add_task(
-        concept_service.queue_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        summary_service.summarize_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        environment_summary_service.refresh_environment_summary,
+    _queue_chain(
+        background,
+        session,
         session_factory,
-        document.environment_id,
+        document,
+        parser,
+        embedder,
         llm,
-    )
-    background.add_task(
-        concept_service.extract_when_ready, session_factory, document.id, llm
-    )
-    background.add_task(
-        graph_service.refresh_graph, session_factory, document.environment_id, llm
-    )
-    background.add_task(
-        roadmap_service.refresh_roadmap, session_factory, document.environment_id, llm
+        "reprocessed",
     )
     return document
 
@@ -263,23 +228,184 @@ def delete_document(
     background: BackgroundTasks,
 ) -> None:
     environment_id = document.environment_id
+    update = updates.begin(
+        session, environment_id, "deleted", document, llm, updates.DELETION_STEPS
+    )
     service.delete_document(session, document)
     # Its concept links went with it; concepts no document mentions now go too.
     concept_service.refresh_concepts(session, environment_id)
     session.commit()
     # The environment's summary was built from this document: rebuild it from
-    # what is left, or leave it as history if nothing is.
+    # what is left, or leave it as history if nothing is. Its concepts'
+    # relationships went with them; the graph is rebuilt from what is left,
+    # with remembered decisions only; then the roadmap.
+    step, factory = updates.run_step, session_factory
     background.add_task(
+        step,
+        factory,
+        update.id,
+        "environment_summary",
+        llm,
         environment_summary_service.refresh_environment_summary,
-        session_factory,
+        factory,
         environment_id,
         llm,
     )
-    # Its concepts' relationships went with them; the graph is rebuilt from
-    # what is left, with remembered decisions only.
     background.add_task(
-        graph_service.refresh_graph, session_factory, environment_id, llm
+        step,
+        factory,
+        update.id,
+        "knowledge_graph",
+        llm,
+        graph_service.refresh_graph,
+        factory,
+        environment_id,
+        llm,
     )
     background.add_task(
-        roadmap_service.refresh_roadmap, session_factory, environment_id, llm
+        step,
+        factory,
+        update.id,
+        "roadmap",
+        llm,
+        roadmap_service.refresh_roadmap,
+        factory,
+        environment_id,
+        llm,
     )
+    background.add_task(updates.finish, factory, update.id, llm)
+
+
+@router.post(
+    "/documents/{document_id}/versions",
+    response_model=DocumentRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    openapi_extra=UPLOAD_BODY,
+)
+async def upload_new_version(
+    request: Request,
+    document: DocumentDep,
+    session: SessionDep,
+    session_factory: SessionFactoryDep,
+    parser: ParserDep,
+    embedder: EmbedderDep,
+    llm: LLMDep,
+    background: BackgroundTasks,
+) -> Document:
+    """A new version of a document, as the raw PDF body: the document keeps
+    its id, name and place, and only what changed is redone (record 17)."""
+    staged = await _stage(request)
+    try:
+        service.new_version(session, document, staged)
+    except (
+        service.SameVersion,
+        service.DuplicateDocument,
+        service.StillProcessing,
+    ) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    _queue_chain(
+        background,
+        session,
+        session_factory,
+        document,
+        parser,
+        embedder,
+        llm,
+        "new_version",
+    )
+    return document
+
+
+def _queue_chain(
+    background: BackgroundTasks,
+    session,
+    session_factory,
+    document: Document,
+    parser: Parser,
+    embedder,
+    llm,
+    kind: str,
+) -> None:
+    """Record an update for a document added, read again or replaced, and
+    queue its steps, each recording itself. Concepts are queued at once so
+    they show as waiting while the summary, which comes first, is written.
+    Each later step follows straight after the one it is built from, so no
+    page sees a gap between them: the environment's summary after the
+    document's, the graph after concepts, the roadmap after the graph."""
+    update = updates.begin(
+        session, document.environment_id, kind, document, llm, updates.DOCUMENT_STEPS
+    )
+    step, factory, environment_id = (
+        updates.run_step,
+        session_factory,
+        document.environment_id,
+    )
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "read",
+        llm,
+        service.process_document,
+        factory,
+        document.id,
+        parser,
+        embedder,
+    )
+    background.add_task(concept_service.queue_when_ready, factory, document.id, llm)
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "document_summary",
+        llm,
+        summary_service.summarize_when_ready,
+        factory,
+        document.id,
+        llm,
+    )
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "environment_summary",
+        llm,
+        environment_summary_service.refresh_environment_summary,
+        factory,
+        environment_id,
+        llm,
+    )
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "concepts",
+        llm,
+        concept_service.extract_when_ready,
+        factory,
+        document.id,
+        llm,
+    )
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "knowledge_graph",
+        llm,
+        graph_service.refresh_graph,
+        factory,
+        environment_id,
+        llm,
+    )
+    background.add_task(
+        step,
+        factory,
+        update.id,
+        "roadmap",
+        llm,
+        roadmap_service.refresh_roadmap,
+        factory,
+        environment_id,
+        llm,
+    )
+    background.add_task(updates.finish, factory, update.id, llm)

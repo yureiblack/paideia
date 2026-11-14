@@ -599,6 +599,69 @@ class StudyPlan(BaseModel):
     budget: int | None
 
 
+class UpdateStep(BaseModel):
+    """One step of an update: its state (waiting, running, done, failed or
+    skipped) and what it did, in plain words."""
+
+    name: str
+    label: str
+    state: Literal["waiting", "running", "done", "failed", "skipped"]
+    detail: str | None
+
+
+class RelationshipNote(BaseModel):
+    source: str
+    type: str
+    target: str
+
+
+class ChangeNote(BaseModel):
+    name: str
+    detail: str | None
+
+
+class PassageChanges(BaseModel):
+    """What reading the document changed: passages new, kept and removed,
+    and how many were embedded and how many found already embedded by their
+    text."""
+
+    passages: int
+    new: int
+    kept: int
+    removed: int
+    embedded: int
+    reused: int
+
+
+class UpdateReport(BaseModel):
+    """What an update changed, from the environment before and after it."""
+
+    new_concepts: list[str]
+    removed_concepts: list[str]
+    new_relationships: list[RelationshipNote]
+    removed_relationships: list[RelationshipNote]
+    passages: PassageChanges | None
+    updated: list[ChangeNote]
+    unchanged: list[ChangeNote]
+    practice_outdated: list[str]
+
+
+class MaterialUpdateRead(BaseModel):
+    """One change to an environment's material: a document added, a new
+    version, a reprocess or a deletion; its steps as they run, and when it
+    is done, its report."""
+
+    id: uuid.UUID
+    kind: Literal["added", "new_version", "reprocessed", "deleted"]
+    document_id: uuid.UUID | None
+    filename: str
+    status: Literal["running", "done", "failed"]
+    steps: list[UpdateStep]
+    report: UpdateReport | None
+    started_at: datetime
+    finished_at: datetime | None
+
+
 class SearchResult(BaseModel):
     """One passage that matched: where it came from, and how well it answers.
 

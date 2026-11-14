@@ -119,6 +119,84 @@ def test_an_edit_embeds_only_the_chunks_that_changed(session: Session, session_f
     ]
 
 
+def another(session, session_factory, embedder, parsed, env, name) -> dict:
+    """Process one more document, its own file, and return what changed."""
+
+    async def chunks():
+        yield pdfs.pdf(name)
+
+    staged = asyncio.run(storage.stage_upload(chunks(), max_bytes=10_000_000))
+    document_id = service.create_document(session, env, staged, name).id
+    changes = service.process_document(
+        session_factory, document_id, Returns(parsed), embedder
+    )
+    session.expire_all()
+    return changes
+
+
+def test_a_passage_already_embedded_in_any_document_is_reused(
+    session: Session, session_factory
+):
+    first = processed(session, session_factory, FakeEmbedder())
+    revised = document(
+        [H("Scheduling"), P("Round robin gives every task a time quantum.")],
+        [H("Paging"), P("Paging maps pages to frames with a page table.")],
+        [H("Deadlock"), P("Four conditions cause a deadlock.")],
+    )
+    again = FakeEmbedder()
+
+    # In another environment, as a new document: the shared passages are
+    # found by their content, and only the edited one is embedded.
+    changes = another(
+        session, session_factory, again, revised, environment(session, "Copy"), "v2.pdf"
+    )
+
+    assert again.passages_embedded == [
+        "Paging\n\nPaging maps pages to frames with a page table."
+    ]
+    assert changes == {
+        "passages": 3,
+        "new": 3,
+        "kept": 0,
+        "removed": 0,
+        "embedded": 1,
+        "reused": 2,
+    }
+    original = {r.content_hash: r.embedding for r in stored(session, first)}
+    copy = session.scalars(
+        select(DocumentChunk).where(DocumentChunk.content_hash.in_(original))
+    ).all()
+    # The first document's three, and the two passages the copy shares,
+    # each shared one with the very same vector.
+    assert len(copy) == 5
+    for row in copy:
+        assert list(row.embedding) == list(original[row.content_hash])
+
+
+def test_a_reprocess_reports_what_it_kept_and_changed(
+    session: Session, session_factory
+):
+    document_id = processed(session, session_factory, FakeEmbedder())
+    edited = document(
+        [H("Scheduling"), P("Round robin gives every task a time quantum.")],
+        [H("Paging"), P("Paging maps pages to frames with a page table.")],
+    )
+
+    service.request_reprocess(session, session.get(Document, document_id))
+    changes = service.process_document(
+        session_factory, document_id, Returns(edited), FakeEmbedder()
+    )
+
+    assert changes == {
+        "passages": 2,
+        "new": 1,
+        "kept": 1,
+        "removed": 2,
+        "embedded": 1,
+        "reused": 0,
+    }
+
+
 # --- missing embeddings -----------------------------------------------------
 
 

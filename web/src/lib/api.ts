@@ -12,6 +12,7 @@ import type {
   EnvironmentPatch,
   EnvironmentSummaryState,
   GraphState,
+  MaterialUpdate,
   Neighbourhood,
   AttemptInput,
   AttemptResult,
@@ -178,6 +179,18 @@ export const api = {
     if (minutes) query.set("minutes", String(minutes));
     return request<StudyPlan>(`${environmentPath(environmentId)}/plan?${query}`);
   },
+
+  // Changes to the material, newest first, each with its steps and report.
+  listUpdates: (environmentId: string) =>
+    request<MaterialUpdate[]>(`${environmentPath(environmentId)}/updates`),
+
+  // A new version of a document, as the raw PDF body, like an upload.
+  uploadNewVersion: (documentId: string, file: File) =>
+    request<Document>(`${documentPath(documentId)}/versions`, {
+      method: "POST",
+      body: file,
+      headers: { "Content-Type": "application/pdf" },
+    }),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),

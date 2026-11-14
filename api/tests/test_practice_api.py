@@ -13,11 +13,18 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from tests import pdfs
 from tests.test_concepts import concept
 from tests.test_concepts_api import environment, upload
 from tests.test_graph import RULES, SCHEDULING_CONCEPTS
-from tests.test_graph_api import SCHEDULING, SYNCHRONIZATION
+from tests.test_graph_api import SCHEDULING
 from tests.test_practice import Practising
+
+# Scheduling, its threads passage rewritten.
+THREADS_REWRITTEN = pdfs.html_pdf(
+    "<h2>Threads</h2><p>A thread is the smallest unit the scheduler runs.</p>",
+    "<h2>Round robin</h2><p>Round robin gives every thread a time quantum in turn.</p>",
+)
 
 
 @pytest.fixture
@@ -129,7 +136,13 @@ def test_bad_answers_and_replaced_items_are_refused(client: TestClient):
         f"/api/learning-items/{uuid.uuid4()}/attempts", json={"knew": True}
     )
     empty = client.post(f"/api/environments/{env}/practice", json={"concept_ids": []})
-    upload(client, env, "sync.pdf", SYNCHRONIZATION)  # Thread's passages change
+    # A new version rewrites the passage Thread's items cite.
+    document = client.get(f"/api/environments/{env}/documents").json()[0]
+    client.post(
+        f"/api/documents/{document['id']}/versions",
+        content=THREADS_REWRITTEN,
+        headers={"Content-Type": "application/pdf"},
+    )
     replaced = client.post(
         f"/api/learning-items/{choice['id']}/attempts", json={"choice": 0}
     )

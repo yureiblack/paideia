@@ -365,6 +365,49 @@ export type StudyPlan = {
   budget: number | null;
 };
 
+// A change to an environment's material, followed step by step: a document
+// added, a new version, a reprocess or a deletion. report says what changed
+// once it is done.
+export type UpdateStep = {
+  name: string;
+  label: string;
+  state: "waiting" | "running" | "done" | "failed" | "skipped";
+  detail: string | null;
+};
+
+export type ChangeNote = { name: string; detail: string | null };
+export type RelationshipNote = { source: string; type: RelationshipType; target: string };
+
+export type UpdateReport = {
+  new_concepts: string[];
+  removed_concepts: string[];
+  new_relationships: RelationshipNote[];
+  removed_relationships: RelationshipNote[];
+  passages: {
+    passages: number;
+    new: number;
+    kept: number;
+    removed: number;
+    embedded: number;
+    reused: number;
+  } | null;
+  updated: ChangeNote[];
+  unchanged: ChangeNote[];
+  practice_outdated: string[];
+};
+
+export type MaterialUpdate = {
+  id: string;
+  kind: "added" | "new_version" | "reprocessed" | "deleted";
+  document_id: string | null;
+  filename: string;
+  status: "running" | "done" | "failed";
+  steps: UpdateStep[];
+  report: UpdateReport | null;
+  started_at: string;
+  finished_at: string | null;
+};
+
 // One passage that matched a search. score is the reranker's judgement of how
 // well it answers the query, from 0 to 1: higher is better. It orders
 // results; it is not a probability.

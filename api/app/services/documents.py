@@ -54,6 +54,10 @@ class StillProcessing(Exception):
     """The document is being parsed right now."""
 
 
+class SameVersion(Exception):
+    """The file is the document's current version already."""
+
+
 def list_documents(session: Session, environment_id: uuid.UUID) -> list[Document]:
     """An environment's documents, newest first, id breaking ties."""
     query = (
@@ -148,7 +152,7 @@ def process_document(
     document_id: uuid.UUID,
     parser: Parser,
     embedder: Embedder,
-) -> None:
+) -> dict | None:
     """Parse, chunk and embed a document, and store it all. A background task.
 
     It first claims the document by moving it from uploaded to processing; a
@@ -160,12 +164,16 @@ def process_document(
     Whatever goes wrong, the document ends ready or failed, never stuck in
     processing: a failed parse, a failed embedding and a failed write all mark
     it failed with the reason.
+
+    Returns what changed, for the update record: passages new, kept and
+    removed, and vectors embedded and reused. None if the document was not
+    processed, or its result could not be stored.
     """
     with session_factory() as session:
         document = _lock(session, document_id)
         if document is None or document.status != "uploaded":
             session.rollback()
-            return
+            return None
         document.status = "processing"
         document.error = None
         session.commit()
@@ -185,9 +193,12 @@ def process_document(
             parsed = None
             error = "An unexpected error occurred while reading the PDF."
 
+        embedded = reused = 0
         if parsed is not None:
             try:
-                embeddings = _embed_where_needed(session, document_id, chunks, embedder)
+                embeddings, embedded, reused = _embed_where_needed(
+                    session, document_id, chunks, embedder
+                )
             except EmbeddingError as exc:
                 parsed, chunks, error = None, [], str(exc)
             except Exception:
@@ -200,7 +211,7 @@ def process_document(
                 )
 
         try:
-            _store_result(
+            changes = _store_result(
                 session,
                 document_id,
                 parsed,
@@ -209,6 +220,9 @@ def process_document(
                 embedder.model_name,
                 error,
             )
+            if changes is None:
+                return None
+            return {**changes, "embedded": embedded, "reused": reused}
         except Exception:
             # Storing the result failed, so nothing of it was kept. Record the
             # failure in a fresh transaction rather than leaving the document
@@ -224,16 +238,22 @@ def process_document(
                 embedder.model_name,
                 "The PDF was read, but its text could not be stored.",
             )
+            return None
 
 
 def _embed_where_needed(
     session: Session, document_id: uuid.UUID, chunks: list[Chunk], embedder: Embedder
-) -> dict[uuid.UUID, list[float]]:
-    """Embed only the chunks that need it, and return the new vectors by id.
+) -> tuple[dict[uuid.UUID, list[float]], int, int]:
+    """The vectors the chunks need, by id, and how many were computed and how
+    many reused.
 
-    A chunk needs embedding when it is new, when its stored embedding is
+    A chunk needs a vector when it is new, when its stored embedding is
     empty, or when a different model made it. Chunk rows survive a reprocess,
-    so reprocessing an unchanged document embeds nothing at all.
+    so reprocessing an unchanged document needs nothing at all. A needed
+    vector is first looked for by content: any stored chunk with the same
+    text, embedded by the same model, in any document, already has it, since
+    the same text always gives the same vector. Only the rest are computed
+    (decision record 17).
     """
     query = select(
         DocumentChunk.id,
@@ -245,8 +265,31 @@ def _embed_where_needed(
         for chunk_id, model, empty in session.execute(query)
     }
     needed = [chunk for chunk in chunks if current.get(chunk.id) != embedder.model_name]
-    vectors = embedder.embed_passages([chunk.content for chunk in needed])
-    return {chunk.id: vector for chunk, vector in zip(needed, vectors, strict=True)}
+    known: dict[str, list[float]] = {}
+    hashes = {chunk.content_hash for chunk in needed}
+    if hashes:
+        for content_hash, vector in session.execute(
+            select(DocumentChunk.content_hash, DocumentChunk.embedding)
+            .where(
+                DocumentChunk.content_hash.in_(hashes),
+                DocumentChunk.embedding_model == embedder.model_name,
+                DocumentChunk.embedding.is_not(None),
+            )
+            .distinct(DocumentChunk.content_hash)
+        ):
+            known[content_hash] = [float(x) for x in vector]
+    vectors = {
+        chunk.id: known[chunk.content_hash]
+        for chunk in needed
+        if chunk.content_hash in known
+    }
+    fresh = [chunk for chunk in needed if chunk.content_hash not in known]
+    if fresh:
+        computed = embedder.embed_passages([chunk.content for chunk in fresh])
+        vectors.update(
+            {chunk.id: vector for chunk, vector in zip(fresh, computed, strict=True)}
+        )
+    return vectors, len(fresh), len(needed) - len(fresh)
 
 
 def _store_result(
@@ -257,17 +300,19 @@ def _store_result(
     embeddings: dict[uuid.UUID, list[float]],
     model_name: str,
     error: str | None,
-) -> None:
-    """Write the outcome: ready with pages, chunks and embeddings, or failed."""
+) -> dict | None:
+    """Write the outcome: ready with pages, chunks and embeddings, or failed.
+    Returns how many passages are new, kept and removed; None if the document
+    was deleted meanwhile."""
     document = _lock(session, document_id)
     if document is None:  # deleted while it was being parsed
         session.rollback()
-        return
+        return None
 
     # A document's pages are replaced as a whole, inside this transaction:
     # readers see the old set or the new one, never a mixture.
     session.execute(delete(DocumentPage).where(DocumentPage.document_id == document_id))
-    _sync_chunks(session, document_id, chunks, embeddings, model_name)
+    changes = _sync_chunks(session, document_id, chunks, embeddings, model_name)
     if parsed is None:
         document.status = "failed"
         document.error = error
@@ -287,6 +332,7 @@ def _store_result(
         document.pages_with_text = parsed.pages_with_text
         document.repaired = parsed.repaired
     session.commit()
+    return changes
 
 
 # The chunk fields that may change while its content, and so its id, stays the
@@ -307,7 +353,7 @@ def _sync_chunks(
     chunks: list[Chunk],
     embeddings: dict[uuid.UUID, list[float]],
     model_name: str,
-) -> None:
+) -> dict:
     """Make the stored chunks match the given ones, touching only what changed.
 
     A chunk's id is derived from its content, so a chunk produced again keeps
@@ -341,6 +387,12 @@ def _sync_chunks(
         if chunk.id in embeddings:
             row.embedding = embeddings[chunk.id]
             row.embedding_model = model_name
+    return {
+        "passages": len(wanted),
+        "new": len(wanted - stored.keys()),
+        "kept": len(wanted & stored.keys()),
+        "removed": len(stored.keys() - wanted),
+    }
 
 
 def get_chunks(session: Session, document_id: uuid.UUID) -> list[DocumentChunk]:
@@ -365,6 +417,47 @@ def request_reprocess(session: Session, document: Document) -> Document:
         raise StillProcessing("This document is being processed right now.")
     document.status = "uploaded"
     document.error = None
+    session.commit()
+    return document
+
+
+def new_version(
+    session: Session, document: Document, staged: storage.StagedUpload
+) -> Document:
+    """Replace a document's file with a new version, keeping the document:
+    its id, its name and its place in the reading order (decision record 17).
+
+    Its passages' ids come from the document and their text, so every
+    passage the new version shares with the old keeps its row, embedding and
+    concept evidence when it is read again. Refused while it is being read,
+    when the file is the current version already, and when another document
+    in the environment is that same file.
+    """
+    recently_claimed = datetime.now(UTC) - document.updated_at < STALE_PROCESSING
+    if document.status == "processing" and recently_claimed:
+        storage.discard(staged)
+        raise StillProcessing("This document is being processed right now.")
+    if staged.sha256 == document.sha256:
+        storage.discard(staged)
+        raise SameVersion("This file is the document's current version already.")
+    existing = _find_duplicate(session, document.environment_id, staged.sha256)
+    if existing is not None:
+        storage.discard(staged)
+        raise DuplicateDocument(existing)
+    document.sha256 = staged.sha256
+    document.size_bytes = staged.size_bytes
+    document.status = "uploaded"
+    document.error = None
+    try:
+        session.flush()  # the unique fingerprint per environment backs this up
+    except IntegrityError:
+        session.rollback()
+        storage.discard(staged)
+        winner = _find_duplicate(session, document.environment_id, staged.sha256)
+        if winner is None:
+            raise
+        raise DuplicateDocument(winner) from None
+    storage.store(staged, document.environment_id, document.id)  # replaces the file
     session.commit()
     return document
 
