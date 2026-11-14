@@ -7,7 +7,7 @@ one stays in the history; and each refusal has its status code and reason.
 """
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import update
@@ -123,11 +123,12 @@ def test_a_new_model_writes_a_new_summary_and_keeps_the_old_one(
     document = uploaded(client)
     old = summary(client, document["id"]).json()
     # Postgres's now() is frozen for the whole test's transaction: date the
-    # first summary a minute back so the history has an order to show.
+    # first summary a minute back so the history has an order to show (from
+    # its own time; the database's clock may differ from this machine's).
     session.execute(
         update(GeneratedArtifact)
         .where(GeneratedArtifact.id == uuid.UUID(old["id"]))
-        .values(created_at=datetime.now(UTC) - timedelta(minutes=1))
+        .values(created_at=GeneratedArtifact.created_at - timedelta(minutes=1))
     )
     session.flush()
 
