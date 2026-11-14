@@ -8,14 +8,19 @@
 //
 // At the top, the concepts due today (in the learner's own day), those that
 // need attention and those recently strong, each with why; below, each
-// roadmap stage with Prepare practice and Practise this stage. A session replaces the page until it is done.
+// roadmap stage with Prepare practice and Practise this stage; then how each
+// practised concept is going, weakest first, and the past sessions. A
+// session replaces the page until it is done.
 // ?stage= (from the Roadmap tab) starts that stage's session at once, and
 // ?concepts= (from today's plan) a session for those concepts.
 
 import Link from "next/link";
 import { useState } from "react";
 
+import { ConceptPerformance } from "@/components/concept-performance";
+import { PracticeHistory } from "@/components/practice-history";
 import { PracticeSession } from "@/components/practice-session";
+import { Empty, Loading, LoadError } from "@/components/query-states";
 import { StagePractice } from "@/components/stage-practice";
 import { usePractice } from "@/hooks/use-practice";
 import { useRoadmap } from "@/hooks/use-roadmap";
@@ -40,15 +45,19 @@ export function Practice({
   const [fromLink, setFromLink] = useState(stage);
   const [planned, setPlanned] = useState(focus);
 
-  if (practice.isPending || roadmap.isPending) {
-    return <p className="text-zinc-500">Loading practice…</p>;
-  }
   if (practice.isError || roadmap.isError) {
+    const failed = [practice, roadmap].filter((q) => q.isError);
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not load practice: {(practice.error ?? roadmap.error)?.message}
-      </p>
+      <LoadError
+        what="practice"
+        error={(practice.error ?? roadmap.error) as Error}
+        onRetry={() => failed.forEach((q) => void q.refetch())}
+        retrying={failed.some((q) => q.isFetching)}
+      />
     );
+  }
+  if (practice.isPending || roadmap.isPending) {
+    return <Loading what="practice" lines={4} />;
   }
   const stages = roadmap.data.stages;
   const linked = fromLink !== null ? stages.find((s) => s.number === fromLink) : undefined;
@@ -82,6 +91,9 @@ export function Practice({
   const exploreHref = (id: string) =>
     `/environments/${encodeURIComponent(environmentId)}/knowledge-map?concept=${encodeURIComponent(id)}`;
   const today = due_concepts + new_concepts;
+  const dueNow = practice.data.concepts.filter(
+    (c) => c.review === "due" || c.review === "new",
+  );
   return (
     <div className="flex flex-col gap-6">
       <section aria-labelledby="practice-heading" className="flex flex-col gap-3">
@@ -98,13 +110,30 @@ export function Practice({
           a miss brings it back the next day.
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-          <p className="text-sm">
-            {items === 0
-              ? "No practice items yet: prepare a stage below."
-              : today > 0
-                ? `Due today: ${dueText(due_concepts, new_concepts)}.`
-                : `Nothing due today.${next_review_at ? ` Next review ${formatDateTime(next_review_at)}.` : ""}`}
-          </p>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <p className="text-sm">
+              {items === 0
+                ? "No practice items yet: prepare a stage below."
+                : today > 0
+                  ? `Due today: ${dueText(due_concepts, new_concepts)}.`
+                  : `Nothing due today.${next_review_at ? ` Next review ${formatDateTime(next_review_at)}.` : ""}`}
+            </p>
+            {dueNow.length > 0 && (
+              <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs" aria-label="Due today">
+                {dueNow.map((c) => (
+                  <li key={c.concept_id}>
+                    <Link
+                      href={exploreHref(c.concept_id)}
+                      className="underline decoration-zinc-400 underline-offset-2 hover:decoration-current dark:decoration-zinc-500"
+                    >
+                      {c.name}
+                    </Link>
+                    {c.review === "new" && <span className="text-zinc-500"> (new)</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {today > 0 && (
             <button
               type="button"
@@ -137,10 +166,10 @@ export function Practice({
       </section>
 
       {stages.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <Empty>
           Practice is prepared stage by stage, from the roadmap, once materials have
           been read and their concepts found.
-        </p>
+        </Empty>
       ) : (
         <ol className="flex flex-col gap-3" aria-label="Stages to practise">
           {stages.map((stage) => (
@@ -171,6 +200,11 @@ export function Practice({
           ))}
         </ol>
       )}
+
+      <div className="grid gap-10 lg:grid-cols-2">
+        <ConceptPerformance environmentId={environmentId} concepts={practice.data.concepts} />
+        <PracticeHistory environmentId={environmentId} />
+      </div>
     </div>
   );
 }

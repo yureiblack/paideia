@@ -19,6 +19,7 @@ import type {
   AttemptResult,
   PracticeItem,
   PracticeOverview,
+  PracticeSession,
   RoadmapState,
   StudyPlan,
   SearchResponse,
@@ -148,6 +149,10 @@ export const api = {
     request<PracticeOverview>(
       `${environmentPath(environmentId)}/practice?until=${encodeURIComponent(until)}`,
     ),
+
+  // The last practice sessions, newest first.
+  getPracticeHistory: (environmentId: string) =>
+    request<PracticeSession[]>(`${environmentPath(environmentId)}/practice/history`),
 
   // Write practice items for these concepts, in the background.
   preparePractice: (environmentId: string, conceptIds: string[]) =>
