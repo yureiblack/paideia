@@ -1,0 +1,247 @@
+{
+  "about": "Verdicts on the judge's calibration sample (decision record 20): does the cited passage support the key point? Supported means every substantive claim in the point is stated in, or directly follows from, this passage; a point adding claims the passage does not make is not supported. The judge's own verdicts were hidden while these were decided.",
+  "reviewed_by": "2026-11-15, two separate passes that agreed on every pair, separate from building the benchmark. Not an independent human review.",
+  "generation_run": "2026-11-14T18:23:16+00:00",
+  "pairs": [
+    {
+      "id": "j01",
+      "document": "09-storage-and-disk-scheduling.pdf",
+      "point": "Hard disk drives store data magnetically on spinning platters divided into tracks and sectors, with read operations involving seek time, rotational latency, and data transfer. Seek and rotational latency dominate performance, making sequential reads much faster than random reads.",
+      "passage": "09#0",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j02",
+      "document": "04-deadlock.pdf",
+      "point": "Prevention strategies break one of the four conditions, such as enforcing a global lock order to prevent circular wait or requiring all resources to be requested at once.",
+      "passage": "04#3",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j03",
+      "document": "07-file-systems.pdf",
+      "point": "Block allocation methods include contiguous allocation (fast but prone to fragmentation), linked allocation (flexible but prone to pointer damage), and indexed allocation (using pointers or extents for efficiency).",
+      "passage": "07#4",
+      "supported": false,
+      "why": "Only indexed allocation is in this passage; contiguous and linked allocation are in another."
+    },
+    {
+      "id": "j04",
+      "document": "02-cpu-scheduling.pdf",
+      "point": "Round robin assigns fixed time quanta to processes, improving response time for interactive work but requiring careful quantum selection to avoid excessive context switching.",
+      "passage": "02#5",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j05",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "The kernel manages data transfer between programs and devices through buffering, caching, and spooling. Buffering accommodates speed mismatches (e.g., fast programs and slow modems), caching stores frequently accessed data (e.g., disk blocks) for quicker retrieval, and spooling queues output for devices with limited capacity (e.g., printers) to prevent program delays.",
+      "passage": "10#5",
+      "supported": false,
+      "why": "The passage is about device drivers; nothing on buffering, caching or spooling."
+    },
+    {
+      "id": "j06",
+      "document": "02-cpu-scheduling.pdf",
+      "point": "Priority scheduling can starve low-priority processes, so aging gradually increases priorities over time to ensure fairness.",
+      "passage": "02#6",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j07",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "Direct Memory Access (DMA) enables devices to transfer large data blocks to memory without CPU intervention. The CPU configures a DMA controller with source, destination, and data size, allowing it to perform transfers independently and notify the CPU only upon completion. The kernel must ensure the memory pages involved in DMA transfers remain unmoved during the operation.",
+      "passage": "10#3",
+      "supported": false,
+      "why": "The passage is about polling and interrupts; nothing on DMA."
+    },
+    {
+      "id": "j08",
+      "document": "02-cpu-scheduling.pdf",
+      "point": "First-come, first-served scheduling runs processes in arrival order but can cause long waits for short jobs due to the convoy effect, leaving I/O devices idle.",
+      "passage": "02#3",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j09",
+      "document": "04-deadlock.pdf",
+      "point": "Avoidance, like Dijkstra’s banker’s algorithm, grants requests only if the system remains in a safe state where all threads can eventually finish.",
+      "passage": "04#4",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j10",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "Device drivers are kernel modules responsible for communicating with hardware, translating hardware-specific operations into a uniform interface (e.g., block or character devices). They account for a significant portion of an OS’s codebase and are a major source of crashes due to their privileged execution.",
+      "passage": "10#4",
+      "supported": false,
+      "why": "The passage is about DMA; nothing on device drivers."
+    },
+    {
+      "id": "j11",
+      "document": "06-virtual-memory.pdf",
+      "point": "The optimal (OPT) algorithm minimizes faults by replacing the page that won’t be used for the longest time, though it cannot be implemented in practice due to its reliance on future knowledge.",
+      "passage": "06#4",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j12",
+      "document": "03-synchronization.pdf",
+      "point": "Race conditions occur when threads share data and the outcome depends on the timing of their operations, such as lost increments in a shared counter.",
+      "passage": "03#0",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j13",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "Polling and interrupts are two methods for detecting device completion. Polling involves continuous checking of device status, wasting CPU cycles but offering immediate response with no per-event overhead. Interrupts allow the CPU to handle other tasks until the device signals completion, but excessive interrupts can cause livelock, prompting adaptive techniques like switching between polling and interrupts under heavy load.",
+      "passage": "10#2",
+      "supported": false,
+      "why": "The passage covers traps, exceptions and interrupts; polling, livelock and adaptive switching are absent."
+    },
+    {
+      "id": "j14",
+      "document": "09-storage-and-disk-scheduling.pdf",
+      "point": "Write amplification occurs in SSDs when one logical write triggers multiple physical writes during garbage collection, slowing performance and accelerating wear. Over-provisioning (extra spare capacity) mitigates this issue.",
+      "passage": "09#3",
+      "supported": false,
+      "why": "The passage never mentions write amplification or over-provisioning."
+    },
+    {
+      "id": "j15",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "System calls allow programs to request kernel services like file operations or process creation. A program invokes a system call by placing a system call number and arguments in predefined registers and executing a trap instruction, which switches the processor to kernel mode and triggers kernel handling. Libraries like the C library abstract system calls into higher-level functions, buffering small operations to reduce kernel crossings.",
+      "passage": "10#0",
+      "supported": false,
+      "why": "The passage covers user and kernel mode only; nothing on system calls."
+    },
+    {
+      "id": "j16",
+      "document": "08-crash-consistency.pdf",
+      "point": "Copy-on-write systems like ZFS and Btrfs avoid overwrites by creating new copies of blocks and updating pointers atomically, enabling efficient snapshots by preserving old versions.",
+      "passage": "08#6",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j17",
+      "document": "01-processes-and-threads.pdf",
+      "point": "A process is an active program in execution with its own memory and state, including separate text, data, heap, and stack segments.",
+      "passage": "01#0",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j18",
+      "document": "09-storage-and-disk-scheduling.pdf",
+      "point": "Disk scheduling algorithms like First-Come, First-Served (FCFS) and Shortest Seek Time First (SSTF) reorder requests to reduce head movement. FCFS is fair but inefficient, while SSTF minimizes seek distance but can starve requests at disk edges.",
+      "passage": "09#0",
+      "supported": false,
+      "why": "The passage covers hard disk mechanics; FCFS and SSTF are absent."
+    },
+    {
+      "id": "j19",
+      "document": "03-synchronization.pdf",
+      "point": "Hardware provides atomic instructions like test-and-set and compare-and-swap to safely implement locks without relying on program-order guarantees.",
+      "passage": "03#2",
+      "supported": false,
+      "why": "The atomic instructions are supported; 'without relying on program-order guarantees' is not in this passage."
+    },
+    {
+      "id": "j20",
+      "document": "09-storage-and-disk-scheduling.pdf",
+      "point": "SCAN (elevator algorithm) and its variants (C-SCAN, LOOK, C-LOOK) move the disk arm in one direction, serving requests along the way. Modern drives often handle scheduling internally, and SSDs may bypass scheduling entirely due to their low-latency random access.",
+      "passage": "09#2",
+      "supported": false,
+      "why": "SCAN and its variants are supported; the reason given for SSDs bypassing scheduling is not in this passage."
+    },
+    {
+      "id": "j21",
+      "document": "01-processes-and-threads.pdf",
+      "point": "Threads are lightweight execution units within a process that share memory but have their own stack and registers, enabling parallelism and responsiveness.",
+      "passage": "01#7",
+      "supported": false,
+      "why": "The passage is a sentence fragment; shared memory, stacks, registers and parallelism are absent."
+    },
+    {
+      "id": "j22",
+      "document": "06-virtual-memory.pdf",
+      "point": "A page fault occurs when a process accesses a page not in memory, causing a delay of milliseconds due to disk access, which significantly slows down programs if frequent (cost of a page fault).",
+      "passage": "06#0",
+      "supported": false,
+      "why": "The fault is supported; its cost in milliseconds is in another passage."
+    },
+    {
+      "id": "j23",
+      "document": "05-memory-management.pdf",
+      "point": "Paging divides virtual memory into fixed-size pages and physical memory into frames of the same size, eliminating external fragmentation. A virtual address is split into a page number and offset, with the page table mapping pages to frames.",
+      "passage": "05#4",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j24",
+      "document": "08-crash-consistency.pdf",
+      "point": "Log-structured file systems store all data and metadata sequentially in a log, avoiding in-place updates but requiring a cleaner to reclaim dead blocks from old segments.",
+      "passage": "08#5",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j25",
+      "document": "08-crash-consistency.pdf",
+      "point": "File system operations often update multiple structures (e.g., data blocks, inodes, bitmaps) sequentially, risking partial updates on crash, which can corrupt data or cause space leaks.",
+      "passage": "08#0",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j26",
+      "document": "01-processes-and-threads.pdf",
+      "point": "The operating system maintains a process control block for each process, storing details like registers, program counter, scheduling info, memory mappings, open files, and CPU usage.",
+      "passage": "01#1",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j27",
+      "document": "09-storage-and-disk-scheduling.pdf",
+      "point": "Solid-state drives use flash memory with no moving parts, making random and sequential reads similarly fast. Flash requires erasing entire blocks before rewriting, leading to wear leveling and garbage collection to extend drive lifespan.",
+      "passage": "09#3",
+      "supported": false,
+      "why": "The SSD facts are supported; garbage collection extending the drive's life is not stated."
+    },
+    {
+      "id": "j28",
+      "document": "05-memory-management.pdf",
+      "point": "External fragmentation occurs when free memory becomes scattered into small holes due to variable-sized allocations, while internal fragmentation wastes space inside fixed-size allocations. Compaction can reduce external fragmentation but requires copying memory.",
+      "passage": "05#2",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j29",
+      "document": "04-deadlock.pdf",
+      "point": "Four conditions must hold simultaneously for a deadlock: mutual exclusion, hold and wait, no preemption, and circular wait. Removing any one prevents deadlock.",
+      "passage": "04#1",
+      "supported": true,
+      "why": "Every claim in the point is stated in the passage."
+    },
+    {
+      "id": "j30",
+      "document": "10-io-and-system-calls.pdf",
+      "point": "Traps, exceptions, and interrupts are mechanisms for handling events: traps are deliberate (e.g., system calls), exceptions occur due to errors (e.g., division by zero), and interrupts are asynchronous signals from devices (e.g., network packets or timers). Interrupts require brief handlers to avoid delaying further interrupts, often split into top and bottom halves for efficiency.",
+      "passage": "10#1",
+      "supported": false,
+      "why": "The passage covers system calls; exceptions, interrupts and handler halves are absent."
+    }
+  ]
+}
