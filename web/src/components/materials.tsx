@@ -1,12 +1,14 @@
 "use client";
 
-// The Materials tab: upload PDFs into an environment, watch them being read,
-// retry failures, delete them, read the extracted text page by page, and ask
+// The Materials tab: upload PDFs into an environment, or a new version of
+// one, watch each change go through step by step and what it changed, retry
+// failures, delete documents, read the extracted text page by page, and ask
 // the local language model for a cited summary of any document.
 
 import { useRef, useState, type ChangeEvent } from "react";
 
 import { DocumentSummaryPanel } from "@/components/document-summary";
+import { MaterialUpdates } from "@/components/material-updates";
 import {
   useDeleteDocument,
   useDocuments,
@@ -16,6 +18,7 @@ import {
   useSummary,
   useUploadDocument,
 } from "@/hooks/use-documents";
+import { useNewVersion } from "@/hooks/use-updates";
 import { formatBytes, formatDate } from "@/lib/format";
 import {
   MAX_UPLOAD_MB,
@@ -79,6 +82,8 @@ export function Materials({ environmentId }: { environmentId: string }) {
         </p>
       )}
 
+      <MaterialUpdates environmentId={environmentId} />
+
       {documents.isPending ? (
         <p className="text-zinc-500">Loading materials…</p>
       ) : documents.isError ? (
@@ -121,6 +126,15 @@ function DocumentRow({
   onToggleReading: () => void;
 }) {
   const reprocess = useReprocessDocument(environmentId);
+  const newVersion = useNewVersion(environmentId);
+  const versionInput = useRef<HTMLInputElement>(null);
+
+  function handleVersion(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    newVersion.mutate({ documentId: document.id, file });
+  }
   const remove = useDeleteDocument(environmentId);
   const summary = useSummary(environmentId, document);
   const askForSummary = useRequestSummary(environmentId, document.id);
@@ -179,6 +193,26 @@ function DocumentRow({
             {showingSummary ? "Hide summary" : summaryLabel(summary.data)}
           </button>
         )}
+        {document.status !== "uploaded" && document.status !== "processing" && (
+          <>
+            <input
+              ref={versionInput}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={handleVersion}
+              className="hidden"
+              aria-label={`Choose a new version of ${document.filename}`}
+            />
+            <button
+              type="button"
+              onClick={() => versionInput.current?.click()}
+              disabled={newVersion.isPending}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+            >
+              {newVersion.isPending ? "Uploading…" : "Upload a new version"}
+            </button>
+          </>
+        )}
         {document.status === "failed" && (
           <button
             type="button"
@@ -199,9 +233,9 @@ function DocumentRow({
         </button>
       </div>
 
-      {(reprocess.error ?? remove.error) && (
+      {(reprocess.error ?? remove.error ?? newVersion.error) && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {(reprocess.error ?? remove.error)?.message}
+          {(reprocess.error ?? remove.error ?? newVersion.error)?.message}
         </p>
       )}
 
