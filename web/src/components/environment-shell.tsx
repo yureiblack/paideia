@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { EnvironmentForm } from "@/components/environment-form";
+import { BackgroundWork } from "@/components/background-work";
 import { EnvironmentTabs } from "@/components/environment-tabs";
 import {
   useDeleteEnvironment,
@@ -57,6 +58,7 @@ export function EnvironmentShell({
     <div className="flex flex-col gap-6">
       <EnvironmentHeader environment={environment.data} />
       <EnvironmentTabs id={id} />
+      <BackgroundWork environmentId={id} />
       <div>{children}</div>
     </div>
   );

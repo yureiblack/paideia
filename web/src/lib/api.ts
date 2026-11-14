@@ -12,6 +12,7 @@ import type {
   EnvironmentPatch,
   EnvironmentSummaryState,
   GraphState,
+  Job,
   MaterialUpdate,
   Neighbourhood,
   AttemptInput,
@@ -191,6 +192,16 @@ export const api = {
       body: file,
       headers: { "Content-Type": "application/pdf" },
     }),
+
+  // Background work: queued and running first, then the latest finished.
+  listJobs: (environmentId: string) =>
+    request<Job[]>(`${environmentPath(environmentId)}/jobs`),
+
+  cancelJob: (jobId: string) =>
+    request<Job>(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
+
+  // Whether a worker is running: rejects with the reason when none is.
+  workerHealth: () => request<{ status: string; workers: number }>("/health/worker"),
 
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),
