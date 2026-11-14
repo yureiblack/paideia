@@ -44,6 +44,9 @@ fastembed==0.9.1
 # Lets SQLAlchemy read and write pgvector's vector column type.
 pgvector==0.5.1
 
+# Talks to Redis, which wakes the background job worker (decision record 18).
+redis==8.1.0
+
 # The HTTP client the app talks to Ollama, the local language model server,
 # with. Pydantic's maintained fork of httpx; FastAPI's test client uses it too.
 httpx2==2.12.0

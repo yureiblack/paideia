@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # connect somewhere unexpected.
     database_url: str
 
+    # Redis, which wakes the background job worker when a job is queued
+    # (decision record 18). The jobs themselves live in Postgres. Defaults to
+    # the container from docker-compose.yml.
+    redis_url: str = "redis://localhost:6379/0"
+
     # Browser origins allowed to call this API, as a comma-separated list.
     # Defaults to the local Next.js dev server, which is safe to assume: it
     # only ever permits a page running on this same machine.
