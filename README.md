@@ -119,6 +119,18 @@ minute, answering at the learner's own pace once known) and which concepts it
 covers, and opens what it needs. An optional time budget, remembered in the
 browser, moves what does not fit to "With more time".
 
+The Overview tab is the environment's dashboard: the numbers at a glance
+(concepts due for review today, concepts, documents, how much of the roadmap
+is strong), today's plan, each roadmap stage's progress, the opening of the
+summary, the knowledge map in a few lines (where to start and the most
+connected concepts), recent material and how recent background work ended.
+The Practice tab adds how each practised concept is going, weakest first,
+and the past sessions, worked out from the answers. Materials shows each
+document's summary opening and, while it runs, the step its background work
+is at. Every section that loads data shows placeholder lines while it loads,
+says why when it cannot, with Try again, and says what to do when there is
+nothing yet.
+
 ## Stack
 
 | Layer | Choice |
@@ -248,7 +260,8 @@ by default, since it assumes the API is at http://localhost:8000.
 | GET | `/api/concepts/{id}/neighbourhood` | One concept and what is next to it: its `prerequisites` and `dependents`, all the way along with their `depth`, what it is `part_of`, its `parts`, and what it is `related` to, each direct relationship with its `confidence` and `evidence` citations. |
 | GET | `/api/environments/{id}/roadmap` | The learning roadmap: its `stages` in order, each with a `title` and `description` (`written` by the local model, or a plain title until then), the `documents` it draws on, and its `concepts` in order, each with what it `builds_on`, whether it is `in_cycle`, and its `evidence` citations; the `cycles` of prerequisites; and the `state` of the titles, as for the environment's summary, with `waiting` for the knowledge graph. |
 | POST | `/api/environments/{id}/roadmap` | Write the titles of the current stages, or try again after a failure: 200 if up to date, 202 if being written or waiting for the graph. It never asks the model twice about the same stage. 422 if there are no concepts yet. |
-| GET | `/api/environments/{id}/practice?until=...` | Practice at a glance, with `until` the end of the learner's day (with its time zone): how many items are practised, how many concepts are `due_concepts` today and `new_concepts`, the next later review, the concepts that `needs_attention` and are `recently_strong` with why, and each concept: its items' `state` (`none`, `pending`, `generating`, `ready`, `failed` with an `error`, or `outdated` when its material changed) and the learner's state worked out from their answers (`review` new, due or scheduled; `exposures`, `recalled`, `failed`, last attempted and recalled, `gap_days`, `next_review_at`, `attention`). |
+| GET | `/api/environments/{id}/practice?until=...` | Practice at a glance, with `until` the end of the learner's day (with its time zone): how many items are practised, how many concepts are `due_concepts` today and `new_concepts`, the next later review, the concepts that `needs_attention` and are `recently_strong` with why, and each concept: its items' `state` (`none`, `pending`, `generating`, `ready`, `failed` with an `error`, or `outdated` when its material changed) and the learner's state worked out from their answers (`review` new, due or scheduled; `exposures`, `recalled`, `failed`, last attempted and recalled, `gap_days`, `next_review_at`, `attention`, and `strong`: recalled on its last answer after a gap of four days or more). |
+| GET | `/api/environments/{id}/practice/history` | The last 20 practice sessions, newest first, worked out from the answers: answers less than 30 minutes apart are one session. Each has when it started and ended, its `answers`, how many were `recalled`, and its `concepts` in the order first answered. |
 | POST | `/api/environments/{id}/practice` | Prepare practice items for the concepts in `concept_ids`, in the background: 202 while they are written. Never writes twice for the same passages, model and prompt. |
 | POST | `/api/concepts/{id}/practice` | The same, for one concept. |
 | GET | `/api/environments/{id}/practice/session?until=...` | A session of up to 10 items, interleaved: two items from each concept due by `until`, overdue first, then new ones in roadmap order; or with `concept_id` repeated (a stage) those concepts' items. Items of the kinds the backend grades never carry their answer. |
