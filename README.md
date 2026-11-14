@@ -25,6 +25,13 @@ a local cross-encoder reranks the best of them. On a labelled set of 32
 questions this puts the right passage at the top far more often than either
 search alone, and "Show scoring" reveals how each result was ranked.
 
+A larger offline benchmark, in [`docs/evaluation/`](docs/evaluation/retrieval-benchmark.md),
+measures this on 80 questions over ten lecture documents written for it and
+read by the app's own pipeline: Recall@5, Recall@10, MRR and latency for
+semantic, keyword, hybrid and hybrid with reranking, and how well the
+summaries' citations support what they say. Every number in it is written by
+the benchmark; a script reproduces them.
+
 Every result cites exactly where it came from: the document, the version of
 its file, the pages and the passage. "Show in page" opens the citation, with
 the passage highlighted in its page.
@@ -322,6 +329,16 @@ set of questions; to print its table, from `api/`:
 python -m tests.retrieval_eval
 ```
 
+The larger benchmark (decision record 20) runs from the repository root, with
+the services up; it rebuilds its own database, the development database's
+name with `_eval` appended, and rewrites the tables in
+`docs/evaluation/retrieval-benchmark.md`:
+
+```sh
+python scripts/evaluate_retrieval.py                # retrieval, about twenty minutes
+python scripts/evaluate_retrieval.py --generation   # also the summaries, with Ollama
+```
+
 Python dependencies are pinned with pip-tools. Edit `api/requirements.in`, never
 `api/requirements.txt`, then from `api/`:
 
@@ -377,6 +394,7 @@ api/                    FastAPI backend
     storage.py          where uploaded files live on disk
     services/           business logic, no HTTP
     routers/            HTTP endpoints
+  evaluation/           the offline benchmark: corpus to PDFs, dataset checks, metrics, report
   migrations/           Alembic migrations
   tests/                pytest suite
   requirements.in       direct dependencies, edited by hand
@@ -388,6 +406,8 @@ web/                    Next.js frontend
   src/lib/              API client, types, config
 data/                   uploaded files and the model cache, never committed
 docs/architecture/      decision records
+docs/evaluation/        the benchmark's corpus, questions, key facts, results and report
+scripts/                evaluate_retrieval.py, which runs the benchmark
 docker-compose.yml      local Postgres and Redis
 .github/workflows/      CI
 ```
