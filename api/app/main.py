@@ -30,6 +30,7 @@ from app.routers import (
     search,
     sources,
     summaries,
+    updates,
 )
 from app.routers.deps import LLMDep
 
@@ -62,6 +63,7 @@ app.include_router(graph.router, prefix="/api")
 app.include_router(roadmap.router, prefix="/api")
 app.include_router(practice.router, prefix="/api")
 app.include_router(plan.router, prefix="/api")
+app.include_router(updates.router, prefix="/api")
 
 
 class Health(BaseModel):
