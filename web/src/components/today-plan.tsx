@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { Empty, Loading, LoadError } from "@/components/query-states";
 import { useBudget, usePlan } from "@/hooks/use-plan";
 import { usePractice, usePreparePractice } from "@/hooks/use-practice";
 import type { PlanSession } from "@/lib/types";
@@ -57,16 +58,19 @@ export function TodayPlan({ environmentId }: { environmentId: string }) {
         </label>
       </div>
       {query.isPending ? (
-        <p className="text-sm text-zinc-500">Working out today&apos;s plan…</p>
+        <Loading what="today's plan" lines={3} />
       ) : query.isError ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          Could not work out today&apos;s plan: {query.error.message}
-        </p>
+        <LoadError
+          what="today's plan"
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
       ) : query.data.sessions.length === 0 && query.data.later.length === 0 ? (
-        <p className="text-sm text-zinc-500">
+        <Empty>
           Nothing planned today. Once materials are read and practice is prepared,
           today&apos;s reviews and next steps appear here.
-        </p>
+        </Empty>
       ) : (
         <>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">

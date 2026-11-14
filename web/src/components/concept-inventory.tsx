@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
+import { Loading, LoadError } from "@/components/query-states";
 import { useConcepts, useRequestConcepts } from "@/hooks/use-concepts";
 import type { Concept, ExtractionState } from "@/lib/types";
 
@@ -30,14 +31,15 @@ export function ConceptInventory({
   const query = useConcepts(environmentId);
   const [filter, setFilter] = useState("");
 
-  if (query.isPending) {
-    return <p className="text-zinc-500">Loading concepts…</p>;
-  }
+  if (query.isPending) return <Loading what="concepts" lines={4} />;
   if (query.isError) {
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not load concepts: {query.error.message}
-      </p>
+      <LoadError
+        what="concepts"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
     );
   }
   const { concepts, documents } = query.data;

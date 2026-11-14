@@ -7,6 +7,7 @@
 // cited passage in its page; then its sources and any documents left out.
 
 import { CitedPoints } from "@/components/cited-points";
+import { Loading, LoadError } from "@/components/query-states";
 import {
   useEnvironmentSummary,
   useRequestEnvironmentSummary,
@@ -32,14 +33,15 @@ export function EnvironmentSummary({ environmentId }: { environmentId: string })
   const query = useEnvironmentSummary(environmentId);
   const update = useRequestEnvironmentSummary(environmentId);
 
-  if (query.isPending) {
-    return <p className="text-zinc-500">Loading the summary…</p>;
-  }
+  if (query.isPending) return <Loading what="the summary" lines={4} />;
   if (query.isError) {
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not load the summary: {query.error.message}
-      </p>
+      <LoadError
+        what="the summary"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
     );
   }
   const { state, waiting_for, error, summary, not_included, earlier_versions } =

@@ -8,6 +8,7 @@
 // checked against the material itself.
 
 import { CitedPoints } from "@/components/cited-points";
+import { Loading, LoadError } from "@/components/query-states";
 import { formatDateTime } from "@/lib/format";
 import type { CurrentSummary } from "@/lib/types";
 
@@ -15,6 +16,8 @@ export function DocumentSummaryPanel({
   environmentId,
   summary,
   loadError,
+  onReload,
+  reloading,
   onTryAgain,
   retrying,
   retryError,
@@ -22,20 +25,23 @@ export function DocumentSummaryPanel({
   environmentId: string;
   summary: CurrentSummary | null | undefined;
   loadError: Error | null;
+  onReload: () => void;
+  reloading: boolean;
   onTryAgain: () => void;
   retrying: boolean;
   retryError: Error | null;
 }) {
   if (loadError) {
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        Could not load the summary: {loadError.message}
-      </p>
+      <LoadError
+        what="the summary"
+        error={loadError}
+        onRetry={onReload}
+        retrying={reloading}
+      />
     );
   }
-  if (summary === undefined) {
-    return <p className="text-sm text-zinc-500">Loading the summary…</p>;
-  }
+  if (summary === undefined) return <Loading what="the summary" lines={3} />;
   if (summary === null || summary.status === "pending") {
     return (
       <p className="text-sm text-zinc-500" role="status">

@@ -7,6 +7,7 @@
 // relationships, what was updated and what was left as it was. Earlier
 // updates are listed below, each opening to its own report.
 
+import { LoadError } from "@/components/query-states";
 import { useUpdates } from "@/hooks/use-updates";
 import { formatDateTime } from "@/lib/format";
 import type { MaterialUpdate, RelationshipNote, UpdateStep } from "@/lib/types";
@@ -34,6 +35,16 @@ const RELATION: Record<RelationshipNote["type"], string> = {
 
 export function MaterialUpdates({ environmentId }: { environmentId: string }) {
   const query = useUpdates(environmentId);
+  if (query.isError) {
+    return (
+      <LoadError
+        what="the history of changes"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
+    );
+  }
   if (!query.data || query.data.length === 0) return null;
   const [latest, ...earlier] = query.data;
 

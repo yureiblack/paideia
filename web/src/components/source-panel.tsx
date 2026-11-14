@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, type Ref } from "react";
 
+import { Loading, LoadError } from "@/components/query-states";
 import { usePreview } from "@/hooks/use-sources";
 import type { SourcePage } from "@/lib/types";
 
@@ -33,14 +34,15 @@ export function SourcePanel({
     }
   }, [preview.data]);
 
-  if (preview.isPending) {
-    return <p className="text-sm text-zinc-500">Loading the page…</p>;
-  }
+  if (preview.isPending) return <Loading what="the page" lines={4} />;
   if (preview.isError) {
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        {preview.error.message}
-      </p>
+      <LoadError
+        what="the page"
+        error={preview.error}
+        onRetry={() => void preview.refetch()}
+        retrying={preview.isFetching}
+      />
     );
   }
   const { citation, pages } = preview.data;

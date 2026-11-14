@@ -15,6 +15,7 @@ import { CitationChips } from "@/components/cited-points";
 import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
 import { StagePractice } from "@/components/stage-practice";
+import { Loading, LoadError } from "@/components/query-states";
 import { useRequestRoadmap, useRoadmap } from "@/hooks/use-roadmap";
 import type { RoadmapConcept, RoadmapStage, RoadmapState } from "@/lib/types";
 
@@ -22,14 +23,15 @@ export function LearningRoadmap({ environmentId }: { environmentId: string }) {
   const query = useRoadmap(environmentId);
   const update = useRequestRoadmap(environmentId);
 
-  if (query.isPending) {
-    return <p className="text-zinc-500">Loading the roadmap…</p>;
-  }
+  if (query.isPending) return <Loading what="the roadmap" lines={4} />;
   if (query.isError) {
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not load the roadmap: {query.error.message}
-      </p>
+      <LoadError
+        what="the roadmap"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
     );
   }
   const { state, stages, cycles } = query.data;

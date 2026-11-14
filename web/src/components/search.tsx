@@ -10,6 +10,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Empty, Loading, LoadError } from "@/components/query-states";
 import { useSearch } from "@/hooks/use-search";
 import { pagesLabel, SourcePanel } from "@/components/source-panel";
 import {
@@ -77,16 +78,19 @@ export function Search({ environmentId }: { environmentId: string }) {
           reading.
         </p>
       ) : search.isPending ? (
-        <p className="text-zinc-500">Searching…</p>
+        <Loading what="results" lines={4} />
       ) : search.isError ? (
-        <p role="alert" className="text-red-600 dark:text-red-400">
-          Search failed: {search.error.message}
-        </p>
+        <LoadError
+          what="results"
+          error={search.error}
+          onRetry={() => void search.refetch()}
+          retrying={search.isFetching}
+        />
       ) : search.data.results.length === 0 ? (
-        <p className="text-zinc-500">
+        <Empty>
           Nothing to search yet. Upload materials and wait for them to finish
           reading.
-        </p>
+        </Empty>
       ) : (
         <>
           <ol className="flex flex-col gap-3" aria-label="Search results">

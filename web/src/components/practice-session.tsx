@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
+import { Loading, LoadError } from "@/components/query-states";
 import { useAnswer, usePracticeSession } from "@/hooks/use-practice";
 import { formatDateTime } from "@/lib/format";
 import type { AttemptInput, AttemptResult, PracticeItem, PracticeKind } from "@/lib/types";
@@ -37,12 +38,24 @@ export function PracticeSession({
   const [index, setIndex] = useState(0);
   const [results, setResults] = useState<AttemptResult[]>([]);
 
-  if (query.isPending) return <p className="text-zinc-500">Starting practice…</p>;
+  if (query.isPending) return <Loading what="the practice items" lines={4} />;
   if (query.isError) {
     return (
-      <p role="alert" className="text-red-600 dark:text-red-400">
-        Could not start practice: {query.error.message}
-      </p>
+      <div className="flex flex-col items-start gap-3">
+        <LoadError
+          what="the practice items"
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
+        <button
+          type="button"
+          onClick={onDone}
+          className="text-sm underline decoration-zinc-400 underline-offset-2 hover:decoration-current dark:decoration-zinc-500"
+        >
+          Back to practice
+        </button>
+      </div>
     );
   }
   const items = query.data;
