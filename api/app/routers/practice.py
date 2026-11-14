@@ -46,6 +46,7 @@ from app.schemas import (
     AttemptResult,
     PracticeItem,
     PracticeOverview,
+    PracticeSessionRead,
     PrepareRequest,
 )
 from app.services import jobs
@@ -80,6 +81,18 @@ def read_practice(
     until: UntilQuery = None,
 ) -> PracticeOverview:
     return service.overview(session, environment, llm, until=aware_until(until))
+
+
+@router.get(
+    "/environments/{environment_id}/practice/history",
+    response_model=list[PracticeSessionRead],
+)
+def read_history(
+    environment: EnvironmentDep, session: SessionDep
+) -> list[PracticeSessionRead]:
+    """The last practice sessions, newest first, worked out from the
+    answers (decision record 19)."""
+    return service.history(session, environment.id)
 
 
 def aware_until(until: datetime | None) -> datetime | None:

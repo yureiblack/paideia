@@ -479,7 +479,9 @@ class PracticeConcept(BaseModel):
     review comes by the end of the learner's day) or scheduled, and null
     without items; exposures, recalled and failed count answers; gap_days is
     the current gap between reviews; attention says why it needs attention,
-    if it does."""
+    if it does; strong is true when it was recalled on its last answer after
+    a gap of four days or more (the Practice tab's "recently strong", and a
+    roadmap stage's progress)."""
 
     concept_id: uuid.UUID
     name: str
@@ -495,6 +497,20 @@ class PracticeConcept(BaseModel):
     gap_days: int | None
     next_review_at: datetime | None
     attention: str | None
+    strong: bool
+
+
+class PracticeSessionRead(BaseModel):
+    """One practice session, worked out from the answers: nothing records a
+    session, so answers less than 30 minutes apart belong to the same one.
+    started_at and ended_at are its first and last answers; recalled counts
+    the answers that were right; concepts are in the order first answered."""
+
+    started_at: datetime
+    ended_at: datetime
+    answers: int
+    recalled: int
+    concepts: list[ConceptRef]
 
 
 class ConceptNote(BaseModel):
