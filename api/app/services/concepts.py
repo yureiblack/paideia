@@ -174,7 +174,9 @@ def _propose(
             max_concepts=MAX_CONCEPTS,
         )
         generated = llm.generate_structured(prompt, answer_schema(numbers))
-        proposals += generated.value.concepts
+        # answer_schema builds its classes at run time, so the checker knows
+        # only that the answer is a BaseModel, not which fields it has.
+        proposals += generated.value.concepts  # type: ignore[attr-defined]
         given.update(numbers)
         seconds += generated.seconds
     return proposals, given, seconds
@@ -193,7 +195,7 @@ def write_extraction(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":
                 return
-            document = session.get(Document, artifact.document_id)
+            document = summaries.document_of(session, artifact)
             plan = (
                 summaries.plan(session, document)
                 if document.status == "ready"
@@ -221,7 +223,9 @@ def write_extraction(
             artifact.status = "generating"
             session.commit()
 
-        problem, kept, proposed_count, dropped, seconds = None, [], 0, 0, None
+        problem: str | None = None
+        kept: list[naming.ValidConcept] = []
+        proposed_count, dropped, seconds = 0, 0, 0.0
         try:
             proposals, given, seconds = _propose(filename, sections, llm)
             kept, dropped = naming.validate(proposals, given)
@@ -236,7 +240,7 @@ def write_extraction(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "generating":
                 return
-            document = session.get(Document, artifact.document_id)
+            document = summaries.document_of(session, artifact)
             if problem is None and (
                 document.status != "ready"
                 or summaries.plan(session, document).source_version

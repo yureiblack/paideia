@@ -102,11 +102,14 @@ class Draft:
 
 
 def short_answer(question: str, answer: str, sources: Sequence[int]) -> Draft | str:
-    question, answer = tidy(question, QUESTION_CHARS), tidy(answer, ANSWER_CHARS)
-    if not question or not answer:
+    clean_question = tidy(question, QUESTION_CHARS)
+    clean_answer = tidy(answer, ANSWER_CHARS)
+    if not clean_question or not clean_answer:
         return "formatting, a mention of passages, or too long"
-    content = {"question": question, "answer": answer}
-    return Draft("short_answer", content, tuple(sources), f"{question} {answer}")
+    content = {"question": clean_question, "answer": clean_answer}
+    return Draft(
+        "short_answer", content, tuple(sources), f"{clean_question} {clean_answer}"
+    )
 
 
 def multiple_choice(
@@ -119,10 +122,11 @@ def multiple_choice(
 ) -> Draft | str:
     """correct counts from 1, as the model gives it. Stored options are
     shuffled with seed, and correct becomes their index from 0."""
-    question = tidy(question, QUESTION_CHARS)
-    explanation = tidy(explanation, ANSWER_CHARS)
-    cleaned = [tidy(_NUMBERING.sub("", option), OPTION_CHARS) for option in options]
-    if not question or not explanation or not all(cleaned):
+    clean_question = tidy(question, QUESTION_CHARS)
+    clean_explanation = tidy(explanation, ANSWER_CHARS)
+    tidied = [tidy(_NUMBERING.sub("", option), OPTION_CHARS) for option in options]
+    cleaned = [option for option in tidied if option]
+    if not clean_question or not clean_explanation or len(cleaned) != len(tidied):
         return "formatting, a mention of passages, or too long"
     if len(cleaned) != OPTIONS or not 1 <= correct <= OPTIONS:
         return "not four options with one correct"
@@ -131,36 +135,38 @@ def multiple_choice(
     order = list(range(OPTIONS))
     random.Random(seed).shuffle(order)
     content = {
-        "question": question,
+        "question": clean_question,
         "options": [cleaned[i] for i in order],
         "correct": order.index(correct - 1),
-        "explanation": explanation,
+        "explanation": clean_explanation,
     }
-    return Draft(
-        "multiple_choice", content, tuple(sources), f"{question} {cleaned[correct - 1]}"
-    )
+    claim = f"{clean_question} {cleaned[correct - 1]}"
+    return Draft("multiple_choice", content, tuple(sources), claim)
 
 
 def true_false(
     statement: str, truth: bool, explanation: str, sources: Sequence[int], wanted: bool
 ) -> Draft | str:
-    statement = tidy(statement, QUESTION_CHARS)
-    explanation = tidy(explanation, ANSWER_CHARS)
-    if not statement or not explanation:
+    clean_statement = tidy(statement, QUESTION_CHARS)
+    clean_explanation = tidy(explanation, ANSWER_CHARS)
+    if not clean_statement or not clean_explanation:
         return "formatting, a mention of passages, or too long"
     if truth != wanted:
         return "not the truth asked for"
-    content = {"statement": statement, "truth": truth, "explanation": explanation}
-    return Draft("true_false", content, tuple(sources), statement)
+    content = {
+        "statement": clean_statement,
+        "truth": truth,
+        "explanation": clean_explanation,
+    }
+    return Draft("true_false", content, tuple(sources), clean_statement)
 
 
 def flashcard(front: str, back: str, sources: Sequence[int]) -> Draft | str:
-    front, back = tidy(front, FRONT_CHARS), tidy(back, ANSWER_CHARS)
-    if not front or not back:
+    clean_front, clean_back = tidy(front, FRONT_CHARS), tidy(back, ANSWER_CHARS)
+    if not clean_front or not clean_back:
         return "formatting, a mention of passages, or too long"
-    return Draft(
-        "flashcard", {"front": front, "back": back}, tuple(sources), f"{front} {back}"
-    )
+    content = {"front": clean_front, "back": clean_back}
+    return Draft("flashcard", content, tuple(sources), f"{clean_front} {clean_back}")
 
 
 def wanted_truth(key: str) -> bool:

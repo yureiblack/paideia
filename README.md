@@ -127,6 +127,13 @@ in an `X-Request-ID` header and in every error body, and the jobs it queues
 carry it into the worker's logs; the page shows it as a "Reference" under
 an error. Decision record 21 audits each risk and the test that covers it.
 
+Every pull request is checked in three jobs: the backend's lint, types,
+migrations and tests; the frontend's lint, types, component tests and build;
+and an end-to-end test in a real browser that walks a learner's journey
+through the running app, from creating an environment to a second PDF
+updating it. Coverage is reported, never enforced. Decision record 22 says
+what each kind of test covers, and what no test in CI does.
+
 Each environment's Overview tab shows today's recommended study plan, and the
 dashboard a line of it per environment. It is worked out by fixed rules,
 never by the model: first the concepts missed lately, to strengthen while the
@@ -158,9 +165,9 @@ nothing yet.
 | PDF reading | PyMuPDF |
 | Embeddings and reranking | fastembed (ONNX Runtime) running BAAI/bge-small-en-v1.5 and ms-marco-MiniLM-L-6-v2, locally |
 | Database | PostgreSQL 16 with pgvector |
-| Jobs | Redis, provisioned but not yet used |
+| Jobs | A job table in PostgreSQL, a worker process, Redis to wake it |
 | Language model | Ollama running ministral-3:8b locally, behind a replaceable provider interface |
-| Quality | Ruff, pytest, ESLint, TypeScript, GitHub Actions |
+| Quality | Ruff, mypy, pytest with coverage, ESLint, TypeScript, Vitest with Testing Library, Playwright, GitHub Actions |
 
 The reasoning behind these choices is in
 [docs/architecture/](docs/architecture/), starting with
@@ -328,35 +335,15 @@ Backend, from `api/` with the virtual environment active:
 ```sh
 ruff check --fix .   # lint
 ruff format .        # format
-pytest               # tests; needs docker compose up
+mypy                 # check the type annotations in app/
 ```
 
-The tests never touch your development database or your uploaded files. Each
-run drops and rebuilds a separate `paideia_test` database from the migrations,
-every test is rolled back when it finishes, and every test gets its own
-temporary data folder. Test PDFs are built in code, so the repository holds no
-binary files.
-
-Most tests use stand-ins for the models. A few load the real ones,
-including the roadmap's "process scheduling" test and the retrieval
-evaluation; they share the models in `data/models/`, so the first run
-downloads them. One test summarizes a document with the real language model;
-it runs only when Ollama is up with the model downloaded, and is skipped
-otherwise, including in CI. The evaluation scores each way of searching on a labelled
-set of questions; to print its table, from `api/`:
+Frontend, from `web/`:
 
 ```sh
-python -m tests.retrieval_eval
-```
-
-The larger benchmark (decision record 20) runs from the repository root, with
-the services up; it rebuilds its own database, the development database's
-name with `_eval` appended, and rewrites the tables in
-`docs/evaluation/retrieval-benchmark.md`:
-
-```sh
-python scripts/evaluate_retrieval.py                # retrieval, about twenty minutes
-python scripts/evaluate_retrieval.py --generation   # also the summaries, with Ollama
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
 Python dependencies are pinned with pip-tools. Edit `api/requirements.in`, never
@@ -378,17 +365,89 @@ alembic downgrade -1                                       # undo the latest one
 
 Always read a generated migration before applying it.
 
-Frontend, from `web/`:
+## Tests
+
+Postgres and Redis must be up (`docker compose up -d`). Nothing below
+touches your development database, your uploaded files or development's
+Redis database.
+
+Backend, from `api/`:
 
 ```sh
-pnpm lint
-pnpm typecheck
-pnpm build
+pytest                              # every backend test
+pytest --cov                        # the same, with a coverage summary
+pytest --cov --cov-report=html      # and a page per file in htmlcov/
 ```
 
-CI runs all of the above on every pull request, with a real pgvector Postgres
-behind the tests. It also applies the migrations and fails if a model changed
-without a migration to match, and keeps both models cached between runs.
+Each run drops and rebuilds a separate `paideia_test` database from the
+migrations, every test is rolled back when it finishes, and every test gets
+its own temporary data folder. Test PDFs are built in code, so the repository
+holds no binary files.
+
+Most tests use stand-ins for the models. A few load the real ones,
+including the roadmap's "process scheduling" test and the retrieval
+evaluation; they share the models in `data/models/`, so the first run
+downloads them. One test summarizes a document with the real language model;
+it runs only when Ollama is up with the model downloaded, and is skipped
+otherwise, including in CI. The evaluation scores each way of searching on a
+labelled set of questions; to print its table, from `api/`:
+
+```sh
+python -m tests.retrieval_eval
+```
+
+Frontend component tests, from `web/`. They run in a simulated browser with
+the API's answers given by each test:
+
+```sh
+pnpm test               # once
+pnpm test:watch         # again on every change
+pnpm test:coverage      # with a coverage report in coverage/
+```
+
+The end-to-end test walks one learner's journey through the running app in a
+real browser: create an environment, upload a PDF, wait for it to be read,
+search it, open a citation, read the summary, the knowledge map and the
+roadmap, answer a practice item, see its review scheduled, add a second PDF
+and see what it changed. From `web/`, once:
+
+```sh
+pnpm exec playwright install chromium
+```
+
+then each time:
+
+```sh
+pnpm e2e
+```
+
+It starts its own API, worker and page, on ports 8100 and 3100, with their own
+database (`paideia_e2e`), data folder (`web/e2e/.state/`) and Redis database,
+so it can run while the development servers are up; they are emptied at the
+start of every run. Everything is real except the language model, which is a
+stand-in (`api/tests/e2e/`), since the local model cannot run in CI. A run
+takes about half a minute once the page is built.
+
+CI runs on every pull request and every push to main, in three jobs: the
+backend (lint, format, types, migrations, the check that models match them,
+and the tests with coverage), the frontend (lint, types, component tests with
+coverage, build) and the end-to-end test. Coverage reports are kept with each
+run, and summarized on its page; no percentage fails a build. A test that
+fails is never retried: the end-to-end test keeps its trace and report when
+it fails.
+
+Not in CI: the real language model, and the larger benchmark (decision
+record 20), which takes about twenty minutes. It runs from the repository
+root, with the services up; it rebuilds its own database, the development
+database's name with `_eval` appended, and rewrites the tables in
+`docs/evaluation/retrieval-benchmark.md`:
+
+```sh
+python scripts/evaluate_retrieval.py                # retrieval, about twenty minutes
+python scripts/evaluate_retrieval.py --generation   # also the summaries, with Ollama
+```
+
+Decision record 22 maps every kind of test to the files that hold it.
 
 ## Layout
 
@@ -421,13 +480,17 @@ api/                    FastAPI backend
   evaluation/           the offline benchmark: corpus to PDFs, dataset checks, metrics, report
   migrations/           Alembic migrations
   tests/                pytest suite
+    e2e/                the API and worker as the end-to-end test runs them
+  pyproject.toml        mypy and coverage settings
   requirements.in       direct dependencies, edited by hand
   requirements.txt      every dependency pinned, generated
 web/                    Next.js frontend
   src/app/              pages and layouts
-  src/components/       UI pieces
+  src/components/       UI pieces, with their tests beside them
   src/hooks/            data fetching
   src/lib/              API client, types, config
+  src/test/             what the component tests share
+  e2e/                  the end-to-end journey (Playwright)
 data/                   uploaded files and the model cache, never committed
 docs/architecture/      decision records
 docs/evaluation/        the benchmark's corpus, questions, key facts, results and report

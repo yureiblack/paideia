@@ -463,10 +463,15 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
     """Run a claimed job's steps in order, recording progress, then how it
     ended. Each step is marked done as it completes, so a job run again,
     after a crash or a worker's stop, starts at its first step not done. A
-    crash is retried later, up to the job's attempts."""
+    crash is retried later, up to the job's attempts.
+
+    Deleting an environment deletes its jobs, a running one too: a job whose
+    row is gone stops where it is, with nothing left to record."""
     factory = tools.session_factory
     with factory() as session:
         job = session.get(Job, job_id)
+        if job is None:  # deleted with its environment since it was claimed
+            return
         steps, update_id = list(job.steps), job.update_id
         title, request = job.title, job.request_id
     # Every log line written while the job runs carries these (app/logs.py).
@@ -485,17 +490,25 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
     finally:
         with factory() as session:
             ended = session.get(Job, job_id)
-            logger.info(
-                "Job %s: %s",
-                ended.status,
-                title,
-                extra={
-                    "title": title,
-                    "status": ended.status,
-                    "reason": ended.error,
-                    "ms": round(1000 * (time.perf_counter() - started)),
-                },
-            )
+            ms = round(1000 * (time.perf_counter() - started))
+            if ended is None:
+                logger.info(
+                    "Job deleted with its environment: %s",
+                    title,
+                    extra={"title": title, "ms": ms},
+                )
+            else:
+                logger.info(
+                    "Job %s: %s",
+                    ended.status,
+                    title,
+                    extra={
+                        "title": title,
+                        "status": ended.status,
+                        "reason": ended.error,
+                        "ms": ms,
+                    },
+                )
         for var, token in reversed(tokens):
             var.reset(token)
 
@@ -508,6 +521,8 @@ def _run(tools: Tools, job_id: uuid.UUID, steps: list, update_id) -> None:
                 continue
             with factory() as session:
                 job = session.get(Job, job_id, with_for_update=True)
+                if job is None:  # deleted with its environment
+                    return
                 if job.cancel_requested:
                     _end_cancelled(session, job, datetime.now(UTC), was_running=True)
                     session.commit()
@@ -548,12 +563,16 @@ def _run(tools: Tools, job_id: uuid.UUID, steps: list, update_id) -> None:
             steps[index] = {**spec, "done": True}
             with factory() as session:
                 job = session.get(Job, job_id, with_for_update=True)
+                if job is None:  # deleted with its environment
+                    return
                 job.steps = list(steps)
                 session.commit()
     except Exception:
         logger.exception("Job %s failed", job_id)
         with factory() as session:
             job = session.get(Job, job_id, with_for_update=True)
+            if job is None:  # deleted with its environment, perhaps the cause
+                return
             _retry_or_fail(
                 job, datetime.now(UTC), "An unexpected error stopped this job."
             )
@@ -562,6 +581,8 @@ def _run(tools: Tools, job_id: uuid.UUID, steps: list, update_id) -> None:
         return
     with factory() as session:
         job = session.get(Job, job_id, with_for_update=True)
+        if job is None:  # deleted with its environment
+            return
         error = _outcome(session, job)
         job.status = "failed" if error else "succeeded"
         job.error = error

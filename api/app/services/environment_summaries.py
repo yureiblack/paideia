@@ -255,7 +255,7 @@ def write_environment_summary(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":
                 return
-            environment = session.get(Environment, artifact.environment_id)
+            environment = summaries.environment_of(session, artifact)
             inputs = gather(session, environment, llm)
             if (
                 inputs.waiting_for
@@ -271,8 +271,11 @@ def write_environment_summary(
             citations: list[dict] = []
             parts = []
             for doc, summary in inputs.included:
+                summarized = summary.content
+                if summarized is None:  # written with its status, in one commit
+                    raise RuntimeError("A ready document summary has no content.")
                 points = []
-                for kp in summary.content["key_points"]:
+                for kp in summarized["key_points"]:
                     cited = []
                     for citation in kp["citations"]:
                         key = citation["chunk_id"]
@@ -284,7 +287,7 @@ def write_environment_summary(
                 parts.append(
                     _Part(
                         title=f"Document: {doc.filename}",
-                        overview=summary.content["overview"],
+                        overview=summarized["overview"],
                         points=points,
                     )
                 )
@@ -292,11 +295,15 @@ def write_environment_summary(
             artifact.status = "generating"
             session.commit()
 
-        problem, content, seconds = None, None, None
+        problem: str | None = None
+        content: dict | None = None
+        seconds = 0.0
         try:
             answer, seconds = _compose(name, parts, llm)
+            # answer is an instance of a class summaries.answer_schema builds
+            # at run time, so the checker does not know its fields.
             content = {
-                "overview": answer.overview,
+                "overview": answer.overview,  # type: ignore[attr-defined]
                 "key_points": [
                     {
                         "text": kp.point,
@@ -304,7 +311,7 @@ def write_environment_summary(
                             citations[n - 1] for n in dict.fromkeys(kp.sources)
                         ],
                     }
-                    for kp in answer.key_points
+                    for kp in answer.key_points  # type: ignore[attr-defined]
                 ],
             }
         except LLMError as exc:
@@ -339,7 +346,7 @@ def refresh_environment_summary(
             return
         artifact, write_now = request_environment_summary(session, environment, llm)
         artifact_id = artifact.id if artifact else None
-    if write_now:
+    if write_now and artifact_id is not None:  # write_now comes with one
         write_environment_summary(session_factory, artifact_id, llm)
 
 
@@ -388,6 +395,7 @@ def state(
         current = _find(session, environment, inputs.source_version, llm.model_name)
     newest_ready = next((a for a in all_summaries if a.status == "ready"), None)
 
+    error = None
     if inputs.waiting_for:
         label = "waiting"
     elif not inputs.included:
@@ -397,7 +405,7 @@ def state(
     elif current.status in ("pending", "generating"):
         label = "updating"
     elif current.status == "failed":
-        label = "failed"
+        label, error = "failed", current.error
     else:
         label = "up_to_date"
 
@@ -409,7 +417,7 @@ def state(
     return EnvironmentSummaryState(
         state=label,
         waiting_for=inputs.waiting_for,
-        error=current.error if label == "failed" else None,
+        error=error,
         summary=(
             to_read(shown, current=current is not None and shown.id == current.id)
             if shown

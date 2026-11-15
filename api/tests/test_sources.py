@@ -189,3 +189,22 @@ def test_a_passage_that_no_longer_exists_has_no_preview(
 
     assert sources.preview(session, chunk_id) is None
     assert sources.preview(session, uuid.uuid4()) is None
+
+
+def test_a_passage_whose_document_goes_meanwhile_has_no_preview(
+    session: Session, session_factory, monkeypatch
+):
+    lecture = processed(session, session_factory)
+    chunk_id = chunks_of(session, lecture)[0].id
+    # As when the document is deleted, and committed, between reading the
+    # passage and reading its document.
+    real_get = session.get
+    monkeypatch.setattr(
+        session,
+        "get",
+        lambda model, ident, **kw: (
+            None if model is Document else real_get(model, ident, **kw)
+        ),
+    )
+
+    assert sources.preview(session, chunk_id) is None

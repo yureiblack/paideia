@@ -31,7 +31,7 @@ a smaller one after it may still fit.
 
 import math
 import statistics
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -105,7 +105,7 @@ class Plan:
         return sum(s.minutes for s in self.sessions)
 
 
-def pace(timed: dict[str, Sequence[float]]) -> dict[str, float]:
+def pace(timed: Mapping[str, Sequence[float]]) -> dict[str, float]:
     """Seconds per answer, by kind of item: the learner's own median once
     they have OWN_PACE_AFTER timed answers of a kind, otherwise the
     default."""
@@ -242,8 +242,10 @@ def build(
         )
         used.update(c.id for c in fresh)
 
+    # Recent documents nothing has been practised from, each with the number
+    # of words in its summary.
     recent = [
-        d
+        (d, d.summary_words)
         for d in documents
         if d.summary_words
         and now - d.added_at <= RECENT
@@ -251,13 +253,13 @@ def build(
         and all(by_id[i].exposures == 0 for i in d.concepts if i in by_id)
         and not set(d.concepts) <= used
     ]
-    recent.sort(key=lambda d: (d.added_at, str(d.id)), reverse=True)
-    for document in recent[:SKIMS]:
+    recent.sort(key=lambda pair: (pair[0].added_at, str(pair[0].id)), reverse=True)
+    for document, words in recent[:SKIMS]:
         sessions.append(
             Session(
                 kind="skim",
                 title=f"Skim: {document.filename}",
-                minutes=_minutes(document.summary_words / READING_WPM * 60),
+                minutes=_minutes(words / READING_WPM * 60),
                 rationale=(
                     f"Added {_days(now - document.added_at)}, and none of its "
                     f"{_concepts(len(document.concepts))} practised yet. Its summary "

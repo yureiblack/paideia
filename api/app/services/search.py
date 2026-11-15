@@ -23,7 +23,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import Text, cast, func, literal_column, select, text
+from sqlalchemy import ColumnClause, Text, cast, func, literal_column, select, text
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import Session
 
@@ -35,7 +35,8 @@ from app.services.sources import with_heading
 
 # The text-search configuration chunks are indexed with. Must match the one in
 # models.SEARCH_VECTOR, or queries would be stemmed differently from the text.
-_SEARCH_CONFIG = literal_column("'english'::regconfig")
+# Its value is a configuration's name, so it is typed as text.
+_SEARCH_CONFIG: ColumnClause[str] = literal_column("'english'::regconfig")
 
 # A query written in search syntax: a "quoted phrase", the word OR, or a
 # -word to exclude. A hyphen inside a word, as in C-SCAN, does not count.
@@ -275,9 +276,11 @@ def hybrid_search(
     for rank, hit in enumerate(lexical, start=1):
         candidate = found.setdefault(hit.chunk.id, Candidate(hit.chunk, hit.filename))
         candidate.lexical_rank, candidate.lexical_score = rank, hit.score
-    for rank, hit in enumerate(dense, start=1):
-        candidate = found.setdefault(hit.chunk.id, Candidate(hit.chunk, hit.filename))
-        candidate.semantic_rank, candidate.semantic_score = rank, hit.score
+    for rank, dense_hit in enumerate(dense, start=1):
+        candidate = found.setdefault(
+            dense_hit.chunk.id, Candidate(dense_hit.chunk, dense_hit.filename)
+        )
+        candidate.semantic_rank, candidate.semantic_score = rank, dense_hit.score
 
     fused = reciprocal_rank_fusion(
         [[hit.chunk.id for hit in lexical], [hit.chunk.id for hit in dense]]

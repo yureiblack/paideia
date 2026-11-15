@@ -15,8 +15,9 @@ Tables so far: environments, documents, document_pages, document_chunks.
 """
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -71,7 +72,7 @@ class Environment(Base):
 
     # Values the database generates (id, timestamps) come back in the same
     # INSERT or UPDATE statement through RETURNING, instead of a second query.
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -117,7 +118,7 @@ class Document(Base):
             "status IN ('uploaded', 'processing', 'ready', 'failed')", name="status"
         ),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -302,7 +303,7 @@ class GeneratedArtifact(Base):
             postgresql_where=text("document_id IS NULL"),
         ),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -350,7 +351,7 @@ class Concept(Base):
 
     __tablename__ = "concepts"
     __table_args__ = (UniqueConstraint("environment_id", "normalized_name"),)
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -435,7 +436,7 @@ class RelationshipDecision(Base):
         ),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence"),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -481,7 +482,7 @@ class ConceptRelationship(Base):
             unique=True,
         ),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -543,7 +544,7 @@ class LearningItem(Base):
         ),
         CheckConstraint("difficulty BETWEEN 1 AND 3", name="difficulty"),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -599,7 +600,7 @@ class Attempt(Base):
         CheckConstraint("graded_by IN ('key', 'learner')", name="graded_by"),
         CheckConstraint("seconds IS NULL OR seconds >= 0", name="seconds"),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -649,7 +650,7 @@ class MaterialUpdate(Base):
             "status IN ('running', 'done', 'failed', 'cancelled')", name="status"
         ),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
@@ -707,7 +708,7 @@ class Job(Base):
             postgresql_where=text("status IN ('queued', 'running')"),
         ),
     )
-    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")

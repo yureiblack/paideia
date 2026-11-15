@@ -121,15 +121,16 @@ def passage(
 
 def _pieces(pages: list[ParsedPage]) -> Iterator[_Piece]:
     for page in pages:
-        blocks = page.blocks
-        if not blocks and page.text.strip():
+        # Each block as (start, end, is_heading).
+        spans: tuple[tuple[int, int, bool], ...]
+        if not page.blocks and page.text.strip():
             # A parser that cannot tell paragraphs apart: the page is one.
             stripped = page.text.strip()
             start = page.text.index(stripped)
-            blocks = ((start, start + len(stripped), False),)
+            spans = ((start, start + len(stripped), False),)
         else:
-            blocks = tuple((b.start, b.end, b.is_heading) for b in blocks)
-        for start, end, is_heading in blocks:
+            spans = tuple((b.start, b.end, b.is_heading) for b in page.blocks)
+        for start, end, is_heading in spans:
             if is_heading or end - start <= MAX_CHARS:
                 yield _Piece(page.number, start, end, page.text[start:end], is_heading)
                 continue

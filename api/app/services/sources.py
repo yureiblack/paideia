@@ -74,6 +74,8 @@ def preview(session: Session, chunk_id: uuid.UUID) -> SourcePreview | None:
     if chunk is None:
         return None
     document = session.get(Document, chunk.document_id)
+    if document is None:  # deleted, with its chunks, since the chunk was read
+        return None
     stored = session.scalars(
         select(DocumentPage)
         .where(

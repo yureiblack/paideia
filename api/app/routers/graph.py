@@ -72,7 +72,7 @@ def request_graph(
             detail="There are no connected concepts to build a graph from yet.",
         )
     session.commit()  # end this read before the background task (record 09)
-    if write_now:
+    if write_now and artifact is not None:  # write_now comes with one
         jobs.queue_model_work(
             session,
             environment.id,

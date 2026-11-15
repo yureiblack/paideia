@@ -124,7 +124,8 @@ def ordered(
     """A topological order (Kahn's algorithm): every (a, b) in before puts a
     ahead of b. Among the items free to come next, the smallest key comes
     first, so the order is always the same. Raises ValueError on a cycle."""
-    after, waiting = defaultdict(set), dict.fromkeys(items, 0)
+    after: defaultdict[Hashable, set[Hashable]] = defaultdict(set)
+    waiting = dict.fromkeys(items, 0)
     for a, b in before:
         if b not in after[a]:
             after[a].add(b)
@@ -220,7 +221,7 @@ def build(nodes: Iterable[Node], links: Iterable[Link]) -> Roadmap:
     for loop in loops:
         for i in loop[1:]:
             groups.join(loop[0], i)
-    sizes = defaultdict(int)
+    sizes: defaultdict[uuid.UUID, int] = defaultdict(int)
     for i in ids:
         sizes[groups.find(i)] += 1
     by_home = defaultdict(list)
@@ -279,7 +280,7 @@ def build(nodes: Iterable[Node], links: Iterable[Link]) -> Roadmap:
             ):
                 continue
             whole, part = link.target, link.source
-            after = defaultdict(set)
+            after: defaultdict[Hashable, set[Hashable]] = defaultdict(set)
             for a, b in before:
                 after[a].add(b)
             if whole not in _reachable(after, part):  # no prerequisite says otherwise

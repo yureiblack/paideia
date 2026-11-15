@@ -100,7 +100,15 @@ def review(state: State, until: datetime) -> str:
     scheduled. For concepts that have practice items."""
     if state.exposures == 0:
         return "new"
-    return "due" if state.next_review_at <= until else "scheduled"
+    return "due" if _next_review(state) <= until else "scheduled"
+
+
+def _next_review(state: State) -> datetime:
+    """When an answered concept comes back. after() sets it with every
+    answer, so only a State built by hand could lack it."""
+    if state.next_review_at is None:
+        raise RuntimeError("An answered concept has no next review time.")
+    return state.next_review_at
 
 
 def attention(state: State) -> str | None:
@@ -146,11 +154,12 @@ def session(
     gives up to per_concept items, those in the lowest box and answered
     longest ago first, of different kinds where it can. At most limit items,
     interleaved."""
-    queue = []
+    # (overdue first, due time, place on the roadmap, tie-breaker, concept)
+    queue: list[tuple[int, float, int, str, Hashable]] = []
     for concept, state, place in due:
         status = review(state, until)
         if status == "due":
-            when = state.next_review_at.timestamp()
+            when = _next_review(state).timestamp()
             heapq.heappush(queue, (0, when, place, str(concept), concept))
         elif status == "new":
             heapq.heappush(queue, (1, 0.0, place, str(concept), concept))

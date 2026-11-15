@@ -57,7 +57,7 @@ def request_environment_summary(
         )
     # End this request's read before the background task starts (record 09).
     session.commit()
-    if write_now:
+    if write_now and artifact is not None:  # write_now comes with one
         jobs.queue_model_work(
             session,
             environment.id,
