@@ -116,6 +116,17 @@ three times, and any job can be cancelled. The jobs live in Postgres; Redis
 only wakes the worker. Every environment page shows its background work as
 it runs, with progress, the step it is on, and Cancel.
 
+The same work is never queued twice: the database refuses a second job doing
+what one already queued does. A job that stops without finishing settles what
+it was writing at once, and the worker sweeps away files no document accounts
+for, such as uploads a crash left half received. Uploaded names are cleaned
+before they are shown, PDFs longer than `MAX_PAGES` are refused, and a new
+version keeps the old file until the change is committed. The API and the
+worker log one JSON object per line. Every request gets an id that comes back
+in an `X-Request-ID` header and in every error body, and the jobs it queues
+carry it into the worker's logs; the page shows it as a "Reference" under
+an error. Decision record 21 audits each risk and the test that covers it.
+
 Each environment's Overview tab shows today's recommended study plan, and the
 dashboard a line of it per environment. It is worked out by fixed rules,
 never by the model: first the concepts missed lately, to strengthen while the
@@ -204,7 +215,11 @@ summaries, Ollama (on a Mac: `brew install ollama`).
    It reads uploaded documents and does all the language model's work,
    outside the API, so restarting the API loses nothing. Without it, uploads
    wait in the queue; the header says so. Stop it with Ctrl+C: it finishes
-   the step it is on and puts its job back for the next worker.
+   the step it is on and puts its job back for the next worker. At start and
+   every hour it removes files no document accounts for, and logs each one.
+
+   Both the API and the worker log JSON lines. For readable output while
+   working locally, put `LOG_FORMAT=text` in `.env`.
 
 5. Frontend, in another:
 
@@ -235,6 +250,11 @@ The frontend reads the same root `.env` as the backend. It needs nothing from it
 by default, since it assumes the API is at http://localhost:8000.
 
 ## Endpoints
+
+Every response carries an `X-Request-ID` header, and every error answers
+`{"detail": ..., "request_id": ...}` with the same id, which finds the
+request in the API's log. A caller may send its own `X-Request-ID`; it is
+kept if it is at most 64 letters, digits, dots, dashes and underscores.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -391,7 +411,11 @@ api/                    FastAPI backend
     learner.py          learner state per concept, from the answers, and its schedule
     planner.py          today's study plan, by fixed rules
     worker.py           the background job worker: python -m app.worker
-    storage.py          where uploaded files live on disk
+    storage.py          where uploaded files live on disk, and the sweep for leftovers
+    filenames.py        cleaning the names uploads are shown by
+    logs.py             JSON or text log lines, with the ids of the work in hand
+    correlation.py      request ids, one log line per request, error bodies
+    context.py          the request, job and update being worked on
     services/           business logic, no HTTP
     routers/            HTTP endpoints
   evaluation/           the offline benchmark: corpus to PDFs, dataset checks, metrics, report
