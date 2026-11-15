@@ -13,13 +13,18 @@ import uuid
 import pytest
 import redis
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.main import app
+from app.models import Job
 from app.parsing import ParseError
 from app.routers.deps import get_dispatcher
 from app.routers.documents import get_parser
 from app.services import jobs
+from tests import pdfs
 from tests.test_concepts_api import environment, upload
+from tests.test_documents_api import new_environment, uploaded
 from tests.test_graph_api import SCHEDULING
 from tests.test_practice_api import concept_ids
 
@@ -161,3 +166,32 @@ def test_redis_carries_signals_and_sees_workers():
     assert dispatcher.workers() == 1
     client.flushdb()
     assert jobs.RedisDispatcher("redis://localhost:1/0").workers() is None
+
+
+def test_a_document_queued_to_be_read_cannot_be_queued_again(
+    client: TestClient, session: Session
+):
+    # No worker picks anything up: the reading job stays queued.
+    app.dependency_overrides[get_dispatcher] = lambda: Workers(1)
+    env = new_environment(client)
+    document = uploaded(client, env, pdfs.pdf("Threads."))
+
+    again = client.post(f"/api/documents/{document['id']}/reprocess")
+    version = client.post(
+        f"/api/documents/{document['id']}/versions",
+        content=pdfs.pdf("Threads, revised."),
+        headers={"Content-Type": "application/pdf"},
+    )
+
+    assert (again.status_code, again.json()["detail"]) == (
+        409,
+        "This document is already queued to be read.",
+    )
+    assert version.status_code == 409
+    reads = session.scalars(select(Job).where(Job.kind == "read")).all()
+    assert len(reads) == 1
+
+    # Once it has been read, reading it again is allowed.
+    reads[0].status = "succeeded"
+    session.commit()
+    assert client.post(f"/api/documents/{document['id']}/reprocess").status_code == 202

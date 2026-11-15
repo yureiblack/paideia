@@ -682,6 +682,11 @@ class Job(Base):
     counts runs; a job that crashed, or whose worker stopped, is tried again
     after not_before, up to max_attempts. update_id links a job to the
     material update it carries out, if any.
+
+    key fingerprints what the job does, its kind and its steps; while a job
+    is queued or running no other job in the environment may have its key,
+    so the same work is never queued twice (record 21). request_id is the
+    request that queued it, for following one action through the logs.
     """
 
     __tablename__ = "jobs"
@@ -694,6 +699,13 @@ class Job(Base):
         CheckConstraint("progress BETWEEN 0 AND 100", name="progress"),
         CheckConstraint("attempts >= 0", name="attempts"),
         Index("ix_jobs_claim", "lane", "status", "created_at"),
+        Index(
+            "uq_jobs_active_key",
+            "environment_id",
+            "key",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
     )
     __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
 
@@ -710,6 +722,8 @@ class Job(Base):
         ForeignKey("jobs.id", ondelete="SET NULL")
     )
     kind: Mapped[str] = mapped_column(Text)
+    key: Mapped[str | None] = mapped_column(Text)
+    request_id: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text)
     lane: Mapped[str] = mapped_column(Text)
     steps: Mapped[list] = mapped_column(JSONB)

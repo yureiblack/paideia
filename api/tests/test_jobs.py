@@ -10,12 +10,14 @@ a running one before its next step.
 """
 
 import threading
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Job, MaterialUpdate
+from app.models import GeneratedArtifact, Job, MaterialUpdate
 from app.services import jobs
 from app.worker import Worker
 from tests.fakes import MockProvider
@@ -191,7 +193,7 @@ def test_a_stopped_workers_jobs_are_run_again_unless_kept_alive(
     jobs.claim(session, "model", "gone", now=NOW)
     jobs.claim(session, "read", "alive", now=NOW)
 
-    jobs.beat(session, "alive", now=NOW + timedelta(minutes=2))
+    jobs.beat(session, "alive", [kept.id], now=NOW + timedelta(minutes=2))
     found = jobs.recover(session, now=NOW + timedelta(minutes=3))
 
     session.expire_all()
@@ -327,3 +329,246 @@ def test_a_stopping_worker_puts_its_job_back_where_it_was(
     session.expire_all()
     assert session.get(Job, job.id).status == "succeeded"
     assert ran == ["a", "b", "c"]
+
+
+def test_the_same_work_is_never_queued_twice(session: Session, session_factory, ran):
+    env = environment(session)
+    dispatcher = Recording()
+    first = queue(
+        session, session_factory, env, "Once", [note("a")], dispatcher=dispatcher
+    )
+    again = queue(
+        session, session_factory, env, "Once again", [note("a")], dispatcher=dispatcher
+    )
+    other = queue(
+        session, session_factory, env, "Other", [note("b")], dispatcher=dispatcher
+    )
+
+    assert again.id == first.id
+    assert other.id != first.id
+    assert dispatcher.dispatched == [first.id, other.id]
+
+    claim_and_run(session, session_factory)  # the first one finishes
+    later = queue(session, session_factory, env, "Once more", [note("a")])
+
+    assert later.id != first.id
+    assert session.get(Job, first.id).status == "succeeded"
+
+
+def test_two_requests_at_the_same_moment_get_the_same_job(
+    session: Session, session_factory, ran, monkeypatch
+):
+    env = environment(session)
+    first = queue(session, session_factory, env, "Once", [note("a")])
+    # The second request looks before the first has committed, and misses it.
+    real, calls = jobs._active, []
+
+    def racing(*args):
+        calls.append(args)
+        return None if len(calls) == 1 else real(*args)
+
+    monkeypatch.setattr(jobs, "_active", racing)
+
+    again = queue(session, session_factory, env, "Once again", [note("a")])
+
+    assert again.id == first.id
+    assert len(calls) == 2  # missed, then found after the refused insert
+    assert session.scalar(select(func.count()).select_from(Job)) == 1
+    assert session.get(Job, first.id).status == "queued"  # the session still works
+
+
+def test_a_jobs_key_ignores_which_steps_are_done(ran):
+    steps = [note("a"), note("b")]
+    done = [{**steps[0], "done": True}, steps[1]]
+
+    assert jobs.job_key("test", steps) == jobs.job_key("test", done)
+    assert jobs.job_key("test", steps) != jobs.job_key("other", steps)
+    assert jobs.job_key("test", steps) != jobs.job_key("test", steps[:1])
+
+
+# --- artifacts a stopped job leaves unfinished (record 21) ---------------------
+
+
+def artifact(session, env, status="pending", kind="environment_summary"):
+    row = GeneratedArtifact(
+        environment_id=env.id,
+        artifact_type=kind,
+        source_version=uuid.uuid4().hex,
+        status=status,
+        model_name="mock",
+        prompt_version="v1",
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+@pytest.fixture
+def writing(monkeypatch):
+    """Test steps for artifacts: crash_writing claims its artifact
+    (generating) and then crashes, as a worker dying mid-write would; write
+    finishes its artifact."""
+
+    def crash_writing(tools, args):
+        with tools.session_factory() as session:
+            row = session.get(GeneratedArtifact, jobs._id(args["artifact_id"]))
+            row.status = "generating"
+            session.commit()
+        raise RuntimeError("the worker died mid-write")
+
+    def write(tools, args):
+        with tools.session_factory() as session:
+            row = session.get(GeneratedArtifact, jobs._id(args["artifact_id"]))
+            if row.status == "pending":
+                row.status = "ready"
+                session.commit()
+
+    monkeypatch.setitem(jobs.STEPS, "crash_writing", crash_writing)
+    monkeypatch.setitem(jobs.STEPS, "write", write)
+
+
+def status_of(session, row):
+    session.expire_all()
+    found = session.get(GeneratedArtifact, row.id)
+    return found.status, found.error
+
+
+def test_a_crash_mid_write_puts_the_artifact_back_for_the_retry(
+    session: Session, session_factory, ran, writing, monkeypatch
+):
+    env = environment(session)
+    summary = artifact(session, env)
+    job = queue(
+        session,
+        session_factory,
+        env,
+        "Writing",
+        [jobs.step("crash_writing", "Writing", artifact_id=summary.id)],
+    )
+
+    claim_and_run(session, session_factory, now=NOW)
+
+    assert session.get(Job, job.id).status == "queued"  # to be tried again
+    assert status_of(session, summary) == ("pending", None)  # its step rewrites it
+
+    # The retry's step works this time.
+    monkeypatch.setitem(jobs.STEPS, "crash_writing", jobs.STEPS["write"])
+    claim_and_run(
+        session, session_factory, now=datetime.now(UTC) + timedelta(minutes=1)
+    )
+
+    assert session.get(Job, job.id).status == "succeeded"
+    assert status_of(session, summary) == ("ready", None)
+
+
+def test_the_last_failed_attempt_fails_what_the_job_would_have_written(
+    session: Session, session_factory, ran, writing
+):
+    env = environment(session)
+    started, never_reached = artifact(session, env), artifact(session, env)
+    job = queue(
+        session,
+        session_factory,
+        env,
+        "Writing",
+        [
+            jobs.step("crash_writing", "First", artifact_id=started.id),
+            jobs.step("write", "Second", artifact_id=never_reached.id),
+        ],
+    )
+    job.attempts = job.max_attempts - 1  # the next run is the last
+    session.commit()
+
+    claim_and_run(session, session_factory, now=NOW)
+
+    reason = "An unexpected error stopped this job."
+    assert session.get(Job, job.id).status == "failed"
+    assert status_of(session, started) == ("failed", reason)
+    assert status_of(session, never_reached) == ("failed", reason)
+
+
+def test_an_unnamed_artifact_left_generating_fails_so_a_retried_step_rearms_it(
+    session: Session, session_factory, ran, writing
+):
+    env = environment(session)
+    # Written inside a chain step, whose arguments do not name it.
+    chain_summary = artifact(session, env, status="generating")
+    job = queue(session, session_factory, env, "Chain", [jobs.step("fail", "Step")])
+
+    claim_and_run(session, session_factory, now=NOW)
+
+    assert session.get(Job, job.id).status == "queued"
+    assert status_of(session, chain_summary) == (
+        "failed",
+        "An unexpected error stopped this job. Trying again.",
+    )
+
+
+def test_cancelling_a_queued_job_fails_only_what_no_other_job_will_write(
+    session: Session, session_factory, ran, writing
+):
+    env = environment(session)
+    alone, shared = artifact(session, env), artifact(session, env)
+    busy = artifact(session, env, status="generating")  # another job's, running
+    cancelled = queue(
+        session,
+        session_factory,
+        env,
+        "Cancelled",
+        [
+            jobs.step("write", "Alone", artifact_id=alone.id),
+            jobs.step("write", "Shared", artifact_id=shared.id),
+        ],
+    )
+    queue(
+        session,
+        session_factory,
+        env,
+        "Still queued",
+        [jobs.step("write", "Shared too", artifact_id=shared.id)],
+    )
+
+    jobs.cancel(session, cancelled)
+
+    assert status_of(session, alone) == ("failed", "Cancelled before it was written.")
+    assert status_of(session, shared) == ("pending", None)
+    assert status_of(session, busy) == ("generating", None)
+
+
+def test_a_stopped_workers_job_releases_what_it_was_writing(
+    session: Session, session_factory, ran, writing
+):
+    env = environment(session)
+    summary = artifact(session, env)
+    job = queue(
+        session,
+        session_factory,
+        env,
+        "Lost",
+        [jobs.step("write", "Writing", artifact_id=summary.id)],
+    )
+    jobs.claim(session, "model", "gone", now=NOW)
+    summary.status = "generating"  # it was mid-write when its worker died
+    session.commit()
+
+    jobs.recover(session, now=NOW + timedelta(minutes=3))
+
+    assert session.get(Job, job.id).status == "queued"
+    assert status_of(session, summary) == ("pending", None)
+
+
+def test_reading_jobs_leave_artifacts_alone(session: Session, session_factory, ran):
+    env = environment(session)
+    other = artifact(session, env, status="generating")
+    queue(
+        session,
+        session_factory,
+        env,
+        "Reading",
+        [jobs.step("fail", "Read")],
+        lane="read",
+    )
+
+    claim_and_run(session, session_factory, lane="read", now=NOW)
+
+    assert status_of(session, other) == ("generating", None)
