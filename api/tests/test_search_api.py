@@ -134,7 +134,7 @@ def test_an_unknown_environment_is_a_404(client: TestClient):
     response = search(client, str(uuid.uuid4()), "anything")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Environment not found"}
+    assert response.json()["detail"] == "Environment not found"
 
 
 @pytest.mark.parametrize(

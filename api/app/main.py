@@ -10,12 +10,16 @@ Run locally with:  uvicorn app.main:app --reload
 Interactive API docs are then generated automatically at /docs.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app import correlation, logs
 from app.config import settings
 from app.db import engine
 from app.routers import (
@@ -35,9 +39,24 @@ from app.routers import (
 )
 from app.routers.deps import DispatcherDep, LLMDep
 
+
 # The application object. Every route and every piece of middleware attaches to
 # this, and uvicorn is pointed at it by name as "app.main:app".
-app = FastAPI(title="Paideia API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Set up structured logging when the server starts (app/logs.py). The
+    tests never start the server this way, so they keep pytest's own log
+    capture."""
+    logs.configure()
+    yield
+
+
+app = FastAPI(title="Paideia API", version="0.1.0", lifespan=lifespan)
+
+# Request ids, one log line per request, and error bodies that carry the id
+# (app/correlation.py). Added before CORS, so that CORS wraps it and even its
+# own error responses reach the page.
+correlation.install(app)
 
 # Browsers refuse to let a page served from one origin call another unless the
 # server explicitly allows it. The Next.js dev server runs on port 3000 while
@@ -49,6 +68,8 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the page read the request id, to show it beside an error.
+    expose_headers=[correlation.HEADER],
 )
 
 # Feature endpoints live in app/routers/ and are mounted under /api, which keeps

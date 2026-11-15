@@ -313,7 +313,7 @@ def test_an_unknown_document_is_a_404(client: TestClient, method: str, suffix: s
     response = getattr(client, method)(f"/api/documents/{uuid.uuid4()}{suffix}")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Document not found"}
+    assert response.json()["detail"] == "Document not found"
 
 
 def test_delete_removes_the_document_pages_and_file(

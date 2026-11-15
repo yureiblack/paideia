@@ -16,6 +16,7 @@ everything may import it, it imports nothing of ours.
 """
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,6 +49,12 @@ class Settings(BaseSettings):
     # the container from docker-compose.yml.
     redis_url: str = "redis://localhost:6379/0"
 
+    # How the API and the worker log (app/logs.py, decision record 21): one
+    # JSON object per line, or readable text for working locally; and the
+    # least severe level written.
+    log_format: Literal["json", "text"] = "json"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
     # Browser origins allowed to call this API, as a comma-separated list.
     # Defaults to the local Next.js dev server, which is safe to assume: it
     # only ever permits a page running on this same machine.
@@ -68,6 +75,11 @@ class Settings(BaseSettings):
 
     # The largest PDF accepted, in megabytes. Must be at least 1.
     max_upload_mb: int = Field(default=50, gt=0)
+
+    # The most pages a PDF may have. A longer one fails as soon as it is
+    # opened, before any text is extracted or embedded, so a small file with
+    # a huge page count cannot occupy the worker for hours (record 21).
+    max_pages: int = Field(default=1000, gt=0)
 
     # The local embedding model and the size of the vectors it produces. The
     # database column is vector(384), so a model of another size needs a
