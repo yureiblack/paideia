@@ -16,15 +16,23 @@ either fully in place or not there at all.
 
 settings.data_dir is read at call time rather than import time, so the tests
 can point every function here at a temporary folder.
+
+sweep() removes what a crash can leave behind (decision record 21): a part
+of an upload that never finished arriving, a stored file whose row was never
+committed or whose deletion stopped halfway, and the folder of an
+environment that no longer has any documents. It spares anything changed
+recently, since an upload in progress has its file in place a moment
+before its row is committed.
 """
 
 import hashlib
 import os
 import shutil
 import tempfile
+import time
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.config import settings
@@ -115,6 +123,44 @@ def store(
     return target
 
 
+def fingerprint(path: Path) -> str | None:
+    """The SHA-256 of a stored file, or None if it is missing."""
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except FileNotFoundError:
+        return None
+    return digest.hexdigest()
+
+
+def set_aside(environment_id: uuid.UUID, document_id: uuid.UUID) -> Path | None:
+    """Move a document's file aside before replacing it, so it can be put
+    back if the change is not committed. None if there was no file."""
+    current = document_path(environment_id, document_id)
+    aside = current.with_name(current.name + ".previous")
+    try:
+        os.replace(current, aside)
+    except FileNotFoundError:
+        return None
+    return aside
+
+
+def put_back(
+    aside: Path | None, environment_id: uuid.UUID, document_id: uuid.UUID
+) -> None:
+    """Restore a file set aside, over whatever replaced it."""
+    if aside is not None:
+        os.replace(aside, document_path(environment_id, document_id))
+
+
+def forget(aside: Path | None) -> None:
+    """Delete a file set aside, once its replacement is committed."""
+    if aside is not None:
+        aside.unlink(missing_ok=True)
+
+
 def discard(staged: StagedUpload) -> None:
     """Delete a staged upload that will not be stored, such as a duplicate."""
     staged.path.unlink(missing_ok=True)
@@ -127,3 +173,68 @@ def delete_document_file(environment_id: uuid.UUID, document_id: uuid.UUID) -> N
 def delete_environment_files(environment_id: uuid.UUID) -> None:
     """Remove an environment's whole upload folder, if it has one."""
     shutil.rmtree(uploads_dir(environment_id), ignore_errors=True)
+
+
+# A stored file or folder younger than this may belong to an upload whose
+# row is about to be committed; a part in tmp/ younger than TMP_GRACE may
+# still be arriving.
+STORED_GRACE = 60 * 60  # seconds
+TMP_GRACE = 24 * 60 * 60
+
+
+@dataclass
+class Swept:
+    """What a sweep removed."""
+
+    parts: list[Path] = field(default_factory=list)
+    files: list[Path] = field(default_factory=list)
+    folders: list[Path] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return bool(self.parts or self.files or self.folders)
+
+
+def _as_uuid(text: str) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(text)
+    except ValueError:
+        return None
+
+
+def sweep(
+    documents: set[tuple[uuid.UUID, uuid.UUID]], now: float | None = None
+) -> Swept:
+    """Remove what no document accounts for. documents holds every
+    (environment id, document id) in the database."""
+    now = time.time() if now is None else now
+    swept = Swept()
+
+    def old(path: Path, grace: int) -> bool:
+        return now - path.stat().st_mtime > grace
+
+    tmp_dir = settings.data_dir / "tmp"
+    if tmp_dir.is_dir():
+        for path in tmp_dir.iterdir():
+            if path.is_file() and old(path, TMP_GRACE):
+                path.unlink(missing_ok=True)
+                swept.parts.append(path)
+
+    uploads = settings.data_dir / "uploads"
+    if not uploads.is_dir():
+        return swept
+    in_use = {environment_id for environment_id, _ in documents}
+    for folder in uploads.iterdir():
+        if not folder.is_dir():
+            continue
+        environment_id = _as_uuid(folder.name)
+        for path in folder.iterdir():
+            document_id = _as_uuid(path.stem) if path.suffix == ".pdf" else None
+            known = (environment_id, document_id) in documents
+            if path.is_file() and not known and old(path, STORED_GRACE):
+                path.unlink(missing_ok=True)
+                swept.files.append(path)
+        empty = not any(folder.iterdir())
+        if empty and environment_id not in in_use and old(folder, STORED_GRACE):
+            folder.rmdir()
+            swept.folders.append(folder)
+    return swept

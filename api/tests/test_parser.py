@@ -11,6 +11,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
+from app.config import settings
 from app.parsing import ParseError, PyMuPDFParser
 from tests import pdfs
 
@@ -84,6 +85,16 @@ def test_unreadable_files_raise_a_clear_parse_error(
 ):
     with pytest.raises(ParseError, match=message):
         parse(tmp_path, data)
+
+
+def test_a_pdf_with_more_pages_than_allowed_is_refused_before_it_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(settings, "max_pages", 3)
+
+    assert len(parse(tmp_path, pdfs.long_pdf(3)).pages) == 3
+    with pytest.raises(ParseError, match="The PDF has 4 pages; at most 3 are accepted"):
+        parse(tmp_path, pdfs.long_pdf(4))
 
 
 def test_a_missing_file_raises_a_parse_error(tmp_path: Path):

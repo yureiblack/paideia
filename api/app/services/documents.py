@@ -184,6 +184,15 @@ def process_document(
         embeddings: dict[uuid.UUID, list[float]] = {}
         error: str | None = None
         try:
+            # A file that is not the version the row records, after a crash
+            # between replacing it and committing, is never read as if it
+            # were (record 21). A missing file is the parser's to report.
+            found = storage.fingerprint(path)
+            if found is not None and found != document.sha256:
+                raise ParseError(
+                    "The stored file is not the version this document records. "
+                    "Upload it again."
+                )
             parsed = parser.parse(path)
             chunks = chunk_document(document_id, parsed)
         except ParseError as exc:
@@ -457,8 +466,17 @@ def new_version(
         if winner is None:
             raise
         raise DuplicateDocument(winner) from None
-    storage.store(staged, document.environment_id, document.id)  # replaces the file
-    session.commit()
+    # The old file is set aside, not overwritten, until the new version is
+    # committed: if the commit fails, it is put back, and the file always
+    # matches the row (record 21).
+    aside = storage.set_aside(document.environment_id, document.id)
+    storage.store(staged, document.environment_id, document.id)
+    try:
+        session.commit()
+    except Exception:
+        storage.put_back(aside, document.environment_id, document.id)
+        raise
+    storage.forget(aside)
     return document
 
 

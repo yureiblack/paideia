@@ -40,6 +40,8 @@ from typing import Protocol
 
 import pymupdf
 
+from app.config import settings
+
 # MuPDF prints its complaints about damaged files straight to the console.
 # Problems are reported through the document's status instead.
 pymupdf.TOOLS.mupdf_display_errors(False)
@@ -155,6 +157,11 @@ class PyMuPDFParser:
                     raise ParseError("The PDF is password-protected.")
                 if document.page_count == 0:
                     raise ParseError("The PDF has no pages.")
+                if document.page_count > settings.max_pages:
+                    raise ParseError(
+                        f"The PDF has {document.page_count} pages; at most "
+                        f"{settings.max_pages} are accepted."
+                    )
                 raw_pages = [_raw_blocks(page) for page in document]
                 repaired = document.is_repaired
 
