@@ -12,6 +12,10 @@
 __pycache__/
 .venv/
 
+# Coverage measurements and reports, rewritten by every pytest --cov run.
+.coverage
+htmlcov/
+
 # Node: installed packages and build output, rebuilt from package.json.
 node_modules/
 .next/

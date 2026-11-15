@@ -244,7 +244,9 @@ def _ask(pairs: list[pairs_.Pair], llm: LLMProvider) -> dict[str, tuple[str, flo
                 pairs="\n\n".join(blocks),
             )
             answer = llm.generate_structured(prompt, answer_schema(len(batch))).value
-            for decision in answer.decisions:
+            # answer_schema builds its classes at run time, so the checker
+            # knows only that answer is a BaseModel, not which fields it has.
+            for decision in answer.decisions:  # type: ignore[attr-defined]
                 pair = batch[decision.pair - 1]
                 # A pair answered twice keeps its first answer; one left out
                 # is asked again by the next build.
@@ -337,7 +339,7 @@ def write_graph(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":
                 return
-            environment = session.get(Environment, artifact.environment_id)
+            environment = summaries.environment_of(session, artifact)
             pairs = _pairs(session, environment.id)
             if (
                 _waiting_for(session, environment, llm)
@@ -424,7 +426,7 @@ def refresh_graph(
             return
         artifact, write_now = request_graph(session, environment, llm)
         artifact_id = artifact.id if artifact else None
-    if write_now:
+    if write_now and artifact_id is not None:  # write_now comes with one
         write_graph(session_factory, artifact_id, llm)
 
 
@@ -466,6 +468,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Graph
             )
         )
     )
+    error = None
     if waiting:
         label = "waiting"
     elif not pairs:
@@ -475,7 +478,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Graph
     elif current.status in ("pending", "generating"):
         label = "updating"
     elif current.status == "failed":
-        label = "failed"
+        label, error = "failed", current.error
     elif _expected_edges(session, environment.id, pairs, llm) != {
         (r.source_concept_id, r.target_concept_id, r.relationship_type)
         for r in relationships
@@ -505,7 +508,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Graph
     return GraphState(
         state=label,
         waiting_for=waiting,
-        error=current.error if label == "failed" else None,
+        error=error,
         nodes=nodes,
         edges=edges,
         pairs=meta.get("pairs"),

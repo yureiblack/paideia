@@ -1,0 +1,29 @@
+# Settings for the backend's development tools. Dependencies are pinned in
+# requirements.in and requirements.txt, not here.
+
+# Type checking: from api/, run `mypy`. CI runs it on every push (decision
+# record 22). Default strictness: functions without annotations are not
+# checked, so annotations stay where they help the reader.
+[tool.mypy]
+python_version = "3.13"
+files = ["app"]
+# Teaches mypy how Pydantic models and settings are built.
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# Packages that ship without type information.
+[[tool.mypy.overrides]]
+module = ["fastembed.*", "pgvector.*"]
+ignore_missing_imports = true
+
+# Coverage: from api/, run `pytest --cov` for a summary in the terminal, or
+# `pytest --cov --cov-report=html` for a page per file in htmlcov/. Reported,
+# never enforced: there is no target percentage.
+[tool.coverage.run]
+source = ["app", "evaluation"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

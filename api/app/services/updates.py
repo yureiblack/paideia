@@ -75,8 +75,13 @@ def _current(session: Session, environment_id: uuid.UUID, llm: LLMProvider) -> d
     """The result each shared step stands for now, by id: the environment's
     summary of its current documents, the graph of its current pairs, the
     titles of its current stages. Not the newest written: going back to
-    earlier material goes back to the results written for it."""
+    earlier material goes back to the results written for it.
+
+    Callers hold the update's row locked, or found the environment in the
+    same request; deleting the environment would delete the update too."""
     environment = session.get(Environment, environment_id)
+    if environment is None:
+        raise RuntimeError("The environment of an update being recorded is gone.")
     shown = environment_summary_service.state(session, environment, llm).summary
     pairs = graph_service._pairs(session, environment_id)
     graph = (
@@ -139,8 +144,8 @@ def snapshot(session: Session, environment_id: uuid.UUID, llm: LLMProvider) -> d
         select(Document).where(Document.environment_id == environment_id)
     ):
         summary = summary_service.current_summary(session, document, llm)
-        ready = summary is not None and summary.status == "ready"
-        document_summaries[str(document.id)] = str(summary.id) if ready else None
+        ready = summary if summary is not None and summary.status == "ready" else None
+        document_summaries[str(document.id)] = str(ready.id) if ready else None
     _, _, practised, _ = practice_service._practised(session, environment_id)
     return {
         "concepts": concepts,
@@ -397,7 +402,9 @@ def report(before: dict, after: dict, update: MaterialUpdate) -> dict:
         ]
         return sorted(found, key=lambda e: (e["source"], e["type"], e["target"]))
 
-    updated, unchanged = [], []
+    # Each a name and a detail, or None for no detail.
+    updated: list[dict[str, str | None]] = []
+    unchanged: list[dict[str, str | None]] = []
     document = str(update.document_id) if update.document_id else None
     summaries_before = before.get("document_summaries", {})
     summaries_after = after.get("document_summaries", {})

@@ -292,7 +292,9 @@ def _ask(
     answer = llm.generate_structured(prompt, answer_schema(len(stages))).value
     written: dict[str, tuple[str, str] | None] = {key: None for key, _ in stages}
     seen = set()
-    for text in answer.stages:
+    # answer_schema builds its classes at run time, so the checker knows only
+    # that answer is a BaseModel, not which fields it has.
+    for text in answer.stages:  # type: ignore[attr-defined]
         if text.stage in seen:  # a stage answered twice keeps its first
             continue
         seen.add(text.stage)
@@ -315,7 +317,7 @@ def write_roadmap(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":
                 return
-            environment = session.get(Environment, artifact.environment_id)
+            environment = summaries.environment_of(session, artifact)
             found = material(session, environment.id)
             if (
                 _graph_busy(session, environment, llm)
@@ -384,7 +386,7 @@ def refresh_roadmap(
             return
         artifact, write_now = request_roadmap(session, environment, llm)
         artifact_id = artifact.id if artifact else None
-    if write_now:
+    if write_now and artifact_id is not None:  # write_now comes with one
         write_roadmap(session_factory, artifact_id, llm)
 
 
@@ -400,6 +402,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Roadm
         if found.nodes
         else None
     )
+    error = None
     if busy:
         label = "waiting"
     elif not found.nodes:
@@ -409,7 +412,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Roadm
     elif current.status in ("pending", "generating"):
         label = "updating"
     elif current.status == "failed":
-        label = "failed"
+        label, error = "failed", current.error
     else:
         label = "up_to_date"
 
@@ -451,7 +454,9 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Roadm
                         id=i,
                         name=found.nodes[i].name,
                         definition=found.nodes[i].definition,
-                        builds_on=[ref(p) for p in sorted(builds_on[i], key=place.get)],
+                        builds_on=[
+                            ref(p) for p in sorted(builds_on[i], key=place.__getitem__)
+                        ],
                         in_cycle=i in in_cycle,
                         documents=[document(d) for d in found.concept_documents[i]],
                         evidence=evidence[i],
@@ -462,7 +467,7 @@ def state(session: Session, environment: Environment, llm: LLMProvider) -> Roadm
         )
     return RoadmapState(
         state=label,
-        error=current.error if label == "failed" else None,
+        error=error,
         stages=stages,
         cycles=[
             RoadmapCycle(concepts=[ref(i) for i in cycle.concepts])

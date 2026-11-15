@@ -53,7 +53,9 @@ def _with_id(response: Response) -> Response:
     """The same error response, with the request id in its body."""
     request_id = context.request_id.get()
     try:
-        body = json.loads(response.body)
+        # Starlette allows a body to be bytes or a memoryview; json.loads
+        # takes only the first, and bytes() turns either into bytes.
+        body = json.loads(bytes(response.body))
     except (AttributeError, ValueError):
         return response
     if isinstance(body, dict) and request_id:

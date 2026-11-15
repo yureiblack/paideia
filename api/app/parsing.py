@@ -162,7 +162,7 @@ class PyMuPDFParser:
                         f"The PDF has {document.page_count} pages; at most "
                         f"{settings.max_pages} are accepted."
                     )
-                raw_pages = [_raw_blocks(page) for page in document]
+                raw_pages = [_raw_blocks(page) for page in document.pages()]
                 repaired = document.is_repaired
 
         # Everything below is plain Python on the extracted data, so it runs
@@ -181,7 +181,7 @@ def _raw_blocks(page: pymupdf.Page) -> list[_RawBlock]:
         if not visible:
             continue
         top, bottom = block["bbox"][1], block["bbox"][3]
-        sizes = Counter()
+        sizes: Counter[float] = Counter()
         for span in visible:
             sizes[round(span["size"] * 2) / 2] += len(span["text"].strip())
         blocks.append(

@@ -375,9 +375,9 @@ def _sync_chunks(
     stored = {row.id: row for row in session.scalars(query)}
     wanted = {chunk.id for chunk in chunks}
 
-    for chunk_id, row in stored.items():
+    for chunk_id, old in stored.items():
         if chunk_id not in wanted:
-            session.delete(row)
+            session.delete(old)
     for chunk in chunks:
         row = stored.get(chunk.id)
         if row is None:

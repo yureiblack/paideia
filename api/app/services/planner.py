@@ -12,6 +12,7 @@ afresh whenever it is read (decision record 16).
 
 import uuid
 from collections import defaultdict
+from collections.abc import Hashable
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -70,7 +71,9 @@ def plan(
     until = max(until or now, now)
     view = practice.overview(session, environment, llm, now=now, until=until)
     road = roadmap_service.state(session, environment, llm)
-    place = {
+    # This and the other lookups below are keyed by UUIDs, and also read with
+    # the ids the planner hands back, which it knows only as Hashable.
+    place: dict[Hashable, int] = {
         c.id: n
         for n, c in enumerate(c for stage in road.stages for c in stage.concepts)
     }
@@ -106,7 +109,7 @@ def plan(
         .where(Document.environment_id == environment.id)
     ):
         links[document_id].append(concept_id)
-    documents = {
+    documents: dict[Hashable, Document] = {
         d.id: d
         for d in session.scalars(
             select(Document).where(
@@ -133,7 +136,7 @@ def plan(
         now,
         budget,
     )
-    names = {c.concept_id: c.name for c in view.concepts}
+    names: dict[Hashable, str] = {c.concept_id: c.name for c in view.concepts}
 
     def shown(s: planner.Session) -> PlanSession:
         document = documents.get(s.document) if s.document else None

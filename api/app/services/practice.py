@@ -25,7 +25,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, TypeVar
 
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
@@ -73,6 +73,8 @@ CHANGED = "The material changed before the practice items were written."
 # HISTORY sessions.
 SESSION_GAP = timedelta(minutes=30)
 HISTORY = 20
+
+T = TypeVar("T")
 
 
 class NotPractised(Exception):
@@ -227,7 +229,7 @@ def prepare(
     for concept_id in wanted:
         if concept_id in concepts:
             artifact, write_now = request_practice(session, concepts[concept_id], llm)
-            if write_now:
+            if write_now and artifact is not None:  # write_now comes with one
                 pending.append(artifact.id)
     return pending
 
@@ -262,11 +264,13 @@ def _write(
         truth="true" if truth else "false",
     )
     answer = llm.generate_structured(prompt, answer_schema(len(passages))).value
+    # answer_schema builds its classes at run time, so the checker knows only
+    # that answer is a BaseModel, not which fields it has.
     sa, mc, tf, fc = (
-        answer.short_answer,
-        answer.multiple_choice,
-        answer.true_false,
-        answer.flashcard,
+        answer.short_answer,  # type: ignore[attr-defined]
+        answer.multiple_choice,  # type: ignore[attr-defined]
+        answer.true_false,  # type: ignore[attr-defined]
+        answer.flashcard,  # type: ignore[attr-defined]
     )
     candidates = {
         "short_answer": rules.short_answer(sa.question, sa.answer, sa.sources),
@@ -331,7 +335,9 @@ def write_practice(
             artifact.status = "generating"
             session.commit()
 
-        problem, kept, dropped = None, [], {}
+        problem: str | None = None
+        kept: list[tuple[rules.Draft, float]] = []
+        dropped: dict[str, str] = {}
         try:
             kept, dropped = _write(
                 name, definition, passages, artifact.source_version, llm, reranker
@@ -359,7 +365,7 @@ def write_practice(
                 or evidence_key(concept, chunks) != artifact.source_version
             ):
                 problem = CHANGED
-            if problem is not None:
+            if problem is not None or concept is None:  # no concept set CHANGED
                 artifact.status, artifact.error = "failed", problem
                 session.commit()
                 return
@@ -415,6 +421,10 @@ def generation_names(session: Session, artifact_ids) -> dict[uuid.UUID, str]:
     names = {}
     for artifact_id in artifact_ids:
         artifact = session.get(GeneratedArtifact, artifact_id)
+        if artifact is None:
+            raise RuntimeError(
+                "A practice generation prepared in this request has disappeared."
+            )
         concept = session.get(Concept, uuid.UUID(artifact.metadata_json["concept_id"]))
         names[artifact_id] = concept.name if concept else "a concept"
     return names
@@ -449,7 +459,9 @@ def _intact(session: Session, items: list[LearningItem]) -> set[uuid.UUID]:
             select(LearningItemSource.item_id, func.count())
             .where(LearningItemSource.item_id.in_([i.id for i in items]))
             .group_by(LearningItemSource.item_id)
-        ).all()
+        )
+        .tuples()
+        .all()
     )
     return {
         i.id
@@ -510,6 +522,15 @@ def learner_states(
     }
 
 
+def _answered(value: T | None) -> T:
+    """A value of a learner state that answers set, for a concept chosen for
+    having it: one needing attention, or strong, has been answered, and a
+    scheduled one has its next review (app/learner.py)."""
+    if value is None:
+        raise RuntimeError("A concept chosen for its answers lacks what they set.")
+    return value
+
+
 def overview(
     session: Session,
     environment: Environment,
@@ -535,14 +556,16 @@ def overview(
         )
     }
     states = learner_states(session, environment.id)
-    items = defaultdict(int)
+    items: defaultdict[uuid.UUID, int] = defaultdict(int)
     for item, _ in current:
         items[item.concept_id] += 1
     rows = []
     for concept in sorted(concepts.values(), key=lambda c: c.normalized_name):
         generation = generations.get(keys.get(concept.id))
+        error = None
         if generation is not None:
             state = generation.status
+            error = generation.error if state == "failed" else None
         elif items[concept.id]:
             state = "ready"  # written from earlier passages, all still there
         else:
@@ -553,7 +576,7 @@ def overview(
                 concept_id=concept.id,
                 name=concept.name,
                 state=state,
-                error=generation.error if state == "failed" else None,
+                error=error,
                 items=items[concept.id],
                 review=learner.review(known, until) if items[concept.id] else None,
                 exposures=known.exposures,
@@ -570,14 +593,17 @@ def overview(
     practised = [r for r in rows if r.review is not None]
     needing = sorted(
         (r for r in practised if r.attention),
-        key=lambda r: r.last_attempted_at,
+        key=lambda r: _answered(r.last_attempted_at),
         reverse=True,
     )
     strong = sorted(
         (r for r in practised if r.strong),
-        key=lambda r: (-r.gap_days, -r.last_recalled_at.timestamp()),
+        key=lambda r: (
+            -_answered(r.gap_days),
+            -_answered(r.last_recalled_at).timestamp(),
+        ),
     )
-    later = [r.next_review_at for r in practised if r.review == "scheduled"]
+    later = [_answered(r.next_review_at) for r in practised if r.review == "scheduled"]
     return PracticeOverview(
         items=len(current),
         due_concepts=sum(r.review == "due" for r in practised),
@@ -738,7 +764,7 @@ def answer(
             content["options"][content["correct"]],
             content["explanation"],
         )
-        response = {"choice": data.choice}
+        response: dict[str, object] = {"choice": data.choice}
     elif kind == "true_false":
         if data.truth is None:
             raise ValueError("A true/false answer needs true or false.")

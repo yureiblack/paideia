@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 from app import prompting
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
-from app.models import Document, DocumentChunk, GeneratedArtifact
+from app.models import Document, DocumentChunk, Environment, GeneratedArtifact
 from app.schemas import Citation, SummaryPoint, SummaryRead
 from app.services import sources
 
@@ -85,7 +85,9 @@ def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
     if list(numbers) == list(range(numbers[0], numbers[-1] + 1)):
         Number = Annotated[int, Field(ge=numbers[0], le=numbers[-1])]
     else:
-        Number = Literal[tuple(numbers)]
+        # A Literal of values known only at run time: pydantic reads it, but
+        # the checker cannot, and takes Number to be the int above.
+        Number = Literal[tuple(numbers)]  # type: ignore[misc, assignment]
 
     class KeyPoint(BaseModel):
         point: str
@@ -289,6 +291,30 @@ def _compose(
     return content, round(sum(g.seconds for g in generated), 1)
 
 
+def document_of(session: Session, artifact: GeneratedArtifact) -> Document:
+    """The document of a document's artifact that the caller holds locked.
+    Deleting a document deletes its artifacts, which waits for that lock,
+    so the document is there for as long as the lock is held."""
+    document = (
+        session.get(Document, artifact.document_id)
+        if artifact.document_id is not None
+        else None
+    )
+    if document is None:
+        raise RuntimeError("A locked document artifact has no document.")
+    return document
+
+
+def environment_of(session: Session, artifact: GeneratedArtifact) -> Environment:
+    """The environment of an artifact that the caller holds locked, as
+    document_of: deleting an environment deletes its artifacts, which waits
+    for that lock."""
+    environment = session.get(Environment, artifact.environment_id)
+    if environment is None:
+        raise RuntimeError("A locked artifact has no environment.")
+    return environment
+
+
 def write_summary(
     session_factory: SessionFactory, artifact_id: uuid.UUID, llm: LLMProvider
 ) -> None:
@@ -305,7 +331,7 @@ def write_summary(
             artifact = session.get(GeneratedArtifact, artifact_id, with_for_update=True)
             if artifact is None or artifact.status != "pending":
                 return  # written, or taken, by someone else
-            document = session.get(Document, artifact.document_id)
+            document = document_of(session, artifact)
             plan_ = plan(session, document) if document.status == "ready" else None
             if (
                 plan_ is None

@@ -17,7 +17,9 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import GeneratedArtifact, Job, MaterialUpdate
+from app import context
+from app.models import Environment, GeneratedArtifact, Job, MaterialUpdate
+from app.services import environments as environment_service
 from app.services import jobs
 from app.worker import Worker
 from tests.fakes import MockProvider
@@ -572,3 +574,33 @@ def test_reading_jobs_leave_artifacts_alone(session: Session, session_factory, r
     claim_and_run(session, session_factory, lane="read", now=NOW)
 
     assert status_of(session, other) == ("generating", None)
+
+
+def test_a_job_deleted_with_its_environment_stops_where_it_is(
+    session: Session, session_factory, ran, monkeypatch
+):
+    # Deleting an environment deletes its jobs, the running one too, as when
+    # a learner deletes it during a long model call.
+    env = environment(session)
+
+    def delete_environment(tools, args):
+        with tools.session_factory() as other:
+            environment_service.delete_environment(
+                other, other.get(Environment, env.id)
+            )
+
+    monkeypatch.setitem(jobs.STEPS, "delete", delete_environment)
+    queue(
+        session,
+        session_factory,
+        env,
+        "Deleted midway",
+        [note("a"), jobs.step("delete", "Delete the environment"), note("b")],
+    )
+
+    claim_and_run(session, session_factory)  # ends without raising
+
+    assert ran == ["a"]  # nothing after the deletion runs
+    assert session.scalar(select(func.count()).select_from(Job)) == 0
+    # Later lines in the worker's thread are not marked with the deleted job.
+    assert context.job_id.get() is None

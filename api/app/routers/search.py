@@ -66,11 +66,19 @@ def search(
     citations = source_service.cite_all(session, [c.chunk for c in found.results])
     return SearchResponse(
         results=[
-            SearchResult(citation=citation, score=round(c.rerank_score, 4))
+            SearchResult(citation=citation, score=round(_score(c), 4))
             for c, citation in zip(found.results, citations, strict=True)
         ],
         debug=_debug(found) if request.debug else None,
     )
+
+
+def _score(result: search_service.Candidate) -> float:
+    """A result's rerank score. Results are chosen from the reranked
+    candidates, so every one has a score."""
+    if result.rerank_score is None:
+        raise RuntimeError("A search result was never reranked.")
+    return result.rerank_score
 
 
 def _debug(found: search_service.HybridResult) -> SearchDebug:
