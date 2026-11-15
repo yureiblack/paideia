@@ -26,7 +26,6 @@ lets the limit stop the transfer.
 """
 
 import uuid
-from pathlib import PurePosixPath
 from typing import Annotated
 
 from fastapi import (
@@ -39,7 +38,7 @@ from fastapi import (
     status,
 )
 
-from app import storage
+from app import filenames, storage
 from app.config import settings
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
@@ -75,18 +74,23 @@ DocumentDep = Annotated[Document, Depends(document_or_404)]
 
 
 def _display_name(filename: str) -> str:
-    """Keep only the last part of the name a client sent.
-
-    A browser sends a bare name, but nothing stops another client sending a
-    path. The name is only ever displayed, since files on disk are named by
-    document id, but storing "../../secret" would still be misleading.
-    """
-    name = PurePosixPath(filename.replace("\\", "/")).name.strip()
-    if not name:
+    """The cleaned name the document is shown by (app/filenames.py)."""
+    try:
+        return filenames.display_name(filename)
+    except filenames.BadFilename as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="filename must name a file"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+
+
+def _not_queued_already(session, document: Document) -> None:
+    """Refuse to read a document again while it is queued to be read, so a
+    second click never queues a second chain (record 21)."""
+    if jobs.reading(session, document.id) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="This document is already queued to be read.",
         )
-    return name
 
 
 # Describes the raw-body upload in /docs, which cannot infer it, so the page
@@ -208,6 +212,7 @@ def reprocess_document(
     dispatcher: DispatcherDep,
     background: BackgroundTasks,
 ) -> Document:
+    _not_queued_already(session, document)
     try:
         service.request_reprocess(session, document)
     except service.StillProcessing as exc:
@@ -280,6 +285,7 @@ async def upload_new_version(
 ) -> Document:
     """A new version of a document, as the raw PDF body: the document keeps
     its id, name and place, and only what changed is redone (record 17)."""
+    _not_queued_already(session, document)
     staged = await _stage(request)
     try:
         service.new_version(session, document, staged)

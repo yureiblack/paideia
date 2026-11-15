@@ -24,7 +24,10 @@ succeeded, failed or cancelled:
   next step.
 """
 
+import hashlib
+import json
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,8 +36,10 @@ from typing import Any, Protocol
 
 import redis
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import context
 from app.db import SessionFactory
 from app.llm import LLMProvider
 from app.models import Document, GeneratedArtifact, Job, MaterialUpdate
@@ -262,12 +267,25 @@ def start(
     update_id: uuid.UUID | None = None,
     after: Job | None = None,
 ) -> Job:
-    """Queue a job and have it run. Commits."""
+    """Queue a job and have it run. Commits.
+
+    The same work is never queued twice (record 21): while a job with the
+    same key is queued or running in the environment, that job is returned
+    instead of a new one. Two requests arriving together both miss it, and
+    then the database's unique index refuses the second insert; the insert
+    sits in a savepoint, so the refusal undoes only it, and the job that won
+    is returned."""
+    key = job_key(kind, steps)
+    existing = _active(session, environment_id, key)
+    if existing is not None:
+        return existing
     job = Job(
         environment_id=environment_id,
         update_id=update_id,
         after_id=after.id if after else None,
         kind=kind,
+        key=key,
+        request_id=context.request_id.get(),
         title=title,
         lane=lane,
         steps=steps,
@@ -275,10 +293,52 @@ def start(
         progress=0,
         created_at=datetime.now(UTC),
     )
-    session.add(job)
+    try:
+        with session.begin_nested():
+            session.add(job)
+    except IntegrityError:
+        existing = _active(session, environment_id, key)
+        if existing is None:
+            raise
+        session.commit()
+        return existing
     session.commit()
     dispatcher.dispatch(job, background, tools)
     return job
+
+
+def reading(session: Session, document_id: uuid.UUID) -> Job | None:
+    """The queued or running job reading this document, if there is one.
+    Asking to read it again meanwhile would queue a second chain with its
+    own material update, which the job key cannot see as the same work."""
+    return session.scalar(
+        select(Job)
+        .where(
+            Job.kind == "read",
+            Job.status.in_(ACTIVE),
+            Job.steps.contains([{"args": {"document_id": str(document_id)}}]),
+        )
+        .limit(1)
+    )
+
+
+def job_key(kind: str, steps: list) -> str:
+    """What a job does, as a fingerprint: its kind and its steps with their
+    arguments, not whether each is done yet. Two jobs with the same key
+    would do the same work."""
+    plain = [{k: v for k, v in s.items() if k != "done"} for s in steps]
+    text = json.dumps({"kind": kind, "steps": plain}, sort_keys=True, default=str)
+    return hashlib.sha256(text.encode()).hexdigest()[:32]
+
+
+def _active(session: Session, environment_id: uuid.UUID, key: str) -> Job | None:
+    return session.scalar(
+        select(Job).where(
+            Job.environment_id == environment_id,
+            Job.key == key,
+            Job.status.in_(ACTIVE),
+        )
+    )
 
 
 def queue_model_work(
@@ -355,10 +415,13 @@ def claim(
     return None
 
 
-def _end_cancelled(session: Session, job: Job, now: datetime) -> None:
+def _end_cancelled(
+    session: Session, job: Job, now: datetime, was_running: bool = False
+) -> None:
     job.status = "cancelled"
     job.step = None
     job.finished_at = now
+    release(session, job, retrying=False, was_running=was_running)
     if job.update_id:
         updates.cancel(session, job.update_id, now)
     for waiting in session.scalars(
@@ -405,6 +468,40 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
     with factory() as session:
         job = session.get(Job, job_id)
         steps, update_id = list(job.steps), job.update_id
+        title, request = job.title, job.request_id
+    # Every log line written while the job runs carries these (app/logs.py).
+    tokens = [
+        (context.job_id, context.job_id.set(str(job_id))),
+        (
+            context.update_id,
+            context.update_id.set(str(update_id) if update_id else None),
+        ),
+        (context.request_id, context.request_id.set(request)),
+    ]
+    started = time.perf_counter()
+    logger.info("Job started: %s", title, extra={"title": title})
+    try:
+        _run(tools, job_id, steps, update_id)
+    finally:
+        with factory() as session:
+            ended = session.get(Job, job_id)
+            logger.info(
+                "Job %s: %s",
+                ended.status,
+                title,
+                extra={
+                    "title": title,
+                    "status": ended.status,
+                    "reason": ended.error,
+                    "ms": round(1000 * (time.perf_counter() - started)),
+                },
+            )
+        for var, token in reversed(tokens):
+            var.reset(token)
+
+
+def _run(tools: Tools, job_id: uuid.UUID, steps: list, update_id) -> None:
+    factory = tools.session_factory
     try:
         for index, spec in enumerate(steps):
             if spec.get("done"):
@@ -412,7 +509,7 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
             with factory() as session:
                 job = session.get(Job, job_id, with_for_update=True)
                 if job.cancel_requested:
-                    _end_cancelled(session, job, datetime.now(UTC))
+                    _end_cancelled(session, job, datetime.now(UTC), was_running=True)
                     session.commit()
                     return
                 if tools.stopping is not None and tools.stopping.is_set():
@@ -427,6 +524,7 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
                 job.heartbeat_at = datetime.now(UTC)
                 session.commit()
             work = STEPS[spec["call"]]
+            step_started = time.perf_counter()
             if spec.get("update_step") and update_id:
                 updates.run_step(
                     factory,
@@ -439,6 +537,14 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
                 )
             else:
                 work(tools, spec["args"])
+            logger.info(
+                "Step done: %s",
+                spec["label"],
+                extra={
+                    "step": spec["call"],
+                    "ms": round(1000 * (time.perf_counter() - step_started)),
+                },
+            )
             steps[index] = {**spec, "done": True}
             with factory() as session:
                 job = session.get(Job, job_id, with_for_update=True)
@@ -451,6 +557,7 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
             _retry_or_fail(
                 job, datetime.now(UTC), "An unexpected error stopped this job."
             )
+            release(session, job, retrying=job.status == "queued", was_running=True)
             session.commit()
         return
     with factory() as session:
@@ -462,6 +569,72 @@ def run(tools: Tools, job_id: uuid.UUID) -> None:
         job.step = None
         job.finished_at = datetime.now(UTC)
         session.commit()
+
+
+def _named_artifacts(job: Job) -> set[uuid.UUID]:
+    """The artifacts the job's steps not yet done would write."""
+    return {
+        _id(s["args"]["artifact_id"])
+        for s in job.steps
+        if not s.get("done") and "artifact_id" in s["args"]
+    }
+
+
+def release(
+    session: Session, job: Job, *, retrying: bool, was_running: bool
+) -> list[uuid.UUID]:
+    """Settle the artifacts a model job leaves unfinished when it stops
+    without finishing, instead of leaving them to the one-hour stale rule
+    (record 21). Returns the artifacts changed; the caller commits.
+
+    - An artifact still generating was being written by this job, if it was
+      running: only a running model job writes, one at a time. If a step of
+      the job will write it again on the retry, it goes back to pending;
+      otherwise it fails with the job's reason, and a retried step re-arms
+      it, as anyone can from the page.
+    - A pending artifact that a step never reached fails with the job's
+      reason when the job ends for good, unless another active job would
+      still write it.
+    """
+    if job.lane != "model":
+        return []
+    reason = job.error or "Cancelled before it was written."
+    remaining = _named_artifacts(job)
+    still_wanted: set[uuid.UUID] = set()
+    if not retrying:
+        for other in session.scalars(
+            select(Job).where(
+                Job.environment_id == job.environment_id,
+                Job.status.in_(ACTIVE),
+                Job.id != job.id,
+            )
+        ):
+            still_wanted |= _named_artifacts(other)
+    released = []
+    for artifact in session.scalars(
+        select(GeneratedArtifact)
+        .where(
+            GeneratedArtifact.environment_id == job.environment_id,
+            GeneratedArtifact.status.in_(("pending", "generating")),
+        )
+        .with_for_update()
+    ):
+        if artifact.status == "generating" and was_running:
+            if retrying and artifact.id in remaining:
+                artifact.status, artifact.error = "pending", None
+            else:
+                artifact.status, artifact.error = "failed", reason
+        elif (
+            artifact.status == "pending"
+            and not retrying
+            and artifact.id in remaining
+            and artifact.id not in still_wanted
+        ):
+            artifact.status, artifact.error = "failed", reason
+        else:
+            continue
+        released.append(artifact.id)
+    return released
 
 
 def _retry_or_fail(job: Job, now: datetime, why: str) -> None:
@@ -502,15 +675,24 @@ def recover(session: Session, now: datetime | None = None) -> int:
     )
     for job in stale:
         _retry_or_fail(job, now, "Its worker stopped while running it.")
+        release(session, job, retrying=job.status == "queued", was_running=True)
     session.commit()
     return len(stale)
 
 
-def beat(session: Session, worker: str, now: datetime | None = None) -> None:
-    """Mark a worker's running jobs as alive. Commits."""
+def beat(session: Session, worker: str, job_ids, now: datetime | None = None) -> None:
+    """Mark as alive the jobs a worker is running at this moment. Commits.
+
+    Only those it names: a job whose run has ended without its outcome being
+    recorded, for example because the database failed just then, is still
+    "running" in the table but no longer kept alive, so it is found as stale
+    and run again (record 21)."""
+    ids = list(job_ids)
+    if not ids:
+        return
     session.execute(
         update(Job)
-        .where(Job.worker == worker, Job.status == "running")
+        .where(Job.id.in_(ids), Job.worker == worker, Job.status == "running")
         .values(heartbeat_at=now or datetime.now(UTC))
     )
     session.commit()

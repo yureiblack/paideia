@@ -13,7 +13,7 @@ import { useState, type ReactNode } from "react";
 import { EnvironmentForm } from "@/components/environment-form";
 import { BackgroundWork } from "@/components/background-work";
 import { EnvironmentTabs, tabLabel } from "@/components/environment-tabs";
-import { Loading } from "@/components/query-states";
+import { Loading, Reference } from "@/components/query-states";
 import {
   useDeleteEnvironment,
   useEnvironment,
@@ -67,6 +67,7 @@ export function EnvironmentShell({
               ? "It may have been deleted, or the link is wrong."
               : environment.error.message}
           </p>
+          {!isMissing && <Reference error={environment.error} />}
           <div className="flex flex-wrap items-center gap-4">
             {!isMissing && (
               <button

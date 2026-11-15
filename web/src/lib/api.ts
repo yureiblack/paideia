@@ -28,13 +28,17 @@ import type {
 
 // A failed request, carrying the HTTP status so callers can tell "not found"
 // apart from "the server is down". Status 0 means no response arrived at all.
+// requestId is the id the API gave the request, shown beside the error so it
+// can be found in the server's logs (decision record 21).
 export class ApiError extends Error {
   readonly status: number;
+  readonly requestId: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, requestId: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.requestId = requestId;
   }
 }
 
@@ -71,7 +75,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(0, "Could not reach the API. Is the backend running?");
   }
   if (!response.ok) {
-    throw new ApiError(response.status, await errorMessage(response));
+    throw new ApiError(
+      response.status,
+      await errorMessage(response),
+      response.headers.get("X-Request-ID"),
+    );
   }
   // 204 No Content has no body to parse.
   return (response.status === 204 ? undefined : await response.json()) as T;

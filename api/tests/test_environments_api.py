@@ -101,7 +101,7 @@ def test_get_unknown_id_is_404(client: TestClient):
     response = client.get(f"{URL}/{uuid.uuid4()}")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Environment not found"}
+    assert response.json()["detail"] == "Environment not found"
 
 
 def test_get_malformed_id_is_422(client: TestClient):

@@ -160,7 +160,7 @@ def test_a_document_not_read_yet_has_no_summary_and_cannot_be_asked_for_one(
     )
     session.flush()
 
-    assert summary(client, document["id"]).json() == {"detail": "No summary yet."}
+    assert summary(client, document["id"]).json()["detail"] == "No summary yet."
     response = ask(client, document["id"])
     assert response.status_code == 409
     assert response.json()["detail"] == "This document has not been read yet."
@@ -194,4 +194,4 @@ def test_the_model_status_says_whether_the_model_is_ready(client: TestClient):
     response = client.get("/health/llm")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "The model ministral-3:8b is not downloaded."}
+    assert response.json()["detail"] == "The model ministral-3:8b is not downloaded."

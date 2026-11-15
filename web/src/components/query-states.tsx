@@ -8,6 +8,8 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
+import { ApiError } from "@/lib/api";
+
 // Placeholder lines while a section loads. Screen readers hear what is
 // loading; the lines pulse only for those who have not asked for less motion.
 export function Loading({ what, lines = 2 }: { what: string; lines?: number }) {
@@ -28,7 +30,8 @@ export function Loading({ what, lines = 2 }: { what: string; lines?: number }) {
 }
 
 // A section that could not load: why, and Try again. retrying shows while
-// the request is being made again.
+// the request is being made again. When the API answered, its reference for
+// the request is shown too, to find it in the server's logs.
 export function LoadError({
   what,
   error,
@@ -45,6 +48,7 @@ export function LoadError({
       <p className="text-red-600 dark:text-red-400">
         Could not load {what}: {error.message}
       </p>
+      <Reference error={error} />
       <button
         type="button"
         onClick={onRetry}
@@ -54,6 +58,16 @@ export function LoadError({
         {retrying ? "Trying again…" : "Try again"}
       </button>
     </div>
+  );
+}
+
+// The API's id for a failed request, shortened; hovering shows all of it.
+export function Reference({ error }: { error: Error | null }) {
+  if (!(error instanceof ApiError) || !error.requestId) return null;
+  return (
+    <span className="text-xs text-zinc-500" title={error.requestId}>
+      Reference {error.requestId.slice(0, 8)}
+    </span>
   );
 }
 

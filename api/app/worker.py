@@ -13,8 +13,10 @@ language model writes). A document being read never waits behind model work,
 and model calls stay one at a time. Each lane takes the oldest job it may
 run, waits for a signal from Redis when there is none, and looks at the jobs
 table again every POLL seconds whatever Redis says. A third thread keeps the
-worker's running jobs alive (their heartbeat) and its key in Redis, and every
-RECOVER seconds runs again the jobs a stopped worker left running.
+worker's running jobs alive (their heartbeat) and its key in Redis, every
+RECOVER seconds runs again the jobs a stopped worker left running, and at
+start and every SWEEP seconds removes files no document accounts for
+(app/storage.py, decision record 21).
 """
 
 import logging
@@ -25,11 +27,14 @@ import threading
 import uuid
 
 import redis
+from sqlalchemy import select
 
+from app import logs, storage
 from app.config import settings
 from app.db import SessionLocal
 from app.embedding import default_embedder
 from app.llm import default_provider
+from app.models import Document
 from app.parsing import PyMuPDFParser
 from app.reranking import default_reranker
 from app.services import jobs
@@ -39,6 +44,7 @@ logger = logging.getLogger("app.worker")
 POLL = 5.0  # seconds a lane waits for a signal before looking again
 BEAT = 10.0  # seconds between heartbeats
 RECOVER = 60.0  # seconds between looks for jobs a stopped worker left
+SWEEP = 3600.0  # seconds between sweeps for files no document accounts for
 KEY_TTL = 30  # seconds a worker's key in Redis outlives its last beat
 STOP_WAIT = 300.0  # seconds to wait for the steps running when stopping
 
@@ -52,6 +58,9 @@ class Worker:
         self.redis = redis.Redis.from_url(redis_url, socket_timeout=POLL + 5)
         self.stopping = threading.Event()
         self.tools.stopping = self.stopping
+        # The job each lane is running now; only these are kept alive.
+        self.running: dict[str, uuid.UUID] = {}
+        self._running_lock = threading.Lock()
 
     def run_one(self, lane: str) -> bool:
         """Claim and run one job of the lane. False if there was none."""
@@ -61,7 +70,13 @@ class Worker:
         if job_id is None:
             return False
         logger.info("Running job %s (%s)", job_id, lane)
-        jobs.run(self.tools, job_id)
+        with self._running_lock:
+            self.running[lane] = job_id
+        try:
+            jobs.run(self.tools, job_id)
+        finally:
+            with self._running_lock:
+                self.running.pop(lane, None)
         return True
 
     def _wait(self, lane: str) -> None:
@@ -79,12 +94,43 @@ class Worker:
                 logger.exception("The %s lane hit an error; going on", lane)
                 self.stopping.wait(POLL)
 
+    def sweep(self) -> storage.Swept:
+        """Remove files no document accounts for, and say what went."""
+        with self.tools.session_factory() as session:
+            documents = set(
+                session.execute(select(Document.environment_id, Document.id)).tuples()
+            )
+        swept = storage.sweep(documents)
+        if swept:
+            logger.info(
+                "Removed %s unfinished uploads, %s files and %s folders no document "
+                "accounts for",
+                len(swept.parts),
+                len(swept.files),
+                len(swept.folders),
+                extra={
+                    "removed": [
+                        str(p) for p in (*swept.parts, *swept.files, *swept.folders)
+                    ]
+                },
+            )
+        return swept
+
     def _keep_alive(self) -> None:
         since_recovery = RECOVER
+        since_sweep = SWEEP
         while not self.stopping.is_set():
+            if since_sweep >= SWEEP:
+                try:
+                    self.sweep()
+                except Exception:
+                    logger.exception("Could not sweep for leftover files")
+                since_sweep = 0.0
             try:
                 with self.tools.session_factory() as session:
-                    jobs.beat(session, self.name)
+                    with self._running_lock:
+                        now_running = list(self.running.values())
+                    jobs.beat(session, self.name, now_running)
                     if since_recovery >= RECOVER:
                         found = jobs.recover(session)
                         if found:
@@ -99,6 +145,7 @@ class Worker:
                 logger.exception("Could not record the worker's heartbeat")
             self.stopping.wait(BEAT)
             since_recovery += BEAT
+            since_sweep += BEAT
 
     def run(self) -> None:
         threads = [
@@ -126,7 +173,7 @@ class Worker:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    logs.configure()
     tools = jobs.Tools(
         session_factory=SessionLocal,
         llm=default_provider(),
