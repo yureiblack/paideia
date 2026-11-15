@@ -185,8 +185,37 @@ answering 404 while it is not written yet, which the page shows as "not yet".
 
 A newer push to a pull request cancels the run it replaces. On main every
 push keeps its run. Nothing is retried: a flaky test shows as a failure, and
-its log is kept. This is how the one failure of the semantic search tests in
-CI, during Phase 18, was handled: its log was kept before running again.
+its log is kept. That is how the cause of the one flaky backend test was
+found (next section).
+
+### A clean vector index for every test
+
+Two semantic search tests failed in CI twice: during Phase 18 and on this
+phase's first run. Both times the symptom was the same: one passage found
+where three exist. That one was not even the nearest. Locally they always
+passed.
+
+- **The cause was the test setup, not the search.**
+  - Each test's rows are rolled back, but their entries stay in the vector
+    index until VACUUM removes them. By the time those tests ran, the index
+    held hundreds of dead copies of the same fixture passages.
+  - Postgres reads through the index or scans the whole table, depending on
+    its estimate of the table's size. That estimate moves as dead rows pile
+    up and autovacuum runs, which would explain why it failed only
+    sometimes.
+  - A full scan cannot miss the nearest passage; an approximate index can.
+    When the index was used, its search could end among the dead copies
+    before reaching the live rows.
+- **Reproduced:** with the index forced on every search, the whole suite
+  failed four tests, among them CI's two. Each file run alone passed.
+- **Fixed:** after each test, the chunks table is vacuumed
+  (`tests/conftest.py`), so every test starts from a clean index. With the
+  index forced, the whole suite then passes. The run takes no measurably
+  longer.
+
+In production, autovacuum removes dead entries. A search right after a large
+deletion could in principle meet the same problem. At this project's size
+that was not seen, and it was not tested.
 
 ### Not added
 
@@ -210,6 +239,8 @@ CI, during Phase 18, was handled: its log was kept before running again.
   - Journey: an answer that schedules nothing; a citation that marks
     nothing.
 - **The two bugs' tests** each fail without their fix.
+- **The flaky semantic search tests:** reproduced by forcing the vector
+  index (four failures), then passing with the fix (none).
 - **Stability:** the journey passed three runs in a row, about half a minute
   each, and once more with the development page server running beside it.
 

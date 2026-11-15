@@ -114,6 +114,23 @@ def connection(test_engine: Engine) -> Iterator[Connection]:
             yield connection
         finally:
             transaction.rollback()
+    _vacuum_chunks(test_engine)
+
+
+def _vacuum_chunks(engine: Engine) -> None:
+    """Clear the vector index of the passages the test just rolled back.
+
+    A rollback removes rows from view, but their entries stay in the vector
+    index until VACUUM removes them. Over a whole run the index would fill
+    with hundreds of dead copies of the same fixture passages, and a search
+    the planner sends through the index could end among them, before
+    reaching the live rows: semantic search then found one passage of three.
+    In production autovacuum does this; here every test starts from a clean
+    index, as it starts from an empty database. VACUUM cannot run inside a
+    transaction, hence the separate autocommit connection.
+    """
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as c:
+        c.execute(text("VACUUM (INDEX_CLEANUP ON) document_chunks"))
 
 
 def _session_on(connection: Connection) -> Session:
