@@ -36,8 +36,8 @@ services:
       retries: 12
 
   redis:
-    # Provisioned now so the local stack is complete and reproducible, but
-    # nothing reads from it until Phase 18 introduces background job processing.
+    # Wakes the background worker when a job is queued. The jobs themselves
+    # live in Postgres (decision record 18).
     image: redis:7-alpine
     container_name: paideia-redis
     ports:

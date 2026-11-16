@@ -225,7 +225,8 @@ that was not seen, and it was not tested.
 - **Other browsers,** to keep the run short.
 - **The real language model and the benchmark in CI.** The model is a
   download of several gigabytes and CI's machines have no GPU, and the
-  benchmark takes twenty minutes; both are run by hand (README, Tests).
+  benchmark takes twenty minutes; both are run by hand
+  ([setup.md, Tests](../setup.md#tests)).
 
 ## Testing the tests
 
