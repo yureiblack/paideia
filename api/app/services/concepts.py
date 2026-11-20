@@ -33,7 +33,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import concepts as naming
-from app import prompting
+from app import maths, prompting
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
 from app.models import (
@@ -56,7 +56,7 @@ from app.services import sources, summaries
 logger = logging.getLogger(__name__)
 
 ARTIFACT_TYPE = "concept_extraction"
-PROMPT = ("concept_extraction", "v1")
+PROMPT = ("concept_extraction", "v2")
 MAX_CONCEPTS = 12  # per section
 MAX_SOURCES = 4  # passages one concept may cite
 
@@ -68,7 +68,10 @@ def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
 
     class ProposedConcept(BaseModel):
         name: str = Field(min_length=1, max_length=naming.MAX_NAME)
-        definition: str = Field(min_length=1, max_length=naming.MAX_DEFINITION)
+        # The prose limit plus the formulas' (decision record 24).
+        definition: str = Field(
+            min_length=1, max_length=naming.MAX_DEFINITION + maths.FORMULA_CHARS
+        )
         aliases: list[Annotated[str, Field(max_length=naming.MAX_NAME)]] = Field(
             max_length=naming.MAX_ALIASES
         )
@@ -170,7 +173,9 @@ def _propose(
         prompt = prompting.render(
             *PROMPT,
             filename=filename,
-            passages="\n\n".join(f"[{n}] {text}" for n, text in section),
+            passages=maths.for_model(
+                "\n\n".join(f"[{n}] {text}" for n, text in section)
+            ),
             max_concepts=MAX_CONCEPTS,
         )
         generated = llm.generate_structured(prompt, answer_schema(numbers))

@@ -114,6 +114,22 @@ def count(session, model) -> int:
     return session.scalar(select(func.count()).select_from(model))
 
 
+def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
+    session: Session, session_factory
+):
+    # Decision record 24: stored as \( \), shown to the model as $ $.
+    env = environment(session)
+    lecture = document([H("Eigenvalues"), P(r"Each \(\lambda\) solves it.")])
+    doc = add(session, session_factory, env, "eigen.pdf", lecture)
+    llm = answering([concept("Eigenvalue", [1])])
+
+    extract(session, session_factory, doc, llm)
+
+    [prompt] = [p for p, _ in llm.calls if p.name == "concept_extraction"]
+    assert r"Each $\lambda$ solves it." in prompt.user
+    assert r"\(" not in prompt.user
+
+
 def test_proposals_become_concepts_with_their_passages_as_evidence(
     session: Session, session_factory
 ):
@@ -382,5 +398,6 @@ def test_the_schema_bounds_every_list_and_string():
     assert item["sources"]["maxItems"] == concepts.MAX_SOURCES
     assert item["sources"]["items"] == {"minimum": 3, "maximum": 5, "type": "integer"}
     assert item["name"]["maxLength"] == 80
-    assert item["definition"]["maxLength"] == 300
+    # 300 characters of prose and 300 of LaTeX (decision record 24).
+    assert item["definition"]["maxLength"] == 600
     assert item["aliases"]["maxItems"] == 5

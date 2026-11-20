@@ -229,3 +229,46 @@ def test_a_session_is_bounded_and_interleaved():
     assert len(session) == 10
     assert sorted(c.concept for c in session) == ["a"] * 5 + ["b"] * 5
     assert all(x.concept != y.concept for x, y in itertools.pairwise(session))
+
+
+# --- maths (decision record 24) -----------------------------------------------
+
+
+def test_formatting_inside_a_formula_is_maths_not_markup():
+    # | and * drop an item as formatting, but not inside a formula.
+    assert tidy(r"Is $|A| = |A^*|$ for every $A$?", 300) == (
+        r"Is \(|A| = |A^*|\) for every \(A\)?"
+    )
+    assert tidy("Is |A| = |A*| here?", 300) is None
+
+
+def test_citation_marks_are_removed_from_prose_only():
+    # "(2)" is a citation in prose, and maths inside a formula.
+    assert tidy(r"It is $f(2)$ (passage 2).", 300) == r"It is \(f(2)\)."
+
+
+def test_a_formula_that_would_not_render_drops_the_item_with_its_reason():
+    draft = short_answer(r"What is $\frac{1}{2$?", "A half.", [1])
+    assert draft == "a formula that would not render (a { with no })"
+    draft = flashcard("Front", r"Back $\href{x}{y}$", [1])
+    assert draft == (
+        r"a formula that would not render (\href, which links, images or HTML)"
+    )
+
+
+def test_the_prose_limit_counts_a_formula_as_one_character():
+    matrix = r"$\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}$"
+    # 40 characters of prose and a 40-character formula fit a limit of 41.
+    question = "x" * 39 + " " + matrix
+    assert tidy(question, 41) is not None
+    assert tidy(question, 40) is None
+    # The formulas' LaTeX has its own limit.
+    assert tidy("$" + "x" * 300 + "$", 300) is not None
+    assert tidy("$" + "x" * 301 + "$", 300) is None
+
+
+def test_latex_damaged_by_json_is_repaired_in_items():
+    # As JSON gives "\\frac" written with one backslash: a form feed.
+    draft = short_answer("What is $\x0crac{1}{2}$ of 4?", "Two.", [1])
+    assert not isinstance(draft, str)
+    assert draft.content["question"] == r"What is \(\frac{1}{2}\) of 4?"

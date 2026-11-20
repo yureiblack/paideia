@@ -78,7 +78,7 @@ def test_a_document_is_summarized_as_soon_as_it_is_read(client: TestClient):
     )
     assert (body["model"], body["prompt_versions"]) == (
         "mock-llm",
-        ["document_summary/v1"],
+        ["document_summary/v2"],
     )
     [citation] = body["key_points"][0]["citations"]
     preview = client.get(f"/api/chunks/{citation['chunk_id']}/preview").json()

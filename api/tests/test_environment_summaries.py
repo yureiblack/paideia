@@ -24,7 +24,13 @@ from app.services import environment_summaries as env_summaries
 from app.services import environments as environment_service
 from app.services import summaries
 from tests import pdfs
-from tests.fakes import FailingProvider, FakeEmbedder, MockProvider, allowed_numbers
+from tests.fakes import (
+    FailingProvider,
+    FakeEmbedder,
+    MockProvider,
+    allowed_numbers,
+    simple_answer,
+)
 from tests.parsed import H, P, Returns, document
 
 SCHEDULING = document(
@@ -106,7 +112,7 @@ def test_built_from_the_document_summaries_with_their_citations(
     state = refresh(session, session_factory, env, llm)
 
     [(prompt, schema)] = environment_calls(llm)
-    assert prompt.id == "environment_summary/v1"
+    assert prompt.id == "environment_summary/v2"
     assert "Subject: Operating Systems" in prompt.user
     assert prompt.user.index("Document: a.pdf") < prompt.user.index("Document: b.pdf")
     # Each document summary cited two passages (one per key point, as the
@@ -123,6 +129,57 @@ def test_built_from_the_document_summaries_with_their_citations(
     assert summary.based_on[0].summary_id == doc_summary.id
     stored = doc_summary.content["key_points"][0]["citations"][0]
     assert summary.key_points[0].citations[0].model_dump(mode="json") == stored
+
+
+def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
+    session: Session, session_factory
+):
+    # Decision record 24: the documents' summaries store \( \); the notes
+    # show the model $ $.
+    def answer(prompt, schema):
+        if prompt.name == "environment_summary":
+            return simple_answer(prompt, schema)
+        return {
+            "overview": r"About $\lambda$.",
+            "key_points": [
+                {"point": r"It solves $\det(A) = 0$.", "sources": [1]},
+                {"point": "Plain.", "sources": [2]},
+            ],
+        }
+
+    llm = MockProvider(answer=answer)
+    env, _ = course(session, session_factory, llm, ("a.pdf", SCHEDULING))
+
+    refresh(session, session_factory, env, llm)
+
+    [(prompt, _)] = environment_calls(llm)
+    assert r"Overview: About $\lambda$." in prompt.user
+    assert r"- It solves $\det(A) = 0$. [1]" in prompt.user
+    assert r"\(" not in prompt.user
+
+
+def test_a_key_point_whose_formula_would_not_render_is_dropped(
+    session: Session, session_factory
+):
+    # Decision record 24, as for document summaries.
+    def answer(prompt, schema):
+        if prompt.name != "environment_summary":
+            return simple_answer(prompt, schema)
+        return {
+            "overview": r"About $\lambda$.",
+            "key_points": [
+                {"point": r"Kept: $x^2$.", "sources": [1]},
+                {"point": r"Broken: $\frac{1}{2$.", "sources": [2]},
+            ],
+        }
+
+    llm = MockProvider(answer=answer)
+    env, _ = course(session, session_factory, llm, ("a.pdf", SCHEDULING))
+
+    summary = refresh(session, session_factory, env, llm).summary
+
+    assert summary.overview == r"About \(\lambda\)."
+    assert [kp.text for kp in summary.key_points] == [r"Kept: \(x^2\)."]
 
 
 def test_a_passage_cited_by_several_points_is_numbered_once(

@@ -125,7 +125,7 @@ def test_passages_are_numbered_in_reading_order_and_cited_back(
     artifact = summarize(session, session_factory, lecture, llm)
 
     [(prompt, schema)] = llm.calls
-    assert prompt.id == "document_summary/v1"
+    assert prompt.id == "document_summary/v2"
     assert "Document: Lecture 4.pdf" in prompt.user
     first, second, third = (prompt.user.index(f"[{n}] ") for n in (1, 2, 3))
     assert first < second < third
@@ -144,7 +144,7 @@ def test_passages_are_numbered_in_reading_order_and_cited_back(
     assert summary.overview == "Three topics."
     assert (summary.model, summary.prompt_versions, summary.sections) == (
         "mock-llm",
-        ["document_summary/v1"],
+        ["document_summary/v2"],
         1,
     )
     assert summary.seconds == 1.5
@@ -174,19 +174,19 @@ def test_a_long_document_is_read_in_sections_then_combined(
     artifact = summarize(session, session_factory, lecture, llm)
 
     *section_calls, (combine, combine_schema) = llm.calls
-    assert [p.id for p, _ in section_calls] == ["document_summary/v1"] * 3
+    assert [p.id for p, _ in section_calls] == ["document_summary/v2"] * 3
     # Each section keeps the document-wide numbers and may cite only its own.
     assert [allowed_numbers(s) for _, s in section_calls] == [[1, 2], [3, 4], [5, 6]]
     assert "[3] Topic 2" in section_calls[1][0].user
     assert "[1] " not in section_calls[1][0].user
     # The combining call sees every section's notes.
-    assert combine.id == "combine_summaries/v1"
+    assert combine.id == "combine_summaries/v2"
     for n in (1, 2, 3):
         assert f"Section {n} (passages {2 * n - 1} to {2 * n})" in combine.user
     assert allowed_numbers(combine_schema) == [1, 2, 3, 4, 5, 6]
     summary = summaries.to_read(artifact, current=True)
     assert summary.sections == 3
-    assert summary.prompt_versions == ["document_summary/v1", "combine_summaries/v1"]
+    assert summary.prompt_versions == ["document_summary/v2", "combine_summaries/v2"]
     assert summary.seconds == 4 * 1.5
 
 
@@ -239,6 +239,64 @@ def test_an_answer_citing_a_number_it_was_not_given_is_rejected():
         schema.model_validate(
             {"overview": "x", "key_points": [{"point": "y", "sources": [3]}]}
         )
+
+
+def test_an_overview_whose_formula_would_not_render_is_asked_for_again():
+    """Decision record 24: the overview cannot be dropped, so a broken
+    formula in it makes the answer malformed, which the provider retries."""
+    schema = summaries.answer_schema([1])
+    point = {"point": "y", "sources": [1]}
+
+    fine = schema.model_validate({"overview": r"Uses $A^{-1}$.", "key_points": [point]})
+    assert fine.overview == r"Uses \(A^{-1}\)."  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="a { with no }"):
+        schema.model_validate(
+            {"overview": r"Uses $\frac{1}{2$.", "key_points": [point]}
+        )
+
+
+def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
+    session: Session, session_factory
+):
+    # Decision record 24: stored as \( \), shown to the model as $ $.
+    lecture = processed(
+        session,
+        session_factory,
+        document([H("Eigenvalues"), P(r"Each \(\lambda\) solves \[\det(A) = 0\].")]),
+    )
+    llm = MockProvider(answer=citing([1]))
+
+    summarize(session, session_factory, lecture, llm)
+
+    [(prompt, _)] = llm.calls
+    assert r"Each $\lambda$ solves $$\det(A) = 0$$." in prompt.user
+    assert r"\(" not in prompt.user
+
+
+def test_formulas_are_stored_as_latex_and_a_point_that_would_not_render_is_dropped(
+    session: Session, session_factory
+):
+    lecture = processed(session, session_factory)
+
+    def answer(prompt, schema):
+        # As JSON gives it: "\b" of "\begin" read as a backspace.
+        return {
+            "overview": "About $\x08eta$ and money: $5 and $10.",
+            "key_points": [
+                {"point": r"Then $\det A \neq 0$.", "sources": [1]},
+                {"point": r"Broken $\frac{1}{2$.", "sources": [2]},
+                {"point": "Plain.", "sources": [3]},
+            ],
+        }
+
+    artifact = summarize(session, session_factory, lecture, MockProvider(answer=answer))
+
+    assert artifact.status == "ready"
+    assert artifact.content["overview"] == r"About \(\beta\) and money: $5 and $10."
+    assert [kp["text"] for kp in artifact.content["key_points"]] == [
+        r"Then \(\det A \neq 0\).",
+        "Plain.",
+    ]
 
 
 def test_summaries_are_written_one_at_a_time(session: Session, session_factory):

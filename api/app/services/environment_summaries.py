@@ -32,7 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import prompting
+from app import maths, prompting
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
 from app.models import Document, Environment, GeneratedArtifact
@@ -48,7 +48,7 @@ from app.services import summaries
 logger = logging.getLogger(__name__)
 
 ARTIFACT_TYPE = "environment_summary"
-PROMPT = ("environment_summary", "v1")
+PROMPT = ("environment_summary", "v2")
 
 # How much of the documents' notes one request carries, estimated as for
 # document summaries.
@@ -203,7 +203,7 @@ def _compose(
         prompt = prompting.render(
             *PROMPT,
             environment=environment_name,
-            notes="\n\n".join(p.text() for p in chosen),
+            notes=maths.for_model("\n\n".join(p.text() for p in chosen)),
             min_points=min(summaries.MIN_POINTS, len(numbers)),
             max_points=summaries.MAX_POINTS,
         )
@@ -311,7 +311,9 @@ def write_environment_summary(
                             citations[n - 1] for n in dict.fromkeys(kp.sources)
                         ],
                     }
-                    for kp in answer.key_points  # type: ignore[attr-defined]
+                    for kp in summaries.renderable(
+                        answer.key_points  # type: ignore[attr-defined]
+                    )
                 ],
             }
         except LLMError as exc:

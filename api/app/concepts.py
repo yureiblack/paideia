@@ -16,12 +16,21 @@ Validation drops what cannot be trusted rather than storing it: a concept
 whose name normalizes to nothing, has no letters, or cites no passage it was
 given; aliases that are empty, repeat the name or another alias, or read
 like a description.
+
+Definitions may hold maths, stored as LaTeX (decision record 24): a
+definition whose formula would not render drops its concept, and its length
+limit counts each formula as one character. Names and aliases never hold
+maths: a concept is merged by the words of its name, and LaTeX has no words
+to merge on, so a name with a formula drops the concept and an alias with
+one is left out.
 """
 
 import re
 import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+
+from app import maths
 
 MAX_NAME = 80
 MAX_DEFINITION = 300
@@ -123,6 +132,12 @@ class ValidConcept:
     passages: list[int] = field(default_factory=list)  # in the order cited
 
 
+def _has_maths(text: str) -> bool:
+    """Whether the model wrote a formula, or LaTeX outside one."""
+    text = maths.from_model(text)
+    return bool(maths.formulas(text)) or "\\" in text or maths.problem(text) is not None
+
+
 def clean_aliases(aliases: Iterable[str], *taken: str) -> list[str]:
     """Aliases worth keeping: non-empty, a name rather than a description
     (at most MAX_ALIAS_WORDS words, none of them a joining word), and
@@ -137,6 +152,7 @@ def clean_aliases(aliases: Iterable[str], *taken: str) -> list[str]:
         if (
             not key
             or key in seen
+            or _has_maths(alias)
             or len(alias) > MAX_NAME
             or len(words) > MAX_ALIAS_WORDS
             or _DESCRIPTION_WORDS.intersection(words)
@@ -165,14 +181,20 @@ def validate(proposed: Iterable, allowed: set[int]) -> tuple[list[ValidConcept],
     for item in proposed:
         bare, bracketed = split_name(item.name)
         key = normalize(item.name)
-        definition = tidy(item.definition)
+        # Formulas are moved to the stored form before tidy(), whose
+        # whitespace rules would remove what JSON made of "\frac".
+        definition = tidy(maths.from_model(item.definition))
+        prose_chars, formula_chars = maths.sizes(definition)
         passages = [n for n in dict.fromkeys(item.sources) if n in allowed]
         if (
             not key
             or not re.search(r"[^\W\d_]", key)
+            or _has_maths(item.name)
             or len(bare) > MAX_NAME
             or not definition
-            or len(definition) > MAX_DEFINITION
+            or maths.problem(definition)
+            or prose_chars > MAX_DEFINITION
+            or formula_chars > maths.FORMULA_CHARS
             or not passages
         ):
             dropped += 1

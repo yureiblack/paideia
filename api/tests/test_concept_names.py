@@ -182,3 +182,42 @@ def test_aliases_never_merge_concepts():
     )
 
     assert sorted(c.normalized_name for c in kept) == ["lock", "mutex"]
+
+
+# --- maths (decision record 24) -----------------------------------------------
+
+
+def test_definitions_keep_their_formulas_and_names_stay_words():
+    kept, dropped = validate(
+        [
+            proposal(
+                "Determinant",
+                definition="A number $\\det A$, nonzero exactly when $A^{-1}$ exists.",
+                aliases=[r"$\det$", "det"],
+            ),
+            proposal(r"$\mathbb{R}^n$"),  # a name made of LaTeX
+            proposal("Trace", definition=r"The sum $\sum_i a_{ii$."),  # broken
+        ],
+        allowed={1},
+    )
+
+    assert dropped == 2
+    [determinant] = kept
+    assert determinant.definition == (
+        r"A number \(\det A\), nonzero exactly when \(A^{-1}\) exists."
+    )
+    assert determinant.aliases == ["det"]
+
+
+def test_a_definition_damaged_by_json_is_repaired_before_tidying():
+    # A form feed, what JSON makes of "\\f", is whitespace to tidy().
+    [kept], _ = validate([proposal("Half", definition="It is $\x0crac{1}{2}$.")], {1})
+    assert kept.definition == r"It is \(\frac{1}{2}\)."
+
+
+def test_the_definition_limit_counts_a_formula_as_one_character():
+    formula = "$" + "x" * 250 + "$"
+    kept, _ = validate([proposal("Long", definition="y" * 290 + " " + formula)], {1})
+    assert kept
+    kept, _ = validate([proposal("Long", definition="y" * 300 + " " + formula)], {1})
+    assert not kept
