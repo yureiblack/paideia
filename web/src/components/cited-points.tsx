@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 
+import { MathsText } from "@/components/maths-text";
 import { pagesLabel, SourcePanel } from "@/components/source-panel";
 import type { Citation, SummaryPoint } from "@/lib/types";
 
@@ -52,7 +53,9 @@ function KeyPoint({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-sm">{point.text}</p>
+      <p className="text-sm">
+        <MathsText text={point.text} />
+      </p>
       <CitationChips
         environmentId={environmentId}
         citations={point.citations}

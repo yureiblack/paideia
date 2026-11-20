@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import { useAnswer, usePracticeSession } from "@/hooks/use-practice";
 import { formatDateTime } from "@/lib/format";
@@ -164,7 +165,9 @@ function ItemCard({
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {KIND_LABEL[item.kind]} · {item.concept.name}
       </p>
-      <p className="text-base font-medium">{item.prompt}</p>
+      <p className="text-base font-medium">
+        <MathsText text={item.prompt} />
+      </p>
 
       {item.kind === "multiple_choice" && item.options && (
         <fieldset disabled={!!result} className="flex flex-col gap-2">
@@ -178,7 +181,9 @@ function ItemCard({
                 onChange={() => setChoice(n)}
                 className="mt-1"
               />
-              <span>{option}</span>
+              <span>
+                <MathsText text={option} />
+              </span>
             </label>
           ))}
           {!result && (
@@ -225,7 +230,9 @@ function ItemCard({
           )}
           {revealed ? (
             <>
-              <p className="rounded-lg bg-zinc-100 p-3 text-sm dark:bg-zinc-900">{item.answer}</p>
+              <p className="rounded-lg bg-zinc-100 p-3 text-sm dark:bg-zinc-900">
+                <MathsText text={item.answer} />
+              </p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -272,9 +279,17 @@ function ItemCard({
                 : "Marked as not yet."
               : result.correct
                 ? "Right."
-                : `Not quite. The answer: ${result.answer}`}
+                : (
+                  <>
+                    Not quite. The answer: <MathsText text={result.answer} />
+                  </>
+                )}
           </p>
-          {result.explanation && <p>{result.explanation}</p>}
+          {result.explanation && (
+            <p>
+              <MathsText text={result.explanation} />
+            </p>
+          )}
           <CitationChips environmentId={environmentId} citations={result.sources} showFilename />
           <p className="text-xs text-zinc-500">
             {item.concept.name} comes back for review{" "}

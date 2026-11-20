@@ -10,6 +10,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { MathsText } from "@/components/maths-text";
 import { Empty, Loading, LoadError } from "@/components/query-states";
 import { useSearch } from "@/hooks/use-search";
 import { pagesLabel, SourcePanel } from "@/components/source-panel";
@@ -140,7 +141,9 @@ function ResultCard({
           {result.score.toFixed(2)}
         </span>
       </div>
-      <p className="whitespace-pre-wrap text-sm">{citation.excerpt}</p>
+      <p className="whitespace-pre-wrap text-sm">
+        <MathsText text={citation.excerpt} />
+      </p>
       {scores && <StageScores scores={scores} />}
       <button
         type="button"

@@ -8,6 +8,7 @@
 // checked against the material itself.
 
 import { CitedPoints } from "@/components/cited-points";
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import { formatDateTime } from "@/lib/format";
 import type { CurrentSummary } from "@/lib/types";
@@ -85,7 +86,9 @@ export function DocumentSummaryPanel({
       aria-label="Summary"
       className="flex flex-col gap-3 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900"
     >
-      <p className="text-sm">{summary.overview}</p>
+      <p className="text-sm">
+        <MathsText text={summary.overview} />
+      </p>
       <CitedPoints environmentId={environmentId} points={summary.key_points} />
       <p className="text-xs text-zinc-500">
         Written by {summary.model} from this document&apos;s passages

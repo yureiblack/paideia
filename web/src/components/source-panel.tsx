@@ -6,8 +6,10 @@
 
 import { useEffect, useRef, type Ref } from "react";
 
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import { usePreview } from "@/hooks/use-sources";
+import { widen } from "@/lib/maths";
 import type { SourcePage } from "@/lib/types";
 
 export function pagesLabel(start: number, end: number) {
@@ -77,21 +79,24 @@ function PageWithPassage({
   page: SourcePage;
   markRef?: Ref<HTMLElement>;
 }) {
-  const { content, highlight_start: start, highlight_end: end } = page;
+  const { content } = page;
+  // Widened so that a formula is highlighted whole or not at all: half a
+  // formula cannot be typeset.
+  const [start, end] = widen(content, page.highlight_start, page.highlight_end);
   return (
     <section aria-label={`Page ${page.page_number}`}>
       <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
         Page {page.page_number}
       </h4>
       <p className="whitespace-pre-wrap text-sm">
-        {content.slice(0, start)}
+        <MathsText text={content.slice(0, start)} />
         <mark
           ref={markRef}
           className="rounded-sm bg-amber-100 text-inherit dark:bg-amber-900/60"
         >
-          {content.slice(start, end)}
+          <MathsText text={content.slice(start, end)} />
         </mark>
-        {content.slice(end)}
+        <MathsText text={content.slice(end)} />
       </p>
     </section>
   );

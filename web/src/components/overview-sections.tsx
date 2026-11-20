@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 
 import { STATE_BADGE } from "@/components/environment-summary";
 import { StatusBadge } from "@/components/materials";
+import { MathsText } from "@/components/maths-text";
 import { Empty, QueryState } from "@/components/query-states";
 import { useDocuments } from "@/hooks/use-documents";
 import { useEnvironmentSummary } from "@/hooks/use-environment-summary";
@@ -290,7 +291,9 @@ export function SummaryPreview({ environmentId }: { environmentId: string }) {
                 {badge.label}
               </span>
               {overview ? (
-                <p className="line-clamp-5 text-sm leading-6">{overview}</p>
+                <p className="line-clamp-5 text-sm leading-6">
+                  <MathsText text={overview} />
+                </p>
               ) : (
                 <Empty>
                   {s.state === "failed" && s.error

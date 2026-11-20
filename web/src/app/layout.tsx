@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+// KaTeX's styles and fonts, served with the page (decision record 24).
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
