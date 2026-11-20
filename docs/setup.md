@@ -163,6 +163,14 @@ pnpm typecheck
 pnpm build
 ```
 
+The backend checks formulas against the commands the page's KaTeX supports,
+listed in `api/app/katex.json` (decision record 24). After changing KaTeX's
+version, write the list again from `web/`, and commit it:
+
+```sh
+pnpm katex:commands
+```
+
 Python dependencies are pinned with pip-tools. Edit `api/requirements.in`, never
 `api/requirements.txt`. Then, from `api/`:
 
