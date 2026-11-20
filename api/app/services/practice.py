@@ -32,7 +32,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import learner, prompting
+from app import learner, maths, prompting
 from app import practice as rules
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
@@ -65,7 +65,7 @@ from app.services import sources, summaries
 logger = logging.getLogger(__name__)
 
 ARTIFACT_TYPE = "practice_set"
-PROMPT = ("practice_items", "v1")
+PROMPT = ("practice_items", "v2")
 MIN_SUPPORT = 0.5  # the reranker's score of an answer against its passages
 CHANGED = "The material changed before the practice items were written."
 # Nothing records a practice session: answers less than SESSION_GAP apart
@@ -95,7 +95,8 @@ def answer_schema(n: int) -> type[BaseModel]:
     ]
 
     def text(limit: int):
-        return Field(min_length=1, max_length=limit * 3 // 2)
+        # The prose limit plus the formulas' (decision record 24).
+        return Field(min_length=1, max_length=(limit + maths.FORMULA_CHARS) * 3 // 2)
 
     class ShortAnswer(BaseModel):
         question: str = text(rules.QUESTION_CHARS)
@@ -104,9 +105,9 @@ def answer_schema(n: int) -> type[BaseModel]:
 
     class MultipleChoice(BaseModel):
         question: str = text(rules.QUESTION_CHARS)
-        options: list[
-            Annotated[str, Field(min_length=1, max_length=rules.OPTION_CHARS * 3 // 2)]
-        ] = Field(min_length=rules.OPTIONS, max_length=rules.OPTIONS)
+        options: list[Annotated[str, text(rules.OPTION_CHARS)]] = Field(
+            min_length=rules.OPTIONS, max_length=rules.OPTIONS
+        )
         correct: int = Field(ge=1, le=rules.OPTIONS)
         explanation: str = text(rules.ANSWER_CHARS)
         sources: sources_
@@ -259,8 +260,10 @@ def _write(
     prompt = prompting.render(
         *PROMPT,
         concept=name,
-        definition=definition,
-        passages="\n\n".join(f"[{p.number}] {p.text}" for p in passages),
+        definition=maths.for_model(definition),
+        passages=maths.for_model(
+            "\n\n".join(f"[{p.number}] {p.text}" for p in passages)
+        ),
         truth="true" if truth else "false",
     )
     answer = llm.generate_structured(prompt, answer_schema(len(passages))).value

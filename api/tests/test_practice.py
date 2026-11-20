@@ -10,6 +10,7 @@ hold due items, interleaved, or a stage's items.
 """
 
 import itertools
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -29,7 +30,13 @@ from app.models import (
 from app.schemas import AttemptCreate
 from app.services import documents as document_service
 from app.services import practice
-from tests.fakes import FailingProvider, FakeEmbedder, FakeReranker, practice_answer
+from tests.fakes import (
+    FailingProvider,
+    FakeEmbedder,
+    FakeReranker,
+    MockProvider,
+    practice_answer,
+)
 from tests.parsed import H, P, Returns, document
 from tests.test_concepts import add, chunks_of, concept, environment, extract
 from tests.test_graph import (
@@ -96,6 +103,27 @@ def items_of(session, concept_obj, retired=False) -> dict[str, LearningItem]:
     return {i.kind: i for i in session.scalars(query)}
 
 
+def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write():
+    # Decision record 24: the concept's definition and passages are stored
+    # with \( \), and shown to the model with $ $.
+    passage = practice._Passage(
+        1,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        "Eigenvalues\n\n" + r"Each \(\lambda\) solves it.",
+    )
+    llm = MockProvider(answer=lambda prompt, schema: practice_answer(prompt))
+
+    practice._write(
+        "Eigenvalue", r"A number \(\lambda\).", [passage], "0" * 64, llm, FakeReranker()
+    )
+
+    [(prompt, _)] = llm.calls
+    assert r"Concept: Eigenvalue: A number $\lambda$." in prompt.user
+    assert r"Each $\lambda$ solves it." in prompt.user
+    assert r"\(" not in prompt.user
+
+
 def test_preparing_a_concept_writes_four_checked_items_from_its_passages(
     session: Session, session_factory
 ):
@@ -124,7 +152,7 @@ def test_preparing_a_concept_writes_four_checked_items_from_its_passages(
         assert item.metadata_json["support"] >= practice.MIN_SUPPORT
         assert (item.model_name, item.prompt_version) == (
             "mock-llm",
-            "practice_items/v1",
+            "practice_items/v2",
         )
         assert session.get(ReviewSchedule, item.id).box == 0
     generation = session.get(GeneratedArtifact, generation_id)

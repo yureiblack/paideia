@@ -280,6 +280,22 @@ def test_search_understands_what_people_type(
     assert sorted(search(session, os_env, query)) == sorted(expected)
 
 
+def test_latex_commands_are_found_by_their_words(session: Session, session_factory):
+    # Decision record 24: Postgres's parser splits words at backslashes, so
+    # \lambda is indexed as "lambda" and \det as "det", with no rewriting.
+    env = environment(session, "Linear Algebra")
+    text = document(
+        [
+            H("Eigenvalues"),
+            P(r"Each eigenvalue \(\lambda\) solves \[\det(A - \lambda I) = 0\]."),
+        ]
+    )
+    processed(session, session_factory, text, env=env)
+
+    assert search(session, env, "lambda") == ["Eigenvalues"]
+    assert search(session, env, "det") == ["Eigenvalues"]
+
+
 def test_any_word_of_a_question_can_match(session: Session, library):
     # Requiring every word would find nothing here: no chunk mentions
     # "decides" or "next". Without search syntax, any word may match.

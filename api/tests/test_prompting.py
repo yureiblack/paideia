@@ -19,6 +19,11 @@ RELEASED = {
     "document_summary/v1": "d5bffc7d775b7ec4a5f0b661003f63c4b134eaf5aa30564b6806f7387de30dd9",
     "environment_summary/v1": "965c483c92c14c612e891f854bb8fed1d3ecb87019c9587ed6a65cd137610069",
     "practice_items/v1": "548781c5f829fc7171162eb425fca9f15e1059860be7cc540735a43374eacad8",
+    "combine_summaries/v2": "0b28ace190be9452850b6ed3fd935a564fcd319c08fd0e6df232e0bf5b446065",
+    "concept_extraction/v2": "00d0a53acc9acba1e7da3741e00d7cf2e4a1565fdb7d933f52c4cac1179c2506",
+    "document_summary/v2": "42cb382040afddd367ef2b6c813d6e5765b73ffdfcb4d785e0ed667c08455417",
+    "environment_summary/v2": "3530eada05b7a5bd1b65cbf83243dc1a727021ee1ef9c6475d1754443c373f79",
+    "practice_items/v2": "ed84a9ad36815e7f0fb36c54cacd1d56460ed52e8b34b6232c3de5aade0e9196",
     "relationship/v1": "1990b4c79f86eed0f846939af9a0aafcd61e3b3b220b7a7251bd5510d3fd4925",
     "roadmap_stages/v1": "28d49ca8cffcb2a49b6102a51353291ebe1b867b5814e15f2b48e7508e583b33",
 }

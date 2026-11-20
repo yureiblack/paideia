@@ -14,6 +14,7 @@ import Link from "next/link";
 import { CitationChips } from "@/components/cited-points";
 import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
+import { MathsText } from "@/components/maths-text";
 import { StagePractice } from "@/components/stage-practice";
 import { Loading, LoadError } from "@/components/query-states";
 import { useRequestRoadmap, useRoadmap } from "@/hooks/use-roadmap";
@@ -148,7 +149,11 @@ function StageCard({
         <h3 id={`stage-${stage.number}`} className="text-lg font-semibold">
           {stage.title}
         </h3>
-        {stage.description && <p className="text-sm">{stage.description}</p>}
+        {stage.description && (
+          <p className="text-sm">
+            <MathsText text={stage.description} />
+          </p>
+        )}
         <p className="text-xs text-zinc-500">
           {stage.written
             ? "Title and description written by the local model."
@@ -193,7 +198,9 @@ function ConceptStep({
       >
         {concept.name}
       </Link>
-      <p className="text-sm">{concept.definition}</p>
+      <p className="text-sm">
+        <MathsText text={concept.definition} />
+      </p>
       <ConceptProgress environmentId={environmentId} conceptId={concept.id} />
       {concept.builds_on.length > 0 && (
         <p className="text-xs text-zinc-600 dark:text-zinc-400">

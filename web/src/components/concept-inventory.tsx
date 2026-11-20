@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import { useConcepts, useRequestConcepts } from "@/hooks/use-concepts";
 import type { Concept, ExtractionState } from "@/lib/types";
@@ -147,7 +148,9 @@ function ConceptCard({
           </p>
         )}
       </div>
-      <p className="text-sm">{concept.definition}</p>
+      <p className="text-sm">
+        <MathsText text={concept.definition} />
+      </p>
       <p className="text-xs text-zinc-500">
         In {concept.documents.map((d) => d.filename).join(", ")}
       </p>

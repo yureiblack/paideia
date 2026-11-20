@@ -14,6 +14,7 @@ import { CitationChips } from "@/components/cited-points";
 import { ConceptInventory } from "@/components/concept-inventory";
 import { ConceptProgress } from "@/components/concept-progress";
 import { STATE_BADGE } from "@/components/environment-summary";
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import {
   graphVersion,
@@ -232,7 +233,9 @@ function ConceptExplorer({
         {near.aliases.length > 0 && (
           <p className="text-xs text-zinc-500">Also: {near.aliases.join(", ")}</p>
         )}
-        <p className="text-sm">{near.definition}</p>
+        <p className="text-sm">
+        <MathsText text={near.definition} />
+      </p>
         <ConceptProgress environmentId={environmentId} conceptId={near.concept.id} />
       </div>
 

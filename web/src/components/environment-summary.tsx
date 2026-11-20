@@ -7,6 +7,7 @@
 // cited passage in its page; then its sources and any documents left out.
 
 import { CitedPoints } from "@/components/cited-points";
+import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import {
   useEnvironmentSummary,
@@ -89,7 +90,9 @@ export function EnvironmentSummary({ environmentId }: { environmentId: string })
 
       {summary && (
         <section aria-label="Environment summary" className="flex flex-col gap-4">
-          <p>{summary.overview}</p>
+          <p>
+            <MathsText text={summary.overview} />
+          </p>
           <CitedPoints
             environmentId={environmentId}
             points={summary.key_points}

@@ -12,6 +12,11 @@ tested directly.
   machinery behind it. Bracketed citations and formulaic attributions
   ("according to the passages", "passage 1 states that") are removed; any
   other mention of passages drops the item.
+- Maths is the exception to plain text: formulas are stored as LaTeX, and
+  one that would not render drops the item (decision record 24). Every
+  rule about prose looks only at the prose, so the | of |A| or the * of A*
+  inside a formula is not formatting, and the length limits count each
+  formula as one character, with maths.FORMULA_CHARS for their LaTeX.
 - Multiple-choice options must differ, lose any numbering the model gave
   them, and are shuffled with a fixed seed, so the right answer's position
   gives nothing away and is the same every time.
@@ -32,6 +37,8 @@ from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TypeVar
+
+from app import maths
 
 KINDS = ("short_answer", "multiple_choice", "true_false", "flashcard")
 
@@ -72,18 +79,39 @@ _NUMBERING = re.compile(r"^\s*(?:\(?[A-Da-d1-4][.):]|[A-Da-d1-4]\s+-)\s+")
 
 
 def tidy(text: str, limit: int) -> str | None:
-    """The text as a learner should read it: citation marks and formulaic
-    attributions removed, spacing tidied. None if it carries formatting,
-    still mentions passages, is empty or is longer than limit."""
+    """The text as a learner should read it: formulas in the stored form,
+    citation marks and formulaic attributions removed, spacing tidied. None
+    if its prose carries formatting or still mentions passages, if it is
+    empty, if its prose is longer than limit or its formulas longer than
+    maths.FORMULA_CHARS, or if a formula would not render."""
+    text = maths.from_model(text)
+    if maths.problem(text):
+        return None
+    text, restore = maths.prose(text)
     if _MARKUP.search(text):
         return None
     text = _ATTRIBUTION.sub("", _CITATION.sub("", text))
     text = re.sub(r"\s+", " ", text).strip()
     text = text[:1].upper() + text[1:]
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
-    if not text or len(text) > limit or _MENTION.search(text):
+    if not text or _MENTION.search(text):
+        return None
+    text = restore(text)
+    prose_chars, formula_chars = maths.sizes(text)
+    if prose_chars > limit or formula_chars > maths.FORMULA_CHARS:
         return None
     return text
+
+
+def formula_problem(*texts: str) -> str | None:
+    """Why the item is dropped, if a formula in any of its texts would not
+    render: named apart from other formatting, so it can be told apart in
+    the reasons a generation records."""
+    for text in texts:
+        reason = maths.problem(maths.from_model(text))
+        if reason:
+            return f"a formula that would not render ({reason})"
+    return None
 
 
 @dataclass(frozen=True)
@@ -102,6 +130,8 @@ class Draft:
 
 
 def short_answer(question: str, answer: str, sources: Sequence[int]) -> Draft | str:
+    if reason := formula_problem(question, answer):
+        return reason
     clean_question = tidy(question, QUESTION_CHARS)
     clean_answer = tidy(answer, ANSWER_CHARS)
     if not clean_question or not clean_answer:
@@ -122,6 +152,8 @@ def multiple_choice(
 ) -> Draft | str:
     """correct counts from 1, as the model gives it. Stored options are
     shuffled with seed, and correct becomes their index from 0."""
+    if reason := formula_problem(question, explanation, *options):
+        return reason
     clean_question = tidy(question, QUESTION_CHARS)
     clean_explanation = tidy(explanation, ANSWER_CHARS)
     tidied = [tidy(_NUMBERING.sub("", option), OPTION_CHARS) for option in options]
@@ -147,6 +179,8 @@ def multiple_choice(
 def true_false(
     statement: str, truth: bool, explanation: str, sources: Sequence[int], wanted: bool
 ) -> Draft | str:
+    if reason := formula_problem(statement, explanation):
+        return reason
     clean_statement = tidy(statement, QUESTION_CHARS)
     clean_explanation = tidy(explanation, ANSWER_CHARS)
     if not clean_statement or not clean_explanation:
@@ -162,6 +196,8 @@ def true_false(
 
 
 def flashcard(front: str, back: str, sources: Sequence[int]) -> Draft | str:
+    if reason := formula_problem(front, back):
+        return reason
     clean_front, clean_back = tidy(front, FRONT_CHARS), tidy(back, ANSWER_CHARS)
     if not clean_front or not clean_back:
         return "formatting, a mention of passages, or too long"

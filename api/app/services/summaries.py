@@ -30,12 +30,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import prompting
+from app import maths, prompting
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
 from app.models import Document, DocumentChunk, Environment, GeneratedArtifact
@@ -45,8 +45,8 @@ from app.services import sources
 logger = logging.getLogger(__name__)
 
 ARTIFACT_TYPE = "document_summary"
-SUMMARY_PROMPT = ("document_summary", "v1")
-COMBINE_PROMPT = ("combine_summaries", "v1")
+SUMMARY_PROMPT = ("document_summary", "v2")
+COMBINE_PROMPT = ("combine_summaries", "v2")
 
 MIN_POINTS, MAX_POINTS = 3, 7
 MAX_SOURCES = 4  # passages one key point may cite
@@ -90,16 +90,33 @@ def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
         Number = Literal[tuple(numbers)]  # type: ignore[misc, assignment]
 
     class KeyPoint(BaseModel):
-        point: str
+        # Formulas in the stored form (decision record 24). A point whose
+        # formula would not render is dropped later, by renderable().
+        point: Annotated[str, AfterValidator(maths.from_model)]
         sources: list[Number] = Field(min_length=1, max_length=MAX_SOURCES)
 
     class Answer(BaseModel):
-        overview: str
+        # The overview cannot be dropped: a formula in it that would not
+        # render makes the answer malformed, and the model is asked again.
+        overview: Annotated[str, AfterValidator(maths.from_model_checked)]
         key_points: list[KeyPoint] = Field(
             min_length=min(MIN_POINTS, len(numbers)), max_length=MAX_POINTS
         )
 
     return Answer
+
+
+def renderable(key_points: Sequence) -> list:
+    """The key points whose formulas render. The others are dropped and
+    logged: one broken formula is not worth writing a summary again."""
+    kept = []
+    for kp in key_points:
+        reason = maths.problem(kp.point)
+        if reason:
+            logger.warning("Dropped a key point: %s: %r", reason, kp.point)
+        else:
+            kept.append(kp)
+    return kept
 
 
 def _sections(chunks: Sequence[DocumentChunk]) -> list[list[tuple[int, DocumentChunk]]]:
@@ -259,7 +276,9 @@ def _compose(
         ask(
             SUMMARY_PROMPT,
             [n for n, _ in section],
-            passages="\n\n".join(f"[{n}] {text}" for n, text in section),
+            passages=maths.for_model(
+                "\n\n".join(f"[{n}] {text}" for n, text in section)
+            ),
         )
         for section in sections
     ]
@@ -272,7 +291,7 @@ def _compose(
         cited = sorted(
             {n for g in generated for kp in g.value.key_points for n in kp.sources}
         )
-        generated.append(ask(COMBINE_PROMPT, cited, notes=notes))
+        generated.append(ask(COMBINE_PROMPT, cited, notes=maths.for_model(notes)))
 
     final = generated[-1].value
     content = {
@@ -285,7 +304,7 @@ def _compose(
                     for n in dict.fromkeys(kp.sources)
                 ],
             }
-            for kp in final.key_points
+            for kp in renderable(final.key_points)
         ],
     }
     return content, round(sum(g.seconds for g in generated), 1)

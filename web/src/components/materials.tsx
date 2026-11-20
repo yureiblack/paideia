@@ -11,6 +11,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 
 import { DocumentSummaryPanel } from "@/components/document-summary";
 import { MaterialUpdates } from "@/components/material-updates";
+import { MathsText } from "@/components/maths-text";
 import { Empty, Loading, LoadError } from "@/components/query-states";
 import {
   useDeleteDocument,
@@ -209,7 +210,7 @@ function DocumentRow({
         summary.data?.status === "ready" &&
         summary.data.overview && (
           <p className="line-clamp-2 text-sm text-zinc-700 dark:text-zinc-300">
-            {summary.data.overview}
+            <MathsText text={summary.data.overview} />
           </p>
         )}
 
@@ -409,7 +410,9 @@ function PageReader({ documentId }: { documentId: string }) {
             Page {page.page_number}
           </h4>
           {page.content.trim() ? (
-            <p className="whitespace-pre-wrap text-sm">{page.content}</p>
+            <p className="whitespace-pre-wrap text-sm">
+              <MathsText text={page.content} />
+            </p>
           ) : (
             <p className="text-sm text-zinc-500">No text on this page.</p>
           )}

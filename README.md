@@ -646,6 +646,13 @@ ones:
 
 Known limits, each stated in its decision record:
 
+- **Maths is in progress.** Maths written as LaTeX is typeset and checked
+  ([24](docs/architecture/24-maths-notation.md)). Reading maths from PDFs
+  with the local vision model, linear algebra exercises the backend solves
+  and marks, and a maths benchmark are planned as phases 25 to 27. Until
+  then, a PDF's formulas reach the passages as its text layer has them,
+  which for matrices is a row of numbers.
+
 - **One learner per installation,** with no accounts, and one worker.
   Several workers would need the model lock moved into Postgres or Redis,
   and settling what a stopped job left unfinished assumes one worker
@@ -675,8 +682,8 @@ Known limits, each stated in its decision record:
 
 ## Documentation
 
-- [docs/architecture/](docs/architecture/README.md): the 22 decision
-  records, one per phase, with an index.
+- [docs/architecture/](docs/architecture/README.md): the decision records,
+  one per phase, with an index.
 - [docs/setup.md](docs/setup.md): running it, developing it, testing it.
 - [docs/api.md](docs/api.md): every endpoint.
 - [docs/evaluation/](docs/evaluation/retrieval-benchmark.md): the benchmark,
