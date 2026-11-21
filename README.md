@@ -555,7 +555,7 @@ The demo environment below holds two lectures from the benchmark's corpus:
 CPU scheduling, then deadlock. Everything was written by the real local
 model.
 
-**Overview: the numbers at a glance, today's plan, each stage's progress and the summary**
+**Overview: the numbers at a glance, today's plan, the stages around the current one, and the summary**
 
 ![The Overview tab](docs/images/overview.png)
 
@@ -571,7 +571,7 @@ model.
 
 ![The knowledge map with one concept opened](docs/images/knowledge-map.png)
 
-**Roadmap: the first stages, each concept with its passages and how the learner stands on it**
+**Roadmap: the seven stages, the current one open with its concepts and their passages**
 
 ![The learning roadmap](docs/images/roadmap.png)
 
@@ -590,43 +590,46 @@ with the real local model. The times are the background jobs' own.
 
 1. **Create an environment,** "Operating Systems".
 2. **Upload "Lecture 2 - CPU scheduling.pdf",** three pages. It is read in
-   about a second; the model's work takes 136 seconds.
+   under two seconds; the model's work takes 168 seconds.
    - It is cut into 10 passages, all embedded.
    - Its summary and the environment's summary are written.
-   - 12 concepts are proposed and kept, from "Round robin" to "Exponential
-     averaging".
-   - The model is asked about 8 candidate pairs. It keeps 7 relationships,
-     such as "Time quantum is part of Round robin" and "Exponential averaging
-     comes before Shortest job first".
-   - The roadmap has 4 stages, each titled by the model.
-3. **Prepare practice** for the first two stages: 18 items for 5 concepts, in
-   58 and 38 seconds.
-4. **Answer a session** of seven items, some right, some missed. The Overview's
-   plan now starts with "Strengthen: Scheduling metrics and Preemptive
-   scheduling", the two concepts missed.
-5. **Upload "Lecture 4 - Deadlock.pdf".** The model's work takes 167 seconds.
+   - 12 concepts are proposed and kept, from "CPU scheduling" to "convoy
+     effect".
+   - The model is asked about 9 candidate pairs, and all 9 become
+     relationships, such as "Non-preemptive scheduling comes before
+     preemptive scheduling" and "Convoy effect relates to first-come,
+     first-served".
+   - The roadmap has 5 stages, each titled by the model.
+3. **Prepare practice** for the first two stages: 14 items for 5 concepts, in
+   47 and 50 seconds.
+4. **Answer a session** of six items, two of them missed. The Overview's plan
+   now starts with "Strengthen: CPU scheduling", missed on its last answer.
+5. **Upload "Lecture 4 - Deadlock.pdf".** The model's work takes 178 seconds.
    - The new lecture is cut into 8 passages, all embedded.
    - It gets its own summary. The environment's summary is rebuilt from both
      documents' summaries, and the first lecture's summary is kept as it
      was.
    - 12 new concepts are added.
-   - The model is asked about the 27 new candidate pairs only. The first
-     lecture's 8 are remembered, not asked again. All 27 become
-     relationships, such as "Circular Wait is part of Deadlock" and "Four
-     Necessary Conditions for Deadlock comes before Deadlock".
-   - The roadmap grows to 6 stages: the 2 new ones are titled, and the 4
+   - The model is asked about the 25 new candidate pairs only. The first
+     lecture's 9 are remembered, not asked again. 23 become relationships,
+     such as "Safe state is part of banker's algorithm" and "Deadlock
+     detection comes before deadlock recovery".
+   - The roadmap grows to 7 stages: the 2 new ones are titled, and the 5
      existing titles are kept.
    - The practice of the 5 practised concepts is kept, with its answers.
    - The plan adds "Skim: Lecture 4 - Deadlock.pdf", since none of its 12
      concepts has been practised yet.
 6. **Search** "why does one long job at the front make every short job behind
    it wait". The question never names the convoy effect, yet the passage on
-   first-come, first-served comes first, scored 1.00 by the reranker (0.996
+   first-come, first-served comes first, scored 1.00 by the reranker (0.9955
    before rounding).
 
-No passage in either lecture names a concept of the other, so no relationship
-crosses the two. The end-to-end test checks that case with two documents
-that do connect: the second one's passage on page faults names processes.
+No relationship crosses the two lectures. Only one passage names a concept
+of the other: the deadlock lecture's passage on detection mentions CPU
+utilization. That made two of the 25 candidate pairs, CPU utilization with
+deadlock detection and with deadlock recovery, and the model judged both
+unrelated. The end-to-end test checks two documents that do connect: the
+second one's passage on page faults names processes.
 
 ## Trade-offs and rejected alternatives
 

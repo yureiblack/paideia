@@ -60,8 +60,9 @@ They land in `data/demo-pdfs/`, which git ignores.
 Pick two lectures for the demo:
 
 - **The README's demo** used CPU scheduling, then deadlock. Each brings its
-  own concepts and stages, but no relationship crosses the two, because
-  neither names the other's concepts.
+  own concepts and stages, but no relationship crosses the two. Only one
+  passage names the other lecture's concept (CPU utilization, in the
+  deadlock lecture), and the model judged those pairs unrelated.
 - **To show the map linking lectures,** use two whose passages name each
   other's concepts. The scheduling lecture names processes 34 times, so
   processes and threads, then CPU scheduling, is likely to show
@@ -103,18 +104,18 @@ it with a palette made from the video itself:
 ```sh
 ffmpeg -i demo.webm -loop 1 -i label.png -filter_complex "\
 [0:v]split=3[v1][v2][v3];\
-[v1]trim=1:6,setpts=PTS-STARTPTS[a];\
-[v2]trim=6:175,setpts=(PTS-STARTPTS)/20[b0];\
+[v1]trim=0.5:5,setpts=PTS-STARTPTS[a];\
+[v2]trim=5:185.5,setpts=(PTS-STARTPTS)/20[b0];\
 [b0][1:v]overlay=(W-w)/2:H-h-28:shortest=1[b];\
-[v3]trim=175:177.3,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=5[c];\
+[v3]trim=185.5:190.3,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=5[c];\
 [a][b][c]concat=n=3:v=1:a=0,fps=10,scale=960:-1:flags=lanczos,split[s0][s1];\
-[s0]palettegen=max_colors=128:stats_mode=diff[p];\
-[s1][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" demo.gif
+[s0]palettegen=max_colors=48:stats_mode=diff[p];\
+[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" demo.gif
 ```
 
 The filter does four things:
-- It keeps seconds 1 to 6 as they were.
-- It plays seconds 6 to 175 twenty times faster, under a label.
+- It keeps seconds 0.5 to 5 as they were.
+- It plays seconds 5 to 185.5 twenty times faster, under a label.
 - It holds the last frame for five seconds.
 - It turns the result into a GIF.
 
@@ -124,6 +125,9 @@ recording.
 
 ## How the README's demo was made
 
+Made on 21 November 2026, with the interface from
+[record 25](architecture/25-interface-design.md), in its light theme.
+
 - **The stack:** a separate stack like the one above, with the real local
   model (ministral-3:8b on an Apple M3 Pro). Nothing in it was staged or
   edited.
@@ -132,11 +136,12 @@ recording.
   prepared practice for two stages and answered a session.
 - **The recording:** Playwright recorded the second upload, "Lecture 4 -
   Deadlock.pdf", at 1280 by 800, from the upload until the update report.
-  That took 172 seconds, 167 of them the model's work.
-- **The GIF:** the command above turned the recording into a 21-second GIF of
-  2.4 MB, with the model's work sped up twenty times and labelled.
+  That took 188 seconds, 178 of them the model's work.
+- **The GIF:** the command above turned the recording into a 23-second GIF of
+  3.0 MB, with the model's work sped up twenty times and labelled.
 - **The screenshots:** taken from the same environment at twice the
-  resolution, then cropped.
+  resolution, then cropped. Nothing was due by then, so the practice item
+  comes from the second stage's session.
 
 ## Afterwards
 
