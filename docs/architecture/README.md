@@ -3,14 +3,14 @@
 One record per phase of the project. Each one says what was decided, what
 was tried or rejected and why, how it was tested, and what it costs. Records
 are not rewritten when a later one changes a decision; the later record says
-what it replaces. All 23 are accepted.
+what it replaces. All 24 are accepted.
 
 Records 01 to 22 follow the original roadmap; its phase 23, the
 documentation, has no record of its own. From record 24 on, the project
-extends to mathematics, starting with linear algebra, in four planned
-phases: maths notation (24), reading maths from PDFs (25), computed
-exercises (26), and a maths evaluation (27). Record 24 sets out that plan
-and the decisions that hold across it.
+extends to mathematics, starting with linear algebra: maths notation (24),
+reading maths from PDFs (26), computed exercises (27), and a maths
+evaluation (28). Record 24 sets out that plan and the decisions that hold
+across it. Between them, record 25 redesigns the interface.
 
 | # | Record | What was decided | Date |
 |---|---|---|---|
@@ -37,6 +37,7 @@ and the decisions that hold across it.
 | 21 | [Reliability, security and data integrity](21-reliability.md) | An audit of eleven risks: safe names, a page limit, duplicate jobs refused by the database, an orphan sweep, structured logs with request ids. | 2026-11-15 |
 | 22 | [Automated testing and CI](22-testing-and-ci.md) | mypy, coverage reported but never enforced, component tests, one end-to-end journey with a stand-in model, three CI jobs. | 2026-11-15 |
 | 24 | [Maths notation](24-maths-notation.md) | Maths stored as LaTeX between `\(` `\)` and `\[` `\]`, typeset by a bundled KaTeX with trust off; the model's dollar signs moved and its JSON damage repaired; every formula checked against KaTeX's own commands; prose rules blind to formulas. | 2026-11-19 |
+| 25 | [Interface design](25-interface-design.md) | Designed first in a design file kept with the code; three colours as CSS variables with a chosen light or dark theme; type, rules and marks instead of boxes and badges; one frame for phone, tablet and desktop. | 2026-11-21 |
 
 How to run the project is in [../setup.md](../setup.md); the benchmark's
 results are in [../evaluation/retrieval-benchmark.md](../evaluation/retrieval-benchmark.md).
