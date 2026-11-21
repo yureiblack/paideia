@@ -100,14 +100,19 @@ Open http://localhost:3000.
 
 On later runs, only these are needed:
 - `docker compose up -d`;
-- the three processes from steps 3 to 5, without the install lines;
-- Ollama, if it is not already running as a service.
+- Ollama, if it is not already running as a service;
+- the three processes from steps 3 to 5, without the install lines, each
+  terminal with `source .venv/bin/activate` first for the API and worker.
+
+To stop, press Ctrl+C in each terminal, then `docker compose stop`. The data
+stays; `docker compose up -d` brings it back.
 
 ## Checking that it works
 
-The page's header shows whether the API, the database, the language model and
-the worker are ready. Hover over one that is down to see why. The same checks
-answer at:
+The page's masthead says "All systems ok" when the API, the database, the
+language model and the worker are all ready, or names the first one that is
+down. Click it to see all four, with why one is down. The same checks answer
+at:
 
 | Address | Answers |
 |---|---|
@@ -289,9 +294,9 @@ are kept.
 
 ## When something is not ready
 
-- **The header shows the worker as down.** Start it (step 4). Uploads wait
+- **The masthead says the worker is down.** Start it (step 4). Uploads wait
   in the queue until a worker takes them.
-- **The header shows the language model as down.** Start Ollama, and check
+- **The masthead says the model is down.** Start Ollama, and check
   that `ollama list` shows `ministral-3:8b`. Documents are still read,
   embedded and searchable without it. What the model writes fails, with the
   reason shown where it would appear. Once Ollama answers, use Try again on

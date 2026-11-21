@@ -494,9 +494,10 @@ neighbouring one, not the one that says it.
 
 ## Running it locally
 
-You need Docker Desktop, Python 3.13, Node 22 with pnpm, and Ollama.
+You need Docker Desktop, Python 3.13, Node 22 with pnpm, and Ollama (on a
+Mac, `brew install ollama`).
 
-Once, from the repository root:
+**Once,** from the repository root:
 
 ```sh
 docker compose up -d                  # Postgres and Redis
@@ -508,18 +509,45 @@ pip install -r api/requirements.txt
 ollama pull ministral-3:8b            # the language model, about 6 GB
 ```
 
-Then three processes, each in its own terminal from the repository root, with
-the virtual environment active:
+**Every time,** from the repository root. First the services:
 
 ```sh
-cd api && uvicorn app.main:app --reload    # the API, on :8000
-cd api && python -m app.worker             # the worker
-cd web && pnpm dev                         # the page, on :3000
+docker compose up -d                  # Postgres and Redis
+brew services start ollama            # the language model, if it is not already running
 ```
 
-Open http://localhost:3000. [docs/setup.md](docs/setup.md) has every step in
-full, the settings, the development commands, and how to run each kind of
-test. [docs/api.md](docs/api.md) lists every endpoint.
+Then three processes, each in its own terminal:
+
+```sh
+source .venv/bin/activate && cd api && uvicorn app.main:app --reload   # 1: the API, on :8000
+source .venv/bin/activate && cd api && python -m app.worker            # 2: the worker
+cd web && pnpm dev                                                     # 3: the page, on :3000
+```
+
+Then open the app:
+
+```sh
+open http://localhost:3000            # on a Mac; elsewhere, open the address in a browser
+```
+
+The masthead says "All systems ok" once the API, the database, the language
+model and the worker all answer; click it to see each one. The theme (Auto,
+Light or Dark) is beside it.
+
+To stop, press Ctrl+C in each of the three terminals, then:
+
+```sh
+docker compose stop                   # keeps the data; docker compose up -d brings it back
+```
+
+After pulling changes, run `(cd api && alembic upgrade head)` if they add a
+migration, and the install lines again if they change `requirements.txt` or
+`package.json`.
+
+[docs/setup.md](docs/setup.md) has every step in full, the settings, the
+development commands, and how to run each kind of test.
+[docs/api.md](docs/api.md) lists every endpoint. The interface's design is
+in `design/paideia.pen`, which opens in [Pencil](https://pen.dev).
 
 ## Screenshots
 
