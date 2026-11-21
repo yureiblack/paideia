@@ -54,7 +54,7 @@ export function MathsText({ text }: { text: string | null }) {
             <code
               key={segment.start}
               title="This formula could not be shown, so its LaTeX source is shown instead."
-              className="rounded bg-zinc-100 px-1 font-mono text-[0.9em] dark:bg-zinc-800"
+              className="bg-paper-2 px-1 font-mono text-[0.9em]"
             >
               {text.slice(segment.start, segment.end)}
             </code>

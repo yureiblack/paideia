@@ -9,6 +9,7 @@
 import Link from "next/link";
 
 import { Empty } from "@/components/query-states";
+import { Mark, SectionHead } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import type { PracticeConcept } from "@/lib/types";
 
@@ -34,27 +35,27 @@ export function ConceptPerformance({
 }) {
   const practised = weakestFirst(concepts);
   return (
-    <section aria-labelledby="performance-heading" className="flex flex-col gap-3">
-      <h2 id="performance-heading" className="font-medium">
+    <section aria-labelledby="performance-heading" className="flex min-w-0 flex-col">
+      <SectionHead id="performance-heading" right={practised.length ? `${practised.length} practised` : undefined}>
         Concept performance
-      </h2>
+      </SectionHead>
       {practised.length === 0 ? (
         <Empty>
           No answers yet. Once you practise, each concept shows how often it was
           recalled and when it comes back, weakest first.
         </Empty>
       ) : (
-        <ul className="flex flex-col gap-3" aria-label="Concepts, weakest first">
+        <ul aria-label="Concepts, weakest first">
           {practised.map((c) => (
-            <li key={c.concept_id} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+            <li key={c.concept_id} className="flex flex-col gap-1.5 border-b border-rule py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <Link
                   href={`/environments/${encodeURIComponent(environmentId)}/knowledge-map?concept=${encodeURIComponent(c.concept_id)}`}
-                  className="min-w-0 font-medium underline decoration-zinc-400 underline-offset-2 hover:decoration-current dark:decoration-zinc-500"
+                  className="min-w-0 font-semibold hover:underline hover:decoration-accent hover:underline-offset-4"
                 >
                   {c.name}
                 </Link>
-                <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+                <span className="label text-[10px] tabular-nums text-ink-2">
                   {c.recalled} of {c.exposures} recalled
                   {c.gap_days !== null &&
                     ` · every ${c.gap_days} ${c.gap_days === 1 ? "day" : "days"}`}
@@ -68,23 +69,13 @@ export function ConceptPerformance({
                 aria-valuemax={c.exposures}
                 aria-valuenow={c.recalled}
                 aria-valuetext={`${c.recalled} of ${c.exposures} recalled`}
-                className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+                className="label text-xs tracking-[0.12em]"
               >
-                <div
-                  className={`h-full rounded-full ${
-                    c.attention ? "bg-amber-500" : "bg-emerald-600 dark:bg-emerald-400"
-                  }`}
-                  style={{ width: `${(100 * c.recalled) / c.exposures}%` }}
-                />
+                <span aria-hidden>{recallBlocks(c.recalled, c.exposures)}</span>
               </div>
               {(c.attention || c.strong) && (
-                <p
-                  className={`text-xs ${
-                    c.attention
-                      ? "text-amber-700 dark:text-amber-400"
-                      : "text-emerald-700 dark:text-emerald-400"
-                  }`}
-                >
+                <p className="label flex items-center gap-1.5 text-[10px]">
+                  {c.attention ? <Mark /> : <span aria-hidden>●</span>}
                   {c.attention ?? "Strong: recalled after a long gap."}
                 </p>
               )}
@@ -94,4 +85,12 @@ export function ConceptPerformance({
       )}
     </section>
   );
+}
+
+// Recalled answers as filled squares out of all answers, at most ten
+// squares however many answers there were.
+function recallBlocks(recalled: number, exposures: number) {
+  const width = Math.min(exposures, 10);
+  const filled = exposures ? Math.round((width * recalled) / exposures) : 0;
+  return "■".repeat(filled) + "□".repeat(width - filled);
 }

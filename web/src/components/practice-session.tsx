@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { CitationChips } from "@/components/cited-points";
 import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
+import { button, Mark } from "@/components/ui";
 import { useAnswer, usePracticeSession } from "@/hooks/use-practice";
 import { formatDateTime } from "@/lib/format";
 import type { AttemptInput, AttemptResult, PracticeItem, PracticeKind } from "@/lib/types";
@@ -42,18 +43,14 @@ export function PracticeSession({
   if (query.isPending) return <Loading what="the practice items" lines={4} />;
   if (query.isError) {
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-4">
         <LoadError
           what="the practice items"
           error={query.error}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
         />
-        <button
-          type="button"
-          onClick={onDone}
-          className="text-sm underline decoration-zinc-400 underline-offset-2 hover:decoration-current dark:decoration-zinc-500"
-        >
+        <button type="button" onClick={onDone} className={button.link}>
           Back to practice
         </button>
       </div>
@@ -61,18 +58,14 @@ export function PracticeSession({
   }
   const items = query.data;
   const back = (
-    <button
-      type="button"
-      onClick={onDone}
-      className="w-fit rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-    >
-      Back to practice
+    <button type="button" onClick={onDone} className={`${button.outline} w-fit`}>
+      <span aria-hidden>← </span>Back to practice
     </button>
   );
   if (items.length === 0) {
     return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">Nothing to practise here right now.</p>
+      <div className="flex flex-col items-start gap-4">
+        <p className="display text-[22px] text-ink-2 italic">Nothing to practise here right now.</p>
         {back}
       </div>
     );
@@ -80,11 +73,14 @@ export function PracticeSession({
   if (index >= items.length) {
     const tomorrow = results.filter((r) => r.gap_days <= 1).length;
     return (
-      <section aria-labelledby="done-heading" className="flex flex-col gap-3">
-        <h2 id="done-heading" className="text-lg font-semibold">
+      <section aria-labelledby="done-heading" className="flex max-w-xl flex-col gap-4">
+        <p className="label">
+          {items.length} / {items.length} — done
+        </p>
+        <h2 id="done-heading" className="display text-5xl leading-[0.95] tracking-[-0.03em]">
           Session done
         </h2>
-        <p className="text-sm">
+        <p className="text-base leading-relaxed text-ink-2">
           You practised {items.length} {items.length === 1 ? "item" : "items"}.{" "}
           {tomorrow === results.length
             ? "Their concepts all come back tomorrow."
@@ -99,12 +95,16 @@ export function PracticeSession({
   }
   const item = items[index];
   return (
-    <section aria-labelledby="session-heading" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="session-heading" className="font-medium">
+    <section aria-labelledby="session-heading" className="flex flex-col gap-6">
+      <div className="flex items-center gap-4 border-b border-ink pb-3">
+        <h2 id="session-heading" className="label min-w-0 flex-1 truncate">
           {title}
         </h2>
-        <span className="text-sm text-zinc-500">
+        <span aria-hidden className="label hidden tracking-[0.12em] tab:block">
+          {"■".repeat(index + 1)}
+          {"□".repeat(items.length - index - 1)}
+        </span>
+        <span className="label font-semibold">
           {index + 1} of {items.length}
         </span>
       </div>
@@ -112,30 +112,33 @@ export function PracticeSession({
         key={item.id}
         environmentId={environmentId}
         item={item}
+        number={index + 1}
         onAnswered={(result) => setResults([...results, result])}
         onNext={() => setIndex(index + 1)}
         last={index === items.length - 1}
       />
-      <button
-        type="button"
-        onClick={onDone}
-        className="w-fit text-sm text-zinc-500 underline underline-offset-2"
-      >
-        Stop here
-      </button>
+      <div className="border-t border-ink pt-4">
+        <button type="button" onClick={onDone} className={button.link}>
+          Stop here
+        </button>
+      </div>
     </section>
   );
 }
 
+const LETTERS = "ABCDEFGH";
+
 function ItemCard({
   environmentId,
   item,
+  number,
   onAnswered,
   onNext,
   last,
 }: {
   environmentId: string;
   item: PracticeItem;
+  number: number;
   onAnswered: (result: AttemptResult) => void;
   onNext: () => void;
   last: boolean;
@@ -161,118 +164,149 @@ function ItemCard({
 
   const selfMarked = item.kind === "short_answer" || item.kind === "flashcard";
   return (
-    <article className="flex flex-col gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        {KIND_LABEL[item.kind]} · {item.concept.name}
-      </p>
-      <p className="text-base font-medium">
-        <MathsText text={item.prompt} />
-      </p>
-
-      {item.kind === "multiple_choice" && item.options && (
-        <fieldset disabled={!!result} className="flex flex-col gap-2">
-          <legend className="sr-only">Options</legend>
-          {item.options.map((option, n) => (
-            <label key={option} className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name={`choice-${item.id}`}
-                checked={choice === n}
-                onChange={() => setChoice(n)}
-                className="mt-1"
-              />
-              <span>
-                <MathsText text={option} />
-              </span>
-            </label>
-          ))}
-          {!result && (
-            <button
-              type="button"
-              disabled={choice === null || answer.isPending}
-              onClick={() => choice !== null && submit({ choice })}
-              className="w-fit rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              Check
-            </button>
-          )}
-        </fieldset>
-      )}
-
-      {item.kind === "true_false" && !result && (
-        <div className="flex gap-2">
-          {[true, false].map((value) => (
-            <button
-              key={String(value)}
-              type="button"
-              disabled={answer.isPending}
-              onClick={() => submit({ truth: value })}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-            >
-              {value ? "True" : "False"}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selfMarked && !result && (
-        <div className="flex flex-col gap-3">
-          {item.kind === "short_answer" && (
-            <textarea
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              rows={3}
-              maxLength={2000}
-              aria-label="Your answer"
-              placeholder="Your answer, from memory (optional)"
-              className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-            />
-          )}
-          {revealed ? (
-            <>
-              <p className="rounded-lg bg-zinc-100 p-3 text-sm dark:bg-zinc-900">
-                <MathsText text={item.answer} />
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={answer.isPending}
-                  onClick={() => submit({ knew: true, text: text || undefined })}
-                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-                >
-                  I knew it
-                </button>
-                <button
-                  type="button"
-                  disabled={answer.isPending}
-                  onClick={() => submit({ knew: false, text: text || undefined })}
-                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-                >
-                  Not yet
-                </button>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setRevealed(true)}
-              className="w-fit rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-            >
-              {item.kind === "flashcard" ? "Show the back" : "Show the answer"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {answer.error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {answer.error.message}
+    <article className="grid gap-8 desk:grid-cols-[minmax(0,1fr)_300px] desk:gap-12">
+      <div className="flex min-w-0 flex-col gap-6">
+        <p className="label text-[10px] text-ink-3">
+          {KIND_LABEL[item.kind]} · {item.concept.name}
         </p>
-      )}
+        <p className="display text-[30px] leading-[1.05] tracking-[-0.02em] tab:text-[40px] desk:text-[46px]">
+          <span className="sr-only">Question {number}: </span>
+          <MathsText text={item.prompt} />
+        </p>
+
+        {item.kind === "multiple_choice" && item.options && (
+          <fieldset disabled={!!result} className="flex flex-col border-t border-ink">
+            <legend className="sr-only">Options</legend>
+            {item.options.map((option, n) => {
+              const chosen = choice === n;
+              const right = !!result && option === result.answer;
+              const wrong = !!result && chosen && !result.correct;
+              return (
+                <label
+                  key={option}
+                  className={`flex cursor-pointer items-center gap-4 border-b border-rule py-3.5 ${
+                    right ? "bg-ink px-3 text-paper" : chosen && !result ? "bg-paper-2 px-3" : ""
+                  }`}
+                >
+                  {/* The radio itself, invisible, lies over its letter, so a
+                      click or tap lands on it and the letter shows its state. */}
+                  <span className="relative size-7 shrink-0">
+                    <input
+                      type="radio"
+                      name={`choice-${item.id}`}
+                      checked={chosen}
+                      onChange={() => setChoice(n)}
+                      className="peer absolute inset-0 size-7 cursor-pointer opacity-0"
+                    />
+                    <span
+                      aria-hidden
+                      className={`label flex size-7 items-center justify-center border text-[11px] tracking-normal peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent ${
+                        wrong
+                          ? "border-accent bg-accent text-on-accent"
+                          : right
+                            ? "border-paper"
+                            : chosen
+                              ? "border-ink bg-ink text-paper"
+                              : "border-ink"
+                      }`}
+                    >
+                      {LETTERS[n]}
+                    </span>
+                  </span>
+                  <span className={`min-w-0 flex-1 text-base leading-snug ${wrong ? "text-ink-2 line-through" : ""}`}>
+                    <MathsText text={option} />
+                  </span>
+                  {right && <span className="label text-[10px]">✓ Answer</span>}
+                  {wrong && <span className="label text-[10px]">✕ Your choice</span>}
+                </label>
+              );
+            })}
+            {!result && (
+              <button
+                type="button"
+                disabled={choice === null || answer.isPending}
+                onClick={() => choice !== null && submit({ choice })}
+                className={`${button.primary} mt-4 w-fit`}
+              >
+                Check
+              </button>
+            )}
+          </fieldset>
+        )}
+
+        {item.kind === "true_false" && !result && (
+          <div className="flex gap-3">
+            {[true, false].map((value) => (
+              <button
+                key={String(value)}
+                type="button"
+                disabled={answer.isPending}
+                onClick={() => submit({ truth: value })}
+                className={`${button.outline} min-w-28`}
+              >
+                {value ? "True" : "False"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selfMarked && !result && (
+          <div className="flex flex-col gap-4">
+            {item.kind === "short_answer" && (
+              <textarea
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                rows={3}
+                maxLength={2000}
+                aria-label="Your answer"
+                placeholder="Your answer, from memory (optional)"
+                className="w-full border border-ink bg-transparent px-3.5 py-3 text-base placeholder:text-ink-3 focus:border-2 focus:border-accent focus:px-[13px] focus:py-[11px] focus:outline-none"
+              />
+            )}
+            {revealed ? (
+              <>
+                <p className="border-l-2 border-ink bg-paper-2 px-4 py-3 text-base leading-relaxed">
+                  <MathsText text={item.answer} />
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={answer.isPending}
+                    onClick={() => submit({ knew: true, text: text || undefined })}
+                    className={button.primary}
+                  >
+                    I knew it
+                  </button>
+                  <button
+                    type="button"
+                    disabled={answer.isPending}
+                    onClick={() => submit({ knew: false, text: text || undefined })}
+                    className={button.outline}
+                  >
+                    Not yet
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button type="button" onClick={() => setRevealed(true)} className={`${button.outline} w-fit`}>
+                {item.kind === "flashcard" ? "Show the back" : "Show the answer"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {answer.error && (
+          <p role="alert" className="label flex items-center gap-2">
+            <Mark />
+            {answer.error.message}
+          </p>
+        )}
+      </div>
 
       {result && (
-        <div role="status" className="flex flex-col gap-2 border-t border-zinc-200 pt-3 text-sm dark:border-zinc-800">
-          <p className="font-medium">
+        <div role="status" className="flex flex-col gap-3 border-t border-ink pt-4 desk:border-t-0 desk:border-l desk:pt-1 desk:pl-6">
+          <p className="label text-[10px] text-ink-3">Marking</p>
+          <p className="display text-[34px] leading-none tracking-[-0.02em] tab:text-[40px]">
             {result.graded_by === "learner"
               ? result.correct
                 ? "Marked as known."
@@ -281,26 +315,35 @@ function ItemCard({
                 ? "Right."
                 : (
                   <>
-                    Not quite. The answer: <MathsText text={result.answer} />
+                    Not quite.{" "}
+                    {/* A multiple choice shows the answer among its options. */}
+                    <span
+                      className={
+                        item.kind === "multiple_choice"
+                          ? "sr-only"
+                          : "block pt-2 text-xl leading-snug text-ink-2"
+                      }
+                    >
+                      The answer: <MathsText text={result.answer} />
+                    </span>
                   </>
                 )}
           </p>
           {result.explanation && (
-            <p>
+            <p className="text-[15px] leading-relaxed text-ink-2">
               <MathsText text={result.explanation} />
             </p>
           )}
           <CitationChips environmentId={environmentId} citations={result.sources} showFilename />
-          <p className="text-xs text-zinc-500">
-            {item.concept.name} comes back for review{" "}
-            {result.gap_days === 1 ? "tomorrow" : `in ${result.gap_days} days`},{" "}
-            {formatDateTime(result.due_at)}.
+          <p className="label flex items-baseline gap-1.5 border-t border-rule pt-3 text-[10px] text-ink-2">
+            <span aria-hidden>◷</span>
+            <span>
+              {item.concept.name} comes back for review{" "}
+              {result.gap_days === 1 ? "tomorrow" : `in ${result.gap_days} days`},{" "}
+              {formatDateTime(result.due_at)}.
+            </span>
           </p>
-          <button
-            type="button"
-            onClick={onNext}
-            className="w-fit rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-          >
+          <button type="button" onClick={onNext} className={`${button.primary} mt-2 w-full tab:w-fit`}>
             {last ? "Finish" : "Next"}
           </button>
         </div>

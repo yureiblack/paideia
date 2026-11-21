@@ -1,9 +1,11 @@
 "use client";
 
-// The sections of the Overview tab below today's plan (decision record 19).
-// Each reads data its own tab already fetches, so they share one cached copy,
-// and each loads, fails and tries again on its own: one section that cannot
-// load leaves the others as they are.
+// The sections of the Overview tab (decision records 19 and 25): the
+// headline, the figures at a glance, and below today's plan the roadmap,
+// recent material, background work, the summary and the map. Each reads
+// data its own tab already fetches, so they share one cached copy, and each
+// loads, fails and tries again on its own: one section that cannot load
+// leaves the others as they are.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -12,6 +14,7 @@ import { STATE_BADGE } from "@/components/environment-summary";
 import { StatusBadge } from "@/components/materials";
 import { MathsText } from "@/components/maths-text";
 import { Empty, QueryState } from "@/components/query-states";
+import { button, Mark, SectionHead } from "@/components/ui";
 import { useDocuments } from "@/hooks/use-documents";
 import { useEnvironmentSummary } from "@/hooks/use-environment-summary";
 import { useGraph } from "@/hooks/use-graph";
@@ -20,52 +23,73 @@ import { usePractice } from "@/hooks/use-practice";
 import { useRoadmap } from "@/hooks/use-roadmap";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { mapHighlights, stageProgress } from "@/lib/overview";
+import { InWords, inWords } from "@/lib/words";
 import type { Job, RoadmapState } from "@/lib/types";
-
-const LINK =
-  "underline decoration-zinc-400 underline-offset-2 hover:decoration-current dark:decoration-zinc-500";
 
 const tab = (environmentId: string, segment = "") =>
   `/environments/${encodeURIComponent(environmentId)}${segment ? `/${segment}` : ""}`;
 
+// The Overview's headline: what today holds, in one sentence.
+export function OverviewHeadline({ environmentId }: { environmentId: string }) {
+  const { data: p, isError } = usePractice(environmentId);
+  // Today's plan below says why, with Try again.
+  if (isError) return "Today, at a glance.";
+  if (!p) return <span aria-hidden className="placeholder block h-[0.9em] w-3/4" />;
+  const due = p.due_concepts;
+  const fresh = p.new_concepts;
+  const concepts = (n: number) => (n === 1 ? "concept" : "concepts");
+  if (p.items === 0 && p.concepts.length === 0) return "Nothing to practise yet.";
+  if (due > 0 && fresh > 0) {
+    return `${InWords(due)} ${concepts(due)} due today, ${inWords(fresh)} new to start.`;
+  }
+  if (due > 0) return `${InWords(due)} ${concepts(due)} due today.`;
+  if (fresh > 0) return `Nothing due today; ${inWords(fresh)} new to start.`;
+  if (p.next_review_at) return `Nothing due today. Next review ${formatDate(p.next_review_at)}.`;
+  return "Nothing due today.";
+}
+
 export function Section({
   id,
+  number,
   title,
   href,
   more,
+  right,
   children,
-  wide = false,
 }: {
   id: string;
+  number: string;
   title: string;
   href?: string;
   more?: string;
+  right?: ReactNode;
   children: ReactNode;
-  wide?: boolean;
 }) {
   return (
-    <section
-      aria-labelledby={id}
-      className={`flex min-w-0 flex-col gap-3 ${wide ? "lg:col-span-2" : ""}`}
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id={id} className="font-medium">
-          {title}
-        </h2>
-        {href && (
-          <Link href={href} className={`text-sm ${LINK}`}>
-            {more}
-          </Link>
-        )}
-      </div>
+    <section aria-labelledby={id} className="flex min-w-0 flex-col">
+      <SectionHead
+        id={id}
+        right={
+          href ? (
+            <Link href={href} className="text-ink hover:underline hover:decoration-accent">
+              {more} <span aria-hidden>→</span>
+            </Link>
+          ) : (
+            right
+          )
+        }
+      >
+        <span aria-hidden>{number} / </span>
+        {title}
+      </SectionHead>
       {children}
     </section>
   );
 }
 
-// The numbers at a glance: reviews due today, concepts, documents and how
-// much of the roadmap is strong. A number that cannot load says so in its
-// own tile.
+// The figures at a glance: concepts, documents, how much of the roadmap is
+// strong and where you are on it. A figure that cannot load says so in its
+// own cell.
 export function AtAGlance({ environmentId }: { environmentId: string }) {
   const practice = usePractice(environmentId);
   const documents = useDocuments(environmentId);
@@ -73,20 +97,7 @@ export function AtAGlance({ environmentId }: { environmentId: string }) {
 
   return (
     <section aria-label="At a glance">
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Due for review today" query={practice}>
-          {(p) => ({
-            value: p.due_concepts,
-            note:
-              p.new_concepts > 0
-                ? `${p.new_concepts} new to start`
-                : p.next_review_at && p.due_concepts === 0
-                  ? `Next ${formatDate(p.next_review_at)}`
-                  : p.items === 0
-                    ? "No practice yet"
-                    : "concepts",
-          })}
-        </Stat>
+      <dl className="grid grid-cols-2 border-y border-ink tab:grid-cols-4">
         <Stat label="Concepts" query={practice}>
           {(p) => ({
             value: p.concepts.length,
@@ -110,12 +121,21 @@ export function AtAGlance({ environmentId }: { environmentId: string }) {
             };
           }}
         </Stat>
+        <Stat label="Current stage" query={roadmap} also={practice}>
+          {(r) => {
+            const stages = stageProgress(r.stages, practice.data?.concepts ?? []);
+            const current = stages.find((s) => s.practised < s.total);
+            return current
+              ? { value: `${current.number}/${stages.length}`, note: current.title }
+              : { value: "—", note: stages.length ? "All practised" : "No roadmap yet" };
+          }}
+        </Stat>
       </dl>
     </section>
   );
 }
 
-type Tile = { value: number | string; note: string };
+type Figure = { value: number | string; note: string };
 
 function Stat<T>({
   label,
@@ -132,20 +152,23 @@ function Stat<T>({
     refetch: () => unknown;
   };
   also?: { isPending: boolean; isError: boolean; isFetching: boolean; refetch: () => unknown };
-  children: (data: T) => Tile;
+  children: (data: T) => Figure;
 }) {
   const failed = [query, also].filter((q) => q?.isError);
   const pending = query.isPending || also?.isPending;
   let body: ReactNode;
   if (failed.length > 0) {
     body = (
-      <dd className="flex flex-col items-start gap-1">
-        <span className="text-sm text-red-600 dark:text-red-400">Could not load.</span>
+      <dd className="flex flex-col items-start gap-2">
+        <span className="label flex items-center gap-2">
+          <Mark />
+          Could not load.
+        </span>
         <button
           type="button"
           onClick={() => failed.forEach((q) => q?.refetch())}
           disabled={failed.some((q) => q?.isFetching)}
-          className="rounded-lg border border-zinc-300 px-2 py-0.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+          className={button.link}
         >
           Try again
         </button>
@@ -155,37 +178,36 @@ function Stat<T>({
     body = (
       <dd role="status">
         <span className="sr-only">Loading…</span>
-        <span
-          aria-hidden="true"
-          className="block h-7 w-12 rounded bg-zinc-200 motion-safe:animate-pulse dark:bg-zinc-800"
-        />
+        <span aria-hidden="true" className="placeholder block h-10 w-14" />
       </dd>
     );
   } else {
     const { value, note } = children(query.data);
     body = (
-      <dd className="flex flex-col">
-        <span className="text-2xl font-semibold tabular-nums">{value}</span>
-        <span className="text-xs text-zinc-600 dark:text-zinc-400">{note}</span>
+      <dd className="flex flex-col gap-1.5">
+        <span className="display order-first text-[38px] tabular-nums tab:text-5xl">{value}</span>
+        <span className="label truncate text-ink-3">{note}</span>
       </dd>
     );
   }
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-      <dt className="text-xs font-medium text-zinc-500">{label}</dt>
+    <div className="flex min-w-0 flex-col gap-1.5 border-rule py-4 pr-4 not-first:border-l not-first:pl-4 max-tab:nth-3:border-l-0 max-tab:nth-3:pl-0 max-tab:nth-[n+3]:border-t tab:not-first:pl-5">
+      <dt className="label">{label}</dt>
       {body}
     </div>
   );
 }
 
-// Each roadmap stage: how many of its concepts are strong, and practised.
+// The stages around where you are: the one before, the current one and the
+// next, as lines of a table of contents.
 export function RoadmapProgress({ environmentId }: { environmentId: string }) {
   const roadmap = useRoadmap(environmentId);
   const practice = usePractice(environmentId);
   return (
     <Section
       id="progress-heading"
-      title="Roadmap progress"
+      number="03"
+      title="Roadmap"
       href={tab(environmentId, "roadmap")}
       more="Open the roadmap"
     >
@@ -195,37 +217,61 @@ export function RoadmapProgress({ environmentId }: { environmentId: string }) {
             <Empty>{roadmapEmpty(r)}</Empty>
           ) : (
             <QueryState query={practice} what="practice" lines={3}>
-              {(p) => (
-                <>
-                  <ol className="flex flex-col gap-3" aria-label="Stages">
-                    {stageProgress(r.stages, p.concepts).map((s) => (
-                      <li key={s.number} className="flex flex-col gap-1">
-                        <div className="flex flex-col gap-x-3 text-sm sm:flex-row sm:items-baseline sm:justify-between">
-                          <Link
-                            href={`${tab(environmentId, "roadmap")}#stage-${s.number}`}
-                            className={`min-w-0 font-medium ${LINK}`}
+              {(p) => {
+                const stages = stageProgress(r.stages, p.concepts);
+                const at = Math.max(stages.findIndex((s) => s.practised < s.total), 0);
+                const from = Math.max(0, Math.min(at - 1, stages.length - 3));
+                const shown = stages.slice(from, from + 3);
+                const rest = stages.length - shown.length;
+                return (
+                  <>
+                    <ol aria-label="Stages near you">
+                      {shown.map((s) => {
+                        const current = s.number === stages[at]?.number && s.practised < s.total;
+                        const done = s.total > 0 && s.practised === s.total;
+                        return (
+                          <li
+                            key={s.number}
+                            className={`flex items-center gap-3.5 border-b border-rule ${current ? "bg-paper-2 px-2.5" : ""} min-h-9 py-1.5`}
                           >
-                            {s.number}. {s.title}
-                          </Link>
-                          <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
-                            {s.strong} of {s.total} strong · {s.practised} practised
-                          </span>
-                        </div>
-                        <Bar
-                          label={`Stage ${s.number}`}
-                          strong={s.strong}
-                          practised={s.practised}
-                          total={s.total}
-                        />
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="text-xs text-zinc-500">
-                    Strong: recalled on its last answer after a gap of four days or
-                    more. Practised: answered at least once.
-                  </p>
-                </>
-              )}
+                            <span
+                              aria-hidden
+                              className={`label flex h-[18px] w-6 shrink-0 items-center justify-center text-[10px] ${
+                                current ? "bg-accent text-on-accent" : "text-ink-3"
+                              }`}
+                            >
+                              {String(s.number).padStart(2, "0")}
+                            </span>
+                            <Link
+                              href={`${tab(environmentId, "roadmap")}#stage-${s.number}`}
+                              className={`min-w-0 flex-1 text-sm hover:underline hover:decoration-accent ${
+                                current ? "font-semibold" : done ? "" : "text-ink-2"
+                              }`}
+                            >
+                              <span className="sr-only">Stage {s.number}: </span>
+                              {s.title}
+                            </Link>
+                            <span className="label shrink-0 text-[10px]">
+                              {done && "✓ "}
+                              {s.practised} of {s.total} practised
+                              <span className="hidden tab:inline"> · {s.strong} strong</span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    {rest > 0 && (
+                      <p className="label flex min-h-11 items-center text-ink-3">
+                        {rest} more {rest === 1 ? "stage" : "stages"} in the roadmap
+                      </p>
+                    )}
+                    <p className="label text-[10px] text-ink-3">
+                      Strong: recalled on its last answer after a gap of four days or more.
+                      Practised: answered at least once.
+                    </p>
+                  </>
+                );
+              }}
             </QueryState>
           )
         }
@@ -241,57 +287,26 @@ function roadmapEmpty(r: RoadmapState): ReactNode {
   return "The roadmap appears once concepts are extracted from the materials and the knowledge map is built.";
 }
 
-// Strong in full colour, practised but not strong lighter, the rest empty.
-function Bar({
-  label,
-  strong,
-  practised,
-  total,
-}: {
-  label: string;
-  strong: number;
-  practised: number;
-  total: number;
-}) {
-  const pct = (n: number) => (total ? (100 * n) / total : 0);
-  const between = Math.max(practised - strong, 0);
-  return (
-    <div
-      role="progressbar"
-      aria-label={`${label}: strong concepts`}
-      aria-valuemin={0}
-      aria-valuemax={total}
-      aria-valuenow={strong}
-      aria-valuetext={`${strong} of ${total} strong, ${practised} practised`}
-      className="flex h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
-    >
-      <div className="h-full bg-emerald-600 dark:bg-emerald-400" style={{ width: `${pct(strong)}%` }} />
-      <div className="h-full bg-emerald-300 dark:bg-emerald-800" style={{ width: `${pct(between)}%` }} />
-    </div>
-  );
-}
-
-// The opening of the environment's summary.
+// The opening of the environment's summary, set as a quotation.
 export function SummaryPreview({ environmentId }: { environmentId: string }) {
   const query = useEnvironmentSummary(environmentId);
   return (
     <Section
       id="summary-heading"
+      number="06"
       title="Summary"
       href={tab(environmentId, "summary")}
-      more="Read the summary"
+      more="Read"
     >
       <QueryState query={query} what="the summary" lines={4}>
         {(s) => {
           const badge = STATE_BADGE[s.state];
           const overview = s.summary?.status === "ready" ? s.summary.overview : null;
           return (
-            <div className="flex flex-col items-start gap-2">
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badge.style}`}>
-                {badge.label}
-              </span>
+            <div className="flex flex-col items-start gap-3">
+              <span className={`label ${badge.style}`}>{badge.label}</span>
               {overview ? (
-                <p className="line-clamp-5 text-sm leading-6">
+                <p className="display line-clamp-6 text-[22px] leading-[1.2] tracking-[-0.01em] italic">
                   <MathsText text={overview} />
                 </p>
               ) : (
@@ -311,8 +326,8 @@ export function SummaryPreview({ environmentId }: { environmentId: string }) {
   );
 }
 
-// The knowledge map in words: its size, the most connected concepts and
-// where to start, each a link into the map.
+// The knowledge map in words: its size, where to start and the most
+// connected concepts, each a link into the map.
 export function MapPreview({ environmentId }: { environmentId: string }) {
   const query = useGraph(environmentId);
   const conceptLink = (id: string) =>
@@ -320,9 +335,10 @@ export function MapPreview({ environmentId }: { environmentId: string }) {
   return (
     <Section
       id="map-heading"
+      number="07"
       title="Knowledge map"
       href={tab(environmentId, "knowledge-map")}
-      more="Open the map"
+      more="Open"
     >
       <QueryState query={query} what="the knowledge map" lines={3}>
         {(g) => {
@@ -331,11 +347,11 @@ export function MapPreview({ environmentId }: { environmentId: string }) {
             return <Empty>No concepts yet. They are extracted from the materials once they are read.</Empty>;
           }
           return (
-            <div className="flex flex-col gap-3 text-sm">
-              <p>
+            <div className="flex flex-col gap-4">
+              <p className="label text-ink-2">
                 {h.concepts} {h.concepts === 1 ? "concept" : "concepts"},{" "}
-                {h.relationships} {h.relationships === 1 ? "relationship" : "relationships"}.
-                {g.state !== "up_to_date" && ` ${STATE_BADGE[g.state].label}.`}
+                {h.relationships} {h.relationships === 1 ? "relationship" : "relationships"}
+                {g.state !== "up_to_date" && ` · ${STATE_BADGE[g.state].label}`}
               </p>
               {h.foundations.length > 0 && (
                 <Names
@@ -359,9 +375,7 @@ export function MapPreview({ environmentId }: { environmentId: string }) {
                   href={conceptLink}
                 />
               ) : (
-                <p className="text-zinc-600 dark:text-zinc-400">
-                  No relationships between the concepts yet.
-                </p>
+                <p className="text-sm text-ink-2">No relationships between the concepts yet.</p>
               )}
             </div>
           );
@@ -381,15 +395,15 @@ function Names({
   href: (id: string) => string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <h3 className="text-xs font-medium text-zinc-500">{title}</h3>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label={title}>
+    <div className="flex flex-col gap-1.5">
+      <h3 className="label text-[10px] text-ink-3">{title}</h3>
+      <ul className="flex flex-col gap-1" aria-label={title}>
         {names.map((n) => (
-          <li key={n.id}>
-            <Link href={href(n.id)} className={LINK}>
+          <li key={n.id} className="flex items-baseline gap-2">
+            <Link href={href(n.id)} className="min-w-0 flex-1 text-sm hover:underline hover:decoration-accent">
               {n.name}
-            </Link>{" "}
-            <span className="text-xs text-zinc-500">{n.note}</span>
+            </Link>
+            <span className="label shrink-0 text-[10px] text-ink-3">{n.note}</span>
           </li>
         ))}
       </ul>
@@ -403,19 +417,17 @@ export function RecentMaterial({ environmentId }: { environmentId: string }) {
   return (
     <Section
       id="material-heading"
+      number="04"
       title="Recent material"
       href={tab(environmentId, "materials")}
-      more="All materials"
+      more="All"
     >
       <QueryState query={query} what="the materials" lines={3}>
         {(documents) =>
           documents.length === 0 ? (
             <Empty
               action={
-                <Link
-                  href={tab(environmentId, "materials")}
-                  className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                >
+                <Link href={tab(environmentId, "materials")} className={button.primary}>
                   Upload a PDF
                 </Link>
               }
@@ -423,16 +435,16 @@ export function RecentMaterial({ environmentId }: { environmentId: string }) {
               No materials yet. Upload lecture notes or readings to begin.
             </Empty>
           ) : (
-            <ul className="flex flex-col gap-2" aria-label="Recent documents">
+            <ul aria-label="Recent documents">
               {[...documents]
                 .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
                 .slice(0, 5)
                 .map((d) => (
-                  <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <span className="min-w-0 truncate" title={d.filename}>
+                  <li key={d.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-rule py-2">
+                    <span className="min-w-0 flex-1 truncate text-sm" title={d.filename}>
                       {d.filename}
-                      <span className="ml-2 text-xs text-zinc-500">{formatDate(d.updated_at)}</span>
                     </span>
+                    <span className="label text-[10px] text-ink-3">{formatDate(d.updated_at)}</span>
                     <StatusBadge document={d} />
                   </li>
                 ))}
@@ -444,20 +456,20 @@ export function RecentMaterial({ environmentId }: { environmentId: string }) {
   );
 }
 
-const OUTCOME: Record<Job["status"], { label: string; style: string }> = {
-  queued: { label: "Queued", style: "text-zinc-600 dark:text-zinc-400" },
-  running: { label: "Running", style: "text-amber-700 dark:text-amber-400" },
-  succeeded: { label: "Done", style: "text-emerald-700 dark:text-emerald-400" },
-  failed: { label: "Failed", style: "text-red-600 dark:text-red-400" },
-  cancelled: { label: "Cancelled", style: "text-zinc-600 dark:text-zinc-400" },
+const OUTCOME: Record<Job["status"], string> = {
+  queued: "Queued",
+  running: "Running",
+  succeeded: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };
 
 // The background work of late, newest first. Work in progress is followed
-// live in the strip above the tabs; this lists how recent work ended.
+// live beside the contents; this lists how recent work ended.
 export function ProcessingActivity({ environmentId }: { environmentId: string }) {
   const query = useJobs(environmentId);
   return (
-    <Section id="activity-heading" title="Processing activity" wide>
+    <Section id="activity-heading" number="05" title="Activity">
       <QueryState query={query} what="the background work" lines={3}>
         {(jobs) =>
           jobs.length === 0 ? (
@@ -466,20 +478,19 @@ export function ProcessingActivity({ environmentId }: { environmentId: string })
               shows here.
             </Empty>
           ) : (
-            <ul className="flex flex-col gap-1.5 text-sm" aria-label="Recent background work">
+            <ul aria-label="Recent background work">
               {jobs.slice(0, 6).map((job) => (
-                <li key={job.id} className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-                  <span className={`w-20 shrink-0 text-xs font-medium ${OUTCOME[job.status].style}`}>
-                    {OUTCOME[job.status].label}
+                <li key={job.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-rule py-2">
+                  <span className="label flex w-24 shrink-0 items-center gap-1.5 text-[10px]">
+                    {job.status === "failed" ? <Mark /> : <span aria-hidden>{job.status === "succeeded" ? "✓" : "—"}</span>}
+                    {OUTCOME[job.status]}
                     {job.status === "running" && ` ${job.progress}%`}
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 text-sm text-ink-2">
                     {job.title}
-                    {job.status === "failed" && job.error && (
-                      <span className="text-red-600 dark:text-red-400"> · {job.error}</span>
-                    )}
+                    {job.status === "failed" && job.error && <span className="text-ink"> · {job.error}</span>}
                   </span>
-                  <span className="shrink-0 text-xs text-zinc-500">
+                  <span className="label shrink-0 text-[10px] text-ink-3">
                     {formatDateTime(job.finished_at ?? job.created_at)}
                   </span>
                 </li>

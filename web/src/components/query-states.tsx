@@ -10,19 +10,19 @@ import type { ReactNode } from "react";
 
 import { ApiError } from "@/lib/api";
 
+import { button, Mark } from "./ui";
+
 // Placeholder lines while a section loads. Screen readers hear what is
 // loading; the lines pulse only for those who have not asked for less motion.
 export function Loading({ what, lines = 2 }: { what: string; lines?: number }) {
   return (
-    <div role="status" className="flex flex-col gap-2 py-1">
+    <div role="status" className="flex flex-col gap-2.5 py-1">
       <span className="sr-only">Loading {what}…</span>
       {Array.from({ length: lines }, (_, i) => (
         <div
           key={i}
           aria-hidden="true"
-          className={`h-3 rounded bg-zinc-200 motion-safe:animate-pulse dark:bg-zinc-800 ${
-            i % 2 ? "w-1/2" : "w-2/3"
-          }`}
+          className={`placeholder h-3.5 ${i % 2 ? "w-1/2" : "w-2/3"}`}
         />
       ))}
     </div>
@@ -44,19 +44,21 @@ export function LoadError({
   retrying?: boolean;
 }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-      <p className="text-red-600 dark:text-red-400">
-        Could not load {what}: {error.message}
+    <div role="alert" className="flex flex-col items-start gap-3">
+      <p className="flex items-start gap-2.5 text-base">
+        <span className="pt-2">
+          <Mark />
+        </span>
+        <span>
+          Could not load {what}: {error.message}
+        </span>
       </p>
-      <Reference error={error} />
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-      >
-        {retrying ? "Trying again…" : "Try again"}
-      </button>
+      <div className="flex flex-wrap items-center gap-5">
+        <button type="button" onClick={onRetry} disabled={retrying} className={button.outline}>
+          {retrying ? "Trying again…" : "Try again"}
+        </button>
+        <Reference error={error} />
+      </div>
     </div>
   );
 }
@@ -65,7 +67,7 @@ export function LoadError({
 export function Reference({ error }: { error: Error | null }) {
   if (!(error instanceof ApiError) || !error.requestId) return null;
   return (
-    <span className="text-xs text-zinc-500" title={error.requestId}>
+    <span className="label text-ink-3" title={error.requestId}>
       Reference {error.requestId.slice(0, 8)}
     </span>
   );
@@ -74,8 +76,8 @@ export function Reference({ error }: { error: Error | null }) {
 // Nothing to show yet: what that means, and what to do next.
 export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-      <div>{children}</div>
+    <div className="flex flex-col items-start gap-4 border-y border-rule py-4">
+      <div className="display max-w-2xl text-[19px] leading-[1.25] text-ink-2 italic">{children}</div>
       {action}
     </div>
   );

@@ -1,21 +1,22 @@
 "use client";
 
-// The concept inventory, on the Knowledge map tab: every concept the
-// environment's material teaches, as the language model proposed and the
-// backend validated it. Each shows its definition, other names, the
-// documents it appears in, and chips that open the passages explaining it;
-// its name opens it in the explorer above, with how many relationships it
-// has. Documents whose concepts are still coming, or could not be
-// extracted, are listed above, with Try again for failures.
+// The concept inventory, on the Knowledge map tab, set as the index of a
+// book (decision record 25): every concept the environment's material
+// teaches, as the language model proposed and the backend validated it,
+// grouped by first letter, each with its learner state and how many
+// relationships it has. A concept's name opens its entry beside the index.
+// Documents whose concepts are still coming, or could not be extracted,
+// wait behind one notice, with Extract or Try again for each.
 
 import Link from "next/link";
 import { useState } from "react";
 
-import { CitationChips } from "@/components/cited-points";
-import { MathsText } from "@/components/maths-text";
+import { ConceptMark } from "@/components/concept-progress";
 import { Loading, LoadError } from "@/components/query-states";
+import { button, Mark, OpenSign } from "@/components/ui";
 import { useConcepts, useRequestConcepts } from "@/hooks/use-concepts";
-import type { Concept, ExtractionState } from "@/lib/types";
+import { usePractice } from "@/hooks/use-practice";
+import type { Concept, ExtractionState, PracticeConcept } from "@/lib/types";
 
 export function ConceptInventory({
   environmentId,
@@ -30,6 +31,7 @@ export function ConceptInventory({
   exploreHref?: (id: string) => string;
 }) {
   const query = useConcepts(environmentId);
+  const practice = usePractice(environmentId);
   const [filter, setFilter] = useState("");
 
   if (query.isPending) return <Loading what="concepts" lines={4} />;
@@ -52,13 +54,17 @@ export function ConceptInventory({
     : concepts;
   const unsettled = documents.filter((d) => d.status !== "ready");
   const readyCount = documents.length - unsettled.length;
+  const states = new Map((practice.data?.concepts ?? []).map((c) => [c.concept_id, c]));
 
   return (
-    <div className="flex flex-col gap-6">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {concepts.length} {concepts.length === 1 ? "concept" : "concepts"} from{" "}
-        {readyCount} {readyCount === 1 ? "document" : "documents"}, proposed by
-        the local model and checked before being kept.
+    <div className="flex flex-col gap-4">
+      <p className="text-xs leading-snug text-ink-3">
+        <span className="label text-[10px] text-ink-2">
+          {concepts.length} {concepts.length === 1 ? "concept" : "concepts"} from {readyCount}{" "}
+          {readyCount === 1 ? "document" : "documents"}
+        </span>
+        <br />
+        Proposed by the local model and checked before being kept.
       </p>
 
       {unsettled.length > 0 && (
@@ -66,47 +72,67 @@ export function ConceptInventory({
       )}
 
       {concepts.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="display text-lg text-ink-3 italic">
           No concepts yet. They appear here once materials have been read.
         </p>
       ) : (
         <>
-          <input
-            type="search"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder="Filter concepts"
-            aria-label="Filter concepts by name"
-            className="w-full max-w-sm rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-          />
-          <ul className="flex flex-col gap-3" aria-label="Concepts">
-            {shown.map((concept) => (
-              <li key={concept.id}>
-                <ConceptCard
-                  environmentId={environmentId}
-                  concept={concept}
-                  selected={concept.id === selectedId}
-                  relationships={relationships && (relationships[concept.id] ?? 0)}
-                  href={exploreHref?.(concept.id)}
-                />
-              </li>
-            ))}
+          <label className="flex items-baseline gap-3 border-b-2 border-ink pb-2 focus-within:border-accent">
+            <span className="label text-[10px] text-ink-3">Filter</span>
+            <input
+              type="search"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              aria-label="Filter concepts by name"
+              className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
+            />
+          </label>
+          <ul aria-label="Concepts">
+            {shown.map((concept, index) => {
+              const letter = concept.name.charAt(0).toUpperCase();
+              const first = index === 0 || shown[index - 1].name.charAt(0).toUpperCase() !== letter;
+              return (
+                <li key={concept.id}>
+                  {first && (
+                    <p aria-hidden className="display pt-3.5 pb-1 text-3xl">
+                      {letter}
+                    </p>
+                  )}
+                  <ConceptRow
+                    concept={concept}
+                    state={states.get(concept.id)}
+                    selected={concept.id === selectedId}
+                    relationships={relationships && (relationships[concept.id] ?? 0)}
+                    href={exploreHref?.(concept.id)}
+                  />
+                </li>
+              );
+            })}
           </ul>
+          <p className="label flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-[9px] text-ink-3">
+            <span>○ New</span>
+            <span>◐ Learning</span>
+            <span>◷ Due</span>
+            <span>● Strong</span>
+            <span className="flex items-center gap-1.5">
+              <Mark /> Needs attention
+            </span>
+          </p>
         </>
       )}
     </div>
   );
 }
 
-function ConceptCard({
-  environmentId,
+function ConceptRow({
   concept,
+  state,
   selected,
   relationships,
   href,
 }: {
-  environmentId: string;
   concept: Concept;
+  state: PracticeConcept | undefined;
   selected: boolean;
   relationships?: number;
   href?: string;
@@ -114,51 +140,24 @@ function ConceptCard({
   return (
     <article
       aria-current={selected || undefined}
-      className={`flex flex-col gap-2 rounded-xl border p-4 ${
-        selected
-          ? "border-zinc-900 dark:border-zinc-100"
-          : "border-zinc-200 dark:border-zinc-800"
-      }`}
+      className={`flex min-h-11 items-center gap-2.5 tab:min-h-7 ${selected ? "-mx-2 bg-ink px-2 text-paper" : ""}`}
     >
-      <div className="flex flex-col gap-0.5">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h3 className="font-medium">
-            {href ? (
-              <Link
-                href={href}
-                className="underline decoration-zinc-400 underline-offset-4 hover:decoration-current dark:decoration-zinc-500"
-              >
-                {concept.name}
-              </Link>
-            ) : (
-              concept.name
-            )}
-          </h3>
-          {relationships !== undefined && (
-            <span className="text-xs text-zinc-500">
-              {relationships === 0
-                ? "No relationships"
-                : `${relationships} ${relationships === 1 ? "relationship" : "relationships"}`}
-            </span>
-          )}
-        </div>
-        {concept.aliases.length > 0 && (
-          <p className="text-xs text-zinc-500">
-            Also: {concept.aliases.join(", ")}
-          </p>
+      <ConceptMark concept={state} />
+      <h3 className="min-w-0 flex-1 truncate text-sm">
+        {href ? (
+          <Link href={href} className="hover:underline hover:decoration-accent hover:underline-offset-4">
+            {concept.name}
+          </Link>
+        ) : (
+          concept.name
         )}
-      </div>
-      <p className="text-sm">
-        <MathsText text={concept.definition} />
-      </p>
-      <p className="text-xs text-zinc-500">
-        In {concept.documents.map((d) => d.filename).join(", ")}
-      </p>
-      <CitationChips
-        environmentId={environmentId}
-        citations={concept.evidence}
-        showFilename
-      />
+      </h3>
+      {relationships !== undefined && (
+        <span className={`label text-[10px] ${selected ? "text-paper" : "text-ink-3"}`}>
+          {relationships}
+          <span className="sr-only"> {relationships === 1 ? "relationship" : "relationships"}</span>
+        </span>
+      )}
     </article>
   );
 }
@@ -187,33 +186,50 @@ function ExtractionStates({
   documents: ExtractionState[];
 }) {
   const retry = useRequestConcepts(environmentId);
+  const failing = documents.some((d) => d.status === "failed" || d.document_status === "failed");
+  const [open, setOpen] = useState(failing);
   return (
-    <ul className="flex flex-col gap-2 text-sm" aria-label="Documents still to extract">
-      {documents.map((d) => (
-        <li key={d.document_id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="font-medium">{d.filename}</span>
-          <span className="text-zinc-500">
-            · {stateLabel(d)}
-            {d.error && `: ${d.error}`}
-          </span>
-          {d.document_status === "ready" &&
-            (d.status === "failed" || d.status === "none") && (
-            <button
-              type="button"
-              onClick={() => retry.mutate(d.document_id)}
-              disabled={retry.isPending}
-              className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-            >
-              {d.status === "failed" ? "Try again" : "Extract"}
-            </button>
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="label flex w-fit items-center gap-2 text-[10px]"
+      >
+        <Mark />
+        {documents.length} {documents.length === 1 ? "document" : "documents"} still to extract{" "}
+        <OpenSign open={open} />
+      </button>
+      {open && (
+        <ul className="flex flex-col" aria-label="Documents still to extract">
+          {documents.map((d) => (
+            <li key={d.document_id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-rule py-2">
+              <span className="min-w-0 flex-1 truncate text-sm">{d.filename}</span>
+              <span className="label text-[9px] text-ink-3">
+                {stateLabel(d)}
+                {d.error && `: ${d.error}`}
+              </span>
+              {d.document_status === "ready" &&
+                (d.status === "failed" || d.status === "none") && (
+                  <button
+                    type="button"
+                    onClick={() => retry.mutate(d.document_id)}
+                    disabled={retry.isPending}
+                    className={`${button.link} text-[10px]`}
+                  >
+                    {d.status === "failed" ? "Try again" : "Extract"}
+                  </button>
+                )}
+            </li>
+          ))}
+          {retry.error && (
+            <li role="alert" className="label flex items-center gap-2 pt-2">
+              <Mark />
+              {retry.error.message}
+            </li>
           )}
-        </li>
-      ))}
-      {retry.error && (
-        <li role="alert" className="text-red-600 dark:text-red-400">
-          {retry.error.message}
-        </li>
+        </ul>
       )}
-    </ul>
+    </div>
   );
 }

@@ -7,6 +7,7 @@
 // concepts it covered.
 
 import { Empty, QueryState } from "@/components/query-states";
+import { SectionHead } from "@/components/ui";
 import { usePracticeHistory } from "@/hooks/use-practice";
 import { formatDateTime } from "@/lib/format";
 import type { PracticeSession } from "@/lib/types";
@@ -16,10 +17,8 @@ const SHOWN_CONCEPTS = 4;
 export function PracticeHistory({ environmentId }: { environmentId: string }) {
   const query = usePracticeHistory(environmentId);
   return (
-    <section aria-labelledby="history-heading" className="flex flex-col gap-3">
-      <h2 id="history-heading" className="font-medium">
-        Session history
-      </h2>
+    <section aria-labelledby="history-heading" className="flex min-w-0 flex-col">
+      <SectionHead id="history-heading">Session history</SectionHead>
       <QueryState query={query} what="past sessions" lines={3}>
         {(sessions) =>
           sessions.length === 0 ? (
@@ -29,20 +28,20 @@ export function PracticeHistory({ environmentId }: { environmentId: string }) {
             </Empty>
           ) : (
             <>
-              <ol className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800" aria-label="Past sessions">
+              <ol aria-label="Past sessions">
                 {sessions.map((s) => (
-                  <li key={s.started_at} className="flex flex-col gap-0.5 py-2 text-sm">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                      <span className="font-medium">{formatDateTime(s.started_at)}</span>
-                      <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+                  <li key={s.started_at} className="flex flex-col gap-1 border-b border-rule py-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="display text-xl leading-tight">{formatDateTime(s.started_at)}</span>
+                      <span className="label text-[10px] tabular-nums">
                         {s.recalled} of {s.answers} recalled · {duration(s)}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">{concepts(s)}</p>
+                    <p className="text-[13px] leading-snug text-ink-2">{concepts(s)}</p>
                   </li>
                 ))}
               </ol>
-              <p className="text-xs text-zinc-500">
+              <p className="label pt-2.5 text-[9px] text-ink-3">
                 Answers less than 30 minutes apart count as one session. The last{" "}
                 {sessions.length === 1 ? "session is" : `${sessions.length} sessions are`}{" "}
                 shown.

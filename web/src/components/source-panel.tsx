@@ -53,12 +53,12 @@ export function SourcePanel({
       aria-label={`${citation.filename}, ${pagesLabel(citation.page_start, citation.page_end)}`}
       className="flex flex-col gap-2"
     >
-      <p className="text-sm font-medium">
+      <p className="label text-[10px] text-ink-3">
         {citation.filename} · {pagesLabel(citation.page_start, citation.page_end)}
       </p>
       <div
         ref={scroller}
-        className="relative flex max-h-[28rem] flex-col gap-4 overflow-y-auto rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900"
+        className="relative flex max-h-[28rem] flex-col gap-4 overflow-y-auto bg-paper-2 px-5 py-4"
       >
         {pages.map((page, index) => (
           <PageWithPassage
@@ -85,14 +85,14 @@ function PageWithPassage({
   const [start, end] = widen(content, page.highlight_start, page.highlight_end);
   return (
     <section aria-label={`Page ${page.page_number}`}>
-      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+      <h4 className="label mb-1.5 text-[10px] text-ink-3">
         Page {page.page_number}
       </h4>
-      <p className="whitespace-pre-wrap text-sm">
+      <p className="text-sm leading-relaxed whitespace-pre-wrap text-ink-2">
         <MathsText text={content.slice(0, start)} />
         <mark
           ref={markRef}
-          className="rounded-sm bg-amber-100 text-inherit dark:bg-amber-900/60"
+          className="bg-paper py-0.5 pr-0.5 pl-1.5 text-ink shadow-[inset_3px_0_0_var(--accent)] box-decoration-clone"
         >
           <MathsText text={content.slice(start, end)} />
         </mark>

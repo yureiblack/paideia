@@ -1,37 +1,116 @@
 @import "tailwindcss";
 
+/* The Broadsheet design (design/paideia.pen, decision record 25): three
+   colour roles, newsprint, ink and one orange, with tints of the first two.
+   Components use only these names, so a theme is a change of values here
+   and nothing else. Every text pairing meets WCAG AA in both themes; the
+   orange marks things on its own, so it keeps 3:1 against the paper. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f3efe6;
+  --paper-2: #e9e3d6;
+  --ink: #14130f;
+  --ink-2: #4a463d;
+  --ink-3: #68635a;
+  --rule: #14130f26;
+  --accent: #e84800;
+  --on-accent: #14130f;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* The theme the page chose (the script in the root layout sets it before
+   the first paint), and the system's theme when that script cannot run. */
+:root[data-theme="dark"] {
+  --paper: #111110;
+  --paper-2: #1b1a17;
+  --ink: #ede7da;
+  --ink-2: #b5ae9f;
+  --ink-3: #938d80;
+  --rule: #ede7da2e;
+  --accent: #ff5a14;
+  --on-accent: #111110;
+  color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme]) {
+    --paper: #111110;
+    --paper-2: #1b1a17;
+    --ink: #ede7da;
+    --ink-2: #b5ae9f;
+    --ink-3: #938d80;
+    --rule: #ede7da2e;
+    --accent: #ff5a14;
+    --on-accent: #111110;
+    color-scheme: dark;
   }
 }
 
+/* Tailwind's dark variant follows the chosen theme, not the media query. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --font-display: var(--font-instrument-serif);
+  --font-sans: var(--font-instrument-sans);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+/* Phone below 700px, tablet from 700px, desktop from 1100px. */
+@theme {
+  --breakpoint-tab: 43.75rem;
+  --breakpoint-desk: 68.75rem;
+}
+
+/* Small uppercase labels: section numbers, metadata, buttons. Uppercase is
+   set here, not typed, so the words in the page stay as written. */
+@utility label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+/* The display face for headlines, names and numbers. */
+@utility display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Keyboard focus, the same clear ring on every link, button and field in
-   both themes. Only for keyboard focus: a mouse click shows none. In the
-   base layer, so a component's own focus classes can adjust it. */
 @layer base {
+  /* Keyboard focus: the same orange ring on every link, button and field,
+     in both themes. A mouse click shows none. */
   :focus-visible {
-    outline: 2px solid var(--foreground);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  /* A passage marked within its page (the source panel). */
+  mark {
+    background: var(--paper-2);
+    color: inherit;
+    box-shadow: inset 3px 0 0 var(--accent);
+    padding-left: 0.35em;
   }
 }
 
@@ -42,4 +121,23 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   padding-block: 0.25em;
+}
+
+/* Placeholders while a section loads pulse gently, and hold still for
+   anyone who asked for less motion. */
+@keyframes placeholder-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.placeholder {
+  background: var(--paper-2);
+  animation: placeholder-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placeholder {
+    animation: none;
+  }
 }

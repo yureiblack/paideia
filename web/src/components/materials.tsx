@@ -7,12 +7,13 @@
 // document shows the opening of its summary, and the step its background
 // work is at while it runs.
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useRef, useState, type ChangeEvent } from "react";
 
 import { DocumentSummaryPanel } from "@/components/document-summary";
 import { MaterialUpdates } from "@/components/material-updates";
 import { MathsText } from "@/components/maths-text";
 import { Empty, Loading, LoadError } from "@/components/query-states";
+import { button, Mark, Opening, Standfirst, useDismiss } from "@/components/ui";
 import {
   useDeleteDocument,
   useDocuments,
@@ -25,6 +26,7 @@ import {
 import { useJobs } from "@/hooks/use-jobs";
 import { useNewVersion, useUpdates } from "@/hooks/use-updates";
 import { formatBytes, formatDate } from "@/lib/format";
+import { InWords } from "@/lib/words";
 import {
   MAX_UPLOAD_MB,
   type CurrentSummary,
@@ -59,32 +61,42 @@ export function Materials({ environmentId }: { environmentId: string }) {
   const problem = tooLarge ?? upload.error?.message;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          PDFs up to {MAX_UPLOAD_MB} MB. Each is read page by page as soon as
-          it arrives.
-        </p>
-        <input
-          ref={input}
-          type="file"
-          accept="application/pdf,.pdf"
-          onChange={handleFile}
-          className="hidden"
-          aria-label="Choose a PDF to upload"
-        />
-        <button
-          type="button"
-          onClick={() => input.current?.click()}
-          disabled={upload.isPending}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          {upload.isPending ? "Uploading…" : "Upload PDF"}
-        </button>
-      </div>
+    <div className="flex flex-col gap-9">
+      <Opening
+        kicker={
+          <>
+            <span aria-hidden>02 / </span>Materials
+          </>
+        }
+        headline={<MaterialsHeadline documents={documents.data} />}
+        aside={
+          <>
+            <Standfirst>
+              PDFs up to {MAX_UPLOAD_MB} MB. Each is read page by page as soon as it arrives.
+            </Standfirst>
+            <input
+              ref={input}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={handleFile}
+              className="hidden"
+              aria-label="Choose a PDF to upload"
+            />
+            <button
+              type="button"
+              onClick={() => input.current?.click()}
+              disabled={upload.isPending}
+              className={`${button.primary} w-full tab:w-fit`}
+            >
+              {upload.isPending ? "Uploading…" : "Upload PDF"} <span aria-hidden>[+]</span>
+            </button>
+          </>
+        }
+      />
 
       {problem && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="label flex items-center gap-2">
+          <Mark />
           {problem}
         </p>
       )}
@@ -105,23 +117,47 @@ export function Materials({ environmentId }: { environmentId: string }) {
           No materials yet. Upload lecture notes or readings as PDFs to get started.
         </Empty>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {documents.data.map((document) => (
-            <li key={document.id}>
-              <DocumentRow
-                document={document}
-                environmentId={environmentId}
-                job={working.get(document.id)}
-                isReading={reading === document.id}
-                onToggleReading={() =>
-                  setReading(reading === document.id ? null : document.id)
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col">
+          <div aria-hidden className="label hidden gap-4 border-b border-ink pb-2 text-[10px] text-ink-3 tab:flex">
+            <span className="flex-1">Document</span>
+            <span className="w-44">Status</span>
+            <span className="w-32" />
+          </div>
+          <ul aria-label="Documents">
+            {documents.data.map((document) => (
+              <li key={document.id} className="border-b border-rule">
+                <DocumentRow
+                  document={document}
+                  environmentId={environmentId}
+                  job={working.get(document.id)}
+                  isReading={reading === document.id}
+                  onToggleReading={() =>
+                    setReading(reading === document.id ? null : document.id)
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
+  );
+}
+
+// "Four documents. One is being read."
+function MaterialsHeadline({ documents }: { documents: Document[] | undefined }) {
+  if (!documents) return <span aria-hidden className="placeholder block h-[0.9em] w-2/3" />;
+  if (documents.length === 0) return "No materials yet.";
+  const n = documents.length;
+  const busy = documents.filter((d) => d.status === "uploaded" || d.status === "processing").length;
+  const first = `${InWords(n)} ${n === 1 ? "document" : "documents"}.`;
+  if (busy === 0) return first;
+  return (
+    <>
+      {first}
+      <br />
+      {busy === 1 ? "One is" : `${InWords(busy)} are`} being read.
+    </>
   );
 }
 
@@ -171,10 +207,17 @@ function DocumentRow({
   const summary = useSummary(environmentId, document);
   const askForSummary = useRequestSummary(environmentId, document.id);
   const [showingSummary, setShowingSummary] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useDismiss(menu, menuOpen, closeMenu, menuButton);
 
   // A document read before summaries were automatic has none until asked.
   // The click asks, never the panel appearing, so one click is one request.
   function handleSummary() {
+    setMenuOpen(false);
     if (showingSummary) {
       setShowingSummary(false);
       return;
@@ -183,24 +226,107 @@ function DocumentRow({
     if (summary.data === null && !askForSummary.isPending) askForSummary.mutate();
   }
 
-  function handleDelete() {
-    if (window.confirm(`Delete "${document.filename}"? This cannot be undone.`)) {
-      remove.mutate(document.id);
-    }
-  }
+  const canVersion = document.status !== "uploaded" && document.status !== "processing";
+  const item = "label flex w-full items-center gap-2 border-b border-rule px-3.5 py-3 text-left last:border-b-0 hover:bg-ink hover:text-paper disabled:opacity-40";
 
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="truncate font-medium">{document.filename}</h3>
-          <p className="text-xs text-zinc-500">
-            {formatBytes(document.size_bytes)} · added{" "}
-            {formatDate(document.created_at)}
+    <article className={`flex flex-col gap-3 py-4 ${menuOpen ? "bg-paper-2 tab:-mx-3 tab:px-3" : ""}`}>
+      <div className="flex flex-col gap-2 tab:flex-row tab:items-start tab:gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h3 className="display truncate text-2xl leading-none tracking-[-0.015em]">{document.filename}</h3>
+          <p className="label text-[10px] text-ink-3">
+            {formatBytes(document.size_bytes)} · added {formatDate(document.created_at)}
           </p>
         </div>
-        <StatusBadge document={document} />
+        <div className="tab:w-44 tab:pt-1.5">
+          <StatusBadge document={document} />
+        </div>
+        <div ref={menu} className="relative flex items-center gap-4 tab:w-32 tab:justify-end tab:pt-1">
+          {document.status === "ready" && (
+            <button
+              type="button"
+              onClick={onToggleReading}
+              aria-expanded={isReading}
+              className={`${button.link} text-[10px]`}
+            >
+              {isReading ? "Hide text" : "Read text"}
+            </button>
+          )}
+          <button
+            ref={menuButton}
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-expanded={menuOpen}
+            aria-label={`More for ${document.filename}`}
+            className={`label flex size-10 items-center justify-center border border-rule tracking-normal tab:size-7 tab:border-0 ${
+              menuOpen ? "bg-ink text-paper" : "hover:bg-ink hover:text-paper"
+            }`}
+          >
+            •••
+          </button>
+          {menuOpen && (
+            <div className="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col border border-ink bg-paper">
+              {document.status === "ready" && (
+                <button type="button" onClick={handleSummary} aria-expanded={showingSummary} className={item}>
+                  <span className="flex-1">{showingSummary ? "Hide summary" : summaryLabel(summary.data)}</span>
+                  <span aria-hidden>→</span>
+                </button>
+              )}
+              {canVersion && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    versionInput.current?.click();
+                  }}
+                  disabled={newVersion.isPending}
+                  className={item}
+                >
+                  <span className="flex-1">{newVersion.isPending ? "Uploading…" : "Upload a new version"}</span>
+                  <span aria-hidden>→</span>
+                </button>
+              )}
+              {document.status === "failed" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    reprocess.mutate(document.id);
+                  }}
+                  disabled={reprocess.isPending}
+                  className={item}
+                >
+                  <span className="flex-1">Try again</span>
+                  <span aria-hidden>→</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirming(true);
+                }}
+                disabled={remove.isPending}
+                className={item}
+              >
+                <Mark />
+                <span className="flex-1">{remove.isPending ? "Deleting…" : "Delete"}</span>
+                  <span aria-hidden>→</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      {canVersion && (
+        <input
+          ref={versionInput}
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={handleVersion}
+          className="hidden"
+          aria-label={`Choose a new version of ${document.filename}`}
+        />
+      )}
 
       <Notes document={document} />
 
@@ -209,74 +335,37 @@ function DocumentRow({
       {!showingSummary &&
         summary.data?.status === "ready" &&
         summary.data.overview && (
-          <p className="line-clamp-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <p className="line-clamp-2 max-w-3xl text-sm text-ink-2">
             <MathsText text={summary.data.overview} />
           </p>
         )}
 
-      <div className="flex flex-wrap gap-2">
-        {document.status === "ready" && (
-          <button
-            type="button"
-            onClick={onToggleReading}
-            aria-expanded={isReading}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium dark:border-zinc-700"
-          >
-            {isReading ? "Hide text" : "Read text"}
-          </button>
-        )}
-        {document.status === "ready" && (
-          <button
-            type="button"
-            onClick={handleSummary}
-            aria-expanded={showingSummary}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium dark:border-zinc-700"
-          >
-            {showingSummary ? "Hide summary" : summaryLabel(summary.data)}
-          </button>
-        )}
-        {document.status !== "uploaded" && document.status !== "processing" && (
-          <>
-            <input
-              ref={versionInput}
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={handleVersion}
-              className="hidden"
-              aria-label={`Choose a new version of ${document.filename}`}
-            />
+      {confirming && (
+        <div role="alertdialog" aria-label={`Delete ${document.filename}`} className="flex flex-col gap-3 border border-ink p-4 tab:flex-row tab:items-center tab:gap-5">
+          <p className="display flex-1 text-xl leading-tight">
+            Delete “{document.filename}”? This cannot be undone.
+          </p>
+          <div className="flex items-center gap-5">
             <button
               type="button"
-              onClick={() => versionInput.current?.click()}
-              disabled={newVersion.isPending}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+              onClick={() => {
+                setConfirming(false);
+                remove.mutate(document.id);
+              }}
+              className={button.danger}
             >
-              {newVersion.isPending ? "Uploading…" : "Upload a new version"}
+              Delete
             </button>
-          </>
-        )}
-        {document.status === "failed" && (
-          <button
-            type="button"
-            onClick={() => reprocess.mutate(document.id)}
-            disabled={reprocess.isPending}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
-            Try again
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={remove.isPending}
-          className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
-        >
-          {remove.isPending ? "Deleting…" : "Delete"}
-        </button>
-      </div>
+            <button type="button" onClick={() => setConfirming(false)} className={button.link}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
 
       {(reprocess.error ?? remove.error ?? newVersion.error) && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="label flex items-center gap-2">
+          <Mark />
           {(reprocess.error ?? remove.error ?? newVersion.error)?.message}
         </p>
       )}
@@ -303,8 +392,8 @@ function DocumentRow({
 function JobLine({ job }: { job: Job }) {
   const running = job.status === "running";
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+    <div className="flex flex-col gap-1.5">
+      <p className="label text-[10px] text-ink-2">
         {job.title}:{" "}
         {job.cancel_requested
           ? "stopping after this step…"
@@ -318,12 +407,9 @@ function JobLine({ job }: { job: Job }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={job.progress}
-        className="h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+        className="h-1 overflow-hidden bg-paper-2"
       >
-        <div
-          className="h-full rounded-full bg-zinc-900 transition-[width] dark:bg-zinc-100"
-          style={{ width: `${running ? Math.max(job.progress, 3) : 0}%` }}
-        />
+        <div className="h-full bg-ink" style={{ width: `${running ? Math.max(job.progress, 3) : 0}%` }} />
       </div>
     </div>
   );
@@ -345,10 +431,10 @@ function summaryLabel(summary: CurrentSummary | null | undefined) {
 }
 
 const BADGE = {
-  uploaded: { label: "Waiting", style: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
-  processing: { label: "Reading…", style: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
-  ready: { label: "Ready", style: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" },
-  failed: { label: "Failed", style: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
+  uploaded: { label: "Waiting", style: "text-ink-2" },
+  processing: { label: "Reading…", style: "text-ink" },
+  ready: { label: "Ready", style: "text-ink-2" },
+  failed: { label: "Failed", style: "text-ink" },
 };
 
 export function StatusBadge({ document }: { document: Document }) {
@@ -358,9 +444,8 @@ export function StatusBadge({ document }: { document: Document }) {
       ? ` · ${document.page_count} ${document.page_count === 1 ? "page" : "pages"}`
       : "";
   return (
-    <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${style}`}
-    >
+    <span className={`label inline-flex shrink-0 items-center gap-1.5 text-[10px] ${style}`}>
+      {document.status === "failed" && <Mark />}
       {label}
       {pages}
     </span>
@@ -380,7 +465,7 @@ function Notes({ document }: { document: Document }) {
   }
   if (notes.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+    <ul className="flex flex-col gap-1 text-sm text-ink-2">
       {notes.map((note) => (
         <li key={note}>{note}</li>
       ))}
@@ -403,18 +488,18 @@ function PageReader({ documentId }: { documentId: string }) {
     );
   }
   return (
-    <div className="flex max-h-[32rem] flex-col gap-4 overflow-y-auto rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900">
+    <div className="flex max-h-[32rem] flex-col gap-5 overflow-y-auto bg-paper-2 px-5 py-4">
       {pages.data.map((page) => (
         <section key={page.page_number} aria-label={`Page ${page.page_number}`}>
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <h4 className="label mb-1.5 text-[10px] text-ink-3">
             Page {page.page_number}
           </h4>
           {page.content.trim() ? (
-            <p className="whitespace-pre-wrap text-sm">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">
               <MathsText text={page.content} />
             </p>
           ) : (
-            <p className="text-sm text-zinc-500">No text on this page.</p>
+            <p className="display text-base text-ink-3 italic">No text on this page.</p>
           )}
         </section>
       ))}
