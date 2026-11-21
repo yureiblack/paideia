@@ -9,6 +9,7 @@
 // how to start one.
 
 import { useCancelJob, useJobs, useWorker } from "@/hooks/use-jobs";
+import { Mark } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import type { Job } from "@/lib/types";
 
@@ -32,17 +33,20 @@ export function BackgroundWork({ environmentId }: { environmentId: string }) {
   return (
     <section
       aria-labelledby="work-heading"
-      className="flex flex-col gap-2 rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800"
+      className="my-3 flex flex-col gap-2.5 border-t border-rule pt-3 desk:my-0"
     >
-      <h2 id="work-heading" className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+      <h2 id="work-heading" className="label text-[10px] text-ink-3">
         Background work
       </h2>
       {waiting && worker.isError && (
-        <p role="alert" className="text-amber-700 dark:text-amber-400">
-          Waiting for the worker. {worker.error.message}
+        <p role="alert" className="flex gap-2 text-[13px] leading-snug">
+          <span className="pt-1.5">
+            <Mark />
+          </span>
+          <span>Waiting for the worker. {worker.error.message}</span>
         </p>
       )}
-      <ul className="flex flex-col gap-2" aria-label="Jobs">
+      <ul className="flex flex-col gap-3" aria-label="Jobs">
         {active.map((job) => (
           <li key={job.id}>
             <ActiveJob
@@ -53,13 +57,19 @@ export function BackgroundWork({ environmentId }: { environmentId: string }) {
           </li>
         ))}
         {failed.map((job) => (
-          <li key={job.id} className="text-red-600 dark:text-red-400">
-            <span className="font-medium">{job.title}</span> failed: {job.error}
+          <li key={job.id} className="flex gap-2 text-[13px] leading-snug">
+            <span className="pt-1.5">
+              <Mark />
+            </span>
+            <span>
+              <span className="label text-[10px]">{job.title} failed:</span> {job.error}
+            </span>
           </li>
         ))}
       </ul>
       {cancel.error && (
-        <p role="alert" className="text-red-600 dark:text-red-400">
+        <p role="alert" className="label flex items-center gap-2 text-[10px]">
+          <Mark />
           {cancel.error.message}
         </p>
       )}
@@ -85,17 +95,17 @@ function ActiveJob({
         ? `${job.error} Next try ${job.not_before ? formatDateTime(job.not_before) : "soon"} (attempt ${job.attempts + 1} of ${job.max_attempts}).`
         : "Queued";
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-medium">{job.title}</span>
-        <span className="flex items-center gap-2 text-xs text-zinc-500">
+        <span className="label text-[10px]">{job.title}</span>
+        <span className="label flex items-center gap-3 text-[10px] text-ink-3">
           {job.status === "running" && <span className="tabular-nums">{job.progress}%</span>}
           {!job.cancel_requested && (
             <button
               type="button"
               onClick={onCancel}
               disabled={cancelling}
-              className="rounded border border-zinc-300 px-2 py-0.5 font-medium disabled:opacity-50 dark:border-zinc-700"
+              className="border-b border-ink text-ink hover:border-accent disabled:opacity-40"
             >
               Cancel
             </button>
@@ -108,14 +118,14 @@ function ActiveJob({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={job.progress}
-        className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+        className="h-1 overflow-hidden bg-paper-2"
       >
         <div
-          className="h-full rounded-full bg-zinc-900 transition-[width] dark:bg-zinc-100"
+          className="h-full bg-ink"
           style={{ width: `${job.status === "running" ? Math.max(job.progress, 3) : 0}%` }}
         />
       </div>
-      <p className="text-xs text-zinc-600 dark:text-zinc-400">{status}</p>
+      <p className="text-xs leading-snug text-ink-2">{status}</p>
     </div>
   );
 }

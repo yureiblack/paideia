@@ -649,7 +649,7 @@ Known limits, each stated in its decision record:
 - **Maths is in progress.** Maths written as LaTeX is typeset and checked
   ([24](docs/architecture/24-maths-notation.md)). Reading maths from PDFs
   with the local vision model, linear algebra exercises the backend solves
-  and marks, and a maths benchmark are planned as phases 25 to 27. Until
+  and marks, and a maths benchmark are planned as phases 26 to 28. Until
   then, a PDF's formulas reach the passages as its text layer has them,
   which for matrices is a row of numbers.
 
@@ -727,13 +727,14 @@ api/                    FastAPI backend
   requirements.in       direct dependencies, edited by hand
   requirements.txt      every dependency pinned, generated
 web/                    Next.js frontend
-  src/app/              pages and layouts
+  src/app/              pages and layouts; globals.css holds the colours and themes
   src/components/       UI pieces, with their tests beside them
   src/hooks/            data fetching
   src/lib/              API client, types, config
   src/test/             what the component tests share
   e2e/                  the end-to-end journey (Playwright)
 data/                   uploaded files and the model cache, never committed
+design/paideia.pen      the interface's design, opened in Pencil
 docs/architecture/      decision records, with an index
 docs/evaluation/        the benchmark's corpus, questions, key facts, results and report
 docs/images/            the screenshots and the demo above

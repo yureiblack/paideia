@@ -1,23 +1,25 @@
 "use client";
 
-// The Overview tab, the environment's dashboard (decision record 19): the
-// numbers at a glance first, then today's study plan, each roadmap stage's
-// progress, the opening of the summary, the knowledge map in words, recent
-// material and how recent background work ended. Every section reads data
-// its own tab fetches too, and loads, fails and tries again on its own. One
-// column on a phone; two below the plan on a wide screen.
+// The Overview tab, the environment's front page (decision records 19 and
+// 25): a headline saying what today holds, the figures at a glance, today's
+// study plan, then the roadmap, recent material and background work beside
+// a margin column with the summary and the map. Every section reads data
+// its own tab fetches too, and loads, fails and tries again on its own.
+// One column on a phone.
 
 import {
   AtAGlance,
   MapPreview,
+  OverviewHeadline,
   ProcessingActivity,
   RecentMaterial,
   RoadmapProgress,
   SummaryPreview,
 } from "@/components/overview-sections";
 import { TodayPlan } from "@/components/today-plan";
+import { Opening, Standfirst } from "@/components/ui";
 import { useEnvironment } from "@/hooks/use-environments";
-import { formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 export function EnvironmentOverview({ id }: { id: string }) {
   const { data: environment } = useEnvironment(id);
@@ -26,19 +28,36 @@ export function EnvironmentOverview({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col gap-10">
+      <Opening
+        kicker={
+          <>
+            <span aria-hidden>01 / </span>Overview
+          </>
+        }
+        headline={<OverviewHeadline environmentId={id} />}
+        aside={
+          <>
+            {environment.description && <Standfirst>{environment.description}</Standfirst>}
+            <p className="label text-[10px] text-ink-3">
+              Created {formatDate(environment.created_at)} · changed{" "}
+              {formatDate(environment.updated_at)}
+            </p>
+          </>
+        }
+      />
       <AtAGlance environmentId={id} />
       <TodayPlan environmentId={id} />
-      <div className="grid gap-10 lg:grid-cols-2">
-        <RoadmapProgress environmentId={id} />
-        <SummaryPreview environmentId={id} />
-        <MapPreview environmentId={id} />
-        <RecentMaterial environmentId={id} />
-        <ProcessingActivity environmentId={id} />
+      <div className="grid gap-10 tab:grid-cols-[minmax(0,1fr)_260px] desk:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-w-0 flex-col gap-10">
+          <RoadmapProgress environmentId={id} />
+          <RecentMaterial environmentId={id} />
+          <ProcessingActivity environmentId={id} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-10">
+          <SummaryPreview environmentId={id} />
+          <MapPreview environmentId={id} />
+        </div>
       </div>
-      <p className="text-xs text-zinc-500">
-        Created {formatDateTime(environment.created_at)} · last changed{" "}
-        {formatDateTime(environment.updated_at)}
-      </p>
     </div>
   );
 }

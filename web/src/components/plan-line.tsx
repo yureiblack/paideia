@@ -10,7 +10,7 @@ export function PlanLine({ environmentId }: { environmentId: string }) {
   if (!query.data) return null;
   const { sessions, minutes } = query.data;
   return (
-    <p className="text-sm text-zinc-700 dark:text-zinc-300">
+    <p className="label">
       {sessions.length === 0
         ? "Nothing planned today"
         : `Today: ${sessions.length} ${sessions.length === 1 ? "session" : "sessions"} · ${minutes} min`}

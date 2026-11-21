@@ -9,6 +9,7 @@
 
 import { CitedPoints } from "@/components/cited-points";
 import { MathsText } from "@/components/maths-text";
+import { button, Mark } from "@/components/ui";
 import { Loading, LoadError } from "@/components/query-states";
 import { formatDateTime } from "@/lib/format";
 import type { CurrentSummary } from "@/lib/types";
@@ -45,7 +46,7 @@ export function DocumentSummaryPanel({
   if (summary === undefined) return <Loading what="the summary" lines={3} />;
   if (summary === null || summary.status === "pending") {
     return (
-      <p className="text-sm text-zinc-500" role="status">
+      <p className="display text-base text-ink-3 italic" role="status">
         Waiting to be summarized. Summaries are written one at a time, as soon
         as the model is free.
       </p>
@@ -53,7 +54,7 @@ export function DocumentSummaryPanel({
   }
   if (summary.status === "generating") {
     return (
-      <p className="text-sm text-zinc-500" role="status">
+      <p className="display text-base text-ink-3 italic" role="status">
         Writing the summary with the local model… usually under a minute; a
         long document can take several.
       </p>
@@ -62,19 +63,21 @@ export function DocumentSummaryPanel({
   if (summary.status === "failed") {
     return (
       <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="label flex items-center gap-2">
+          <Mark />
           The summary could not be written: {summary.error}
         </p>
         <button
           type="button"
           onClick={onTryAgain}
           disabled={retrying}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          className={button.outline}
         >
           {retrying ? "Asking…" : "Try again"}
         </button>
         {retryError && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="label flex items-center gap-2">
+            <Mark />
             {retryError.message}
           </p>
         )}
@@ -84,13 +87,13 @@ export function DocumentSummaryPanel({
   return (
     <section
       aria-label="Summary"
-      className="flex flex-col gap-3 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900"
+      className="flex flex-col gap-4 border-l-2 border-ink pl-4 tab:pl-5"
     >
-      <p className="text-sm">
+      <p className="display max-w-3xl text-xl leading-[1.2] tab:text-[22px]">
         <MathsText text={summary.overview} />
       </p>
       <CitedPoints environmentId={environmentId} points={summary.key_points} />
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs leading-normal text-ink-3">
         Written by {summary.model} from this document&apos;s passages
         {summary.sections !== null &&
           summary.sections > 1 &&

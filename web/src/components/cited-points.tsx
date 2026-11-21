@@ -1,8 +1,9 @@
 "use client";
 
-// Key points with chips for the passages each cites. A chip opens that passage
-// in its page. Used by document summaries and by the environment's summary,
-// whose chips also name the document, since its points span several.
+// Key points, numbered and ruled, with a reference for each passage they
+// cite. A reference opens that passage in its page. Used by document
+// summaries and by the environment's summary, whose references also name the
+// document, since its points span several.
 
 import { useState } from "react";
 
@@ -20,9 +21,12 @@ export function CitedPoints({
   showFilename?: boolean;
 }) {
   return (
-    <ul className="flex flex-col gap-3">
+    <ol className="border-t border-ink">
       {points.map((point, index) => (
-        <li key={index}>
+        <li key={index} className="flex gap-4 border-b border-rule py-4 tab:gap-5">
+          <span aria-hidden className="label w-6 shrink-0 pt-1 text-[10px] text-ink-3">
+            {String(index + 1).padStart(2, "0")}
+          </span>
           <KeyPoint
             environmentId={environmentId}
             point={point}
@@ -30,7 +34,7 @@ export function CitedPoints({
           />
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }
 
@@ -52,8 +56,8 @@ function KeyPoint({
   showFilename: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-sm">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <p className="max-w-3xl text-base leading-relaxed">
         <MathsText text={point.text} />
       </p>
       <CitationChips
@@ -80,7 +84,7 @@ export function CitationChips({
 
   return (
     <>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5">
         {citations.map((citation) => {
           const isOpen = open === citation.chunk_id;
           return (
@@ -90,10 +94,10 @@ export function CitationChips({
               onClick={() => setOpen(isOpen ? null : citation.chunk_id)}
               aria-expanded={isOpen}
               title="Show this passage in its page"
-              className={`max-w-full truncate rounded-full border px-2.5 py-0.5 text-xs ${
+              className={`label max-w-full truncate text-[10px] tracking-[0.06em] ${
                 isOpen
-                  ? "border-zinc-900 dark:border-zinc-100"
-                  : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                  ? "bg-ink px-1.5 py-0.5 text-paper"
+                  : "border-b border-rule pb-0.5 text-ink-2 hover:border-accent hover:text-ink"
               }`}
             >
               {chipLabel(citation, showFilename)}

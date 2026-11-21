@@ -1,7 +1,9 @@
 "use client";
 
-// The row of tabs on an environment. Each tab is its own URL, so a later phase
-// fills a tab by replacing one page file, and the back button just works.
+// An environment's sections, numbered like a table of contents. Each section
+// is its own URL, so the back button just works. One list, three shapes: a
+// column beside the page on a desktop, a row under the masthead on a tablet,
+// and a full-screen sheet behind the Contents button on a phone.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,35 +25,52 @@ export function tabLabel(id: string, pathname: string): string {
   return tab?.label ?? "Overview";
 }
 
-export function EnvironmentTabs({ id }: { id: string }) {
+// "01", "02": a section's number in the contents.
+export function tabNumber(id: string, pathname: string): string {
+  const index = TABS.findIndex(({ label }) => label === tabLabel(id, pathname));
+  return String(index + 1).padStart(2, "0");
+}
+
+export function EnvironmentTabs({ id, onNavigate }: { id: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   const base = `/environments/${id}`;
 
   return (
-    <nav
-      aria-label="Environment sections"
-      className="flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800"
-    >
-      {TABS.map(({ label, segment }) => {
-        const href = segment ? `${base}/${segment}` : base;
-        const isActive = pathname === href;
-        return (
-          <Link
-            key={label}
-            href={href}
-            aria-current={isActive ? "page" : undefined}
-            // The row scrolls sideways on a phone, which clips anything drawn
-            // outside it, so the focus ring is drawn just inside the tab.
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium focus-visible:-outline-offset-2 ${
-              isActive
-                ? "border-zinc-900 dark:border-zinc-100"
-                : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            }`}
-          >
-            {label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Environment sections" className="min-w-0 flex-1">
+      <ol className="flex flex-col border-t border-ink tab:flex-row tab:gap-6 tab:overflow-x-auto tab:border-0 desk:flex-col desk:gap-0">
+        {TABS.map(({ label, segment }, index) => {
+          const href = segment ? `${base}/${segment}` : base;
+          const isActive = pathname === href;
+          return (
+            <li key={label} className="border-b border-rule tab:border-0 desk:border-b">
+              <Link
+                href={href}
+                onClick={onNavigate}
+                aria-current={isActive ? "page" : undefined}
+                // The row scrolls sideways on a tablet, which clips anything
+                // drawn outside it, so the focus ring is drawn inside.
+                className="group flex h-13 items-center gap-3.5 whitespace-nowrap focus-visible:-outline-offset-2 tab:h-11 tab:gap-2 desk:h-[38px] desk:gap-3"
+              >
+                <span
+                  aria-hidden
+                  className={`label flex h-[18px] w-[26px] shrink-0 items-center justify-center text-[10px] ${
+                    isActive ? "bg-accent text-on-accent" : "text-ink-3 group-hover:text-ink"
+                  }`}
+                >
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span
+                  className={`display text-[28px] tab:font-sans tab:text-sm tab:tracking-normal desk:text-[15px] ${
+                    isActive ? "tab:font-semibold" : "group-hover:underline group-hover:decoration-accent group-hover:underline-offset-4"
+                  }`}
+                >
+                  {label}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

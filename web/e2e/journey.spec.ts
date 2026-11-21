@@ -77,6 +77,8 @@ test("a learner's journey through one subject", async ({ page }) => {
     // Read, then summarised, concepts extracted, mapped and staged.
     await expect(documentCard(page, WEEK_1)).toContainText("Ready · 3 pages");
     await expect(update(page, WEEK_1)).toContainText("Done");
+    // A finished update is one line until "What changed" opens it.
+    await update(page, WEEK_1).getByRole("button", { name: "What changed" }).click();
     // The concepts the document brought, by name.
     await expect(
       update(page, WEEK_1).getByRole("list", { name: "Concepts" }).getByRole("listitem"),
@@ -200,6 +202,7 @@ test("a learner's journey through one subject", async ({ page }) => {
   await test.step("12. Confirm the environment updates", async () => {
     // What the second document changed, and what it left alone.
     const changes = update(page, WEEK_2);
+    await changes.getByRole("button", { name: "What changed" }).click();
     await expect(changes.getByRole("list", { name: "Concepts" })).toContainText("+ Paging");
     await expect(changes.getByRole("list", { name: "Concepts" })).toContainText("+ Page faults");
     // The passage on page faults names processes, from the first document.

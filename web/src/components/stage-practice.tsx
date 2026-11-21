@@ -8,6 +8,7 @@
 
 import Link from "next/link";
 
+import { button, Mark } from "@/components/ui";
 import { usePractice, usePreparePractice } from "@/hooks/use-practice";
 import type { PracticeConcept } from "@/lib/types";
 
@@ -16,12 +17,15 @@ export function StagePractice({
   conceptIds,
   onPractise,
   stageNumber,
+  compact = false,
 }: {
   environmentId: string;
   conceptIds: string[];
   // On the Practice tab, start a session here; elsewhere, link to it.
   onPractise?: () => void;
   stageNumber: number;
+  // A row of a table: practising is a link-style button, not an ink block.
+  compact?: boolean;
 }) {
   const query = usePractice(environmentId);
   const prepare = usePreparePractice(environmentId);
@@ -37,9 +41,22 @@ export function StagePractice({
   const due = concepts.filter((c) => c.review === "due" || c.review === "new").length;
 
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-zinc-600 dark:text-zinc-400">
+    <div className="flex flex-col gap-2">
+      <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${compact ? "tab:flex-row-reverse tab:justify-start" : ""}`}>
+        {items > 0 &&
+          (onPractise ? (
+            <button type="button" onClick={onPractise} className={compact ? `${button.link} text-[10px]` : button.primary}>
+              Practise this stage
+            </button>
+          ) : (
+            <Link
+              href={`/environments/${encodeURIComponent(environmentId)}/practice?stage=${stageNumber}`}
+              className={button.primary}
+            >
+              Practise this stage <span aria-hidden>→</span>
+            </Link>
+          ))}
+        <span className="label text-[10px] text-ink-2">
           {busy.length > 0
             ? `Writing practice items… ${concepts.length - busy.length - missing.length} of ${concepts.length} concepts ready`
             : items > 0
@@ -51,32 +68,16 @@ export function StagePractice({
             type="button"
             onClick={() => prepare.mutate(missing.map((c) => c.concept_id))}
             disabled={prepare.isPending}
-            className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+            className={`${button.link} text-[10px]`}
           >
             {items > 0 ? "Prepare the rest" : "Prepare practice"}
           </button>
         )}
-        {items > 0 &&
-          (onPractise ? (
-            <button
-              type="button"
-              onClick={onPractise}
-              className="rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              Practise this stage
-            </button>
-          ) : (
-            <Link
-              href={`/environments/${encodeURIComponent(environmentId)}/practice?stage=${stageNumber}`}
-              className="rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              Practise this stage
-            </Link>
-          ))}
       </div>
       <Problems concepts={concepts} />
       {prepare.error && (
-        <p role="alert" className="text-red-600 dark:text-red-400">
+        <p role="alert" className="label flex items-center gap-2">
+          <Mark />
           {prepare.error.message}
         </p>
       )}
@@ -89,9 +90,10 @@ function Problems({ concepts }: { concepts: PracticeConcept[] }) {
   const outdated = concepts.filter((c) => c.state === "outdated");
   if (!failed.length && !outdated.length) return null;
   return (
-    <ul className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+    <ul className="flex flex-col gap-1 text-xs text-ink-2">
       {failed.map((c) => (
-        <li key={c.concept_id} className="text-red-600 dark:text-red-400">
+        <li key={c.concept_id} className="flex items-center gap-2 text-ink">
+          <Mark />
           {c.name}: {c.error}
         </li>
       ))}
