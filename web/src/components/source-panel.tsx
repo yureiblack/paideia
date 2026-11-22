@@ -53,7 +53,7 @@ export function SourcePanel({
       aria-label={`${citation.filename}, ${pagesLabel(citation.page_start, citation.page_end)}`}
       className="flex flex-col gap-2"
     >
-      <p className="label text-[10px] text-ink-3">
+      <p className="label text-ink-3">
         {citation.filename} · {pagesLabel(citation.page_start, citation.page_end)}
       </p>
       <div
@@ -85,7 +85,7 @@ function PageWithPassage({
   const [start, end] = widen(content, page.highlight_start, page.highlight_end);
   return (
     <section aria-label={`Page ${page.page_number}`}>
-      <h4 className="label mb-1.5 text-[10px] text-ink-3">
+      <h4 className="label mb-1.5 text-ink-3">
         Page {page.page_number}
       </h4>
       <p className="text-sm leading-relaxed whitespace-pre-wrap text-ink-2">

@@ -35,7 +35,7 @@ export function BackgroundWork({ environmentId }: { environmentId: string }) {
       aria-labelledby="work-heading"
       className="my-3 flex flex-col gap-2.5 border-t border-rule pt-3 desk:my-0"
     >
-      <h2 id="work-heading" className="label text-[10px] text-ink-3">
+      <h2 id="work-heading" className="label text-ink-3">
         Background work
       </h2>
       {waiting && worker.isError && (
@@ -62,13 +62,13 @@ export function BackgroundWork({ environmentId }: { environmentId: string }) {
               <Mark />
             </span>
             <span>
-              <span className="label text-[10px]">{job.title} failed:</span> {job.error}
+              <span className="label">{job.title} failed:</span> {job.error}
             </span>
           </li>
         ))}
       </ul>
       {cancel.error && (
-        <p role="alert" className="label flex items-center gap-2 text-[10px]">
+        <p role="alert" className="label flex items-center gap-2">
           <Mark />
           {cancel.error.message}
         </p>
@@ -97,8 +97,8 @@ function ActiveJob({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="label text-[10px]">{job.title}</span>
-        <span className="label flex items-center gap-3 text-[10px] text-ink-3">
+        <span className="label">{job.title}</span>
+        <span className="label flex items-center gap-3 text-ink-3">
           {job.status === "running" && <span className="tabular-nums">{job.progress}%</span>}
           {!job.cancel_requested && (
             <button
@@ -125,7 +125,7 @@ function ActiveJob({
           style={{ width: `${job.status === "running" ? Math.max(job.progress, 3) : 0}%` }}
         />
       </div>
-      <p className="text-xs leading-snug text-ink-2">{status}</p>
+      <p className="text-[13px] leading-[1.4] text-ink-2">{status}</p>
     </div>
   );
 }

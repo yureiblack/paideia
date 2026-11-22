@@ -4,7 +4,8 @@
 // a matrix, a few vectors, a choice with weights, or eigenvalues with an
 // eigenvector each. Numbers are typed as integers, fractions like 3/4 or
 // decimals; the backend reads them exactly and never evaluates them. Once
-// marked, each cell shows whether it was right.
+// marked, each cell shows whether it was right. The hint on what can be
+// typed is a sentence, so it is in the sans (decision record 28).
 
 import { useState, type FormEvent, type ReactNode } from "react";
 
@@ -56,7 +57,7 @@ function Cell({
       aria-invalid={right === false || undefined}
       maxLength={24}
       className={`w-16 border-b bg-transparent pb-1 text-center text-base tabular-nums focus:border-b-2 focus:border-accent focus:pb-[3px] focus:outline-none disabled:opacity-100 ${
-        right === false ? "border-accent text-accent line-through" : "border-ink"
+        right === false ? "border-accent text-ink line-through decoration-accent decoration-2" : "border-ink"
       }`}
     />
   );
@@ -208,7 +209,7 @@ export function ExerciseForm({
                 <MathsText text={`\\(\\lambda_{${k + 1}} =\\)`} />
                 {cell(k, `Eigenvalue ${k + 1}`)}
               </span>
-              <span className="label text-[10px] text-ink-3">eigenvector</span>
+              <span className="label text-ink-2">eigenvector</span>
               <Brackets columns={1}>
                 {Array.from({ length: form.size }, (_, i) =>
                   cell(form.size + k * form.size + i, `Eigenvector ${k + 1}, entry ${i + 1}`),
@@ -229,8 +230,8 @@ export function ExerciseForm({
           <button type="submit" disabled={!ready || pending} className={button.primary}>
             Check
           </button>
-          <span className="label text-[10px] text-ink-3">
-            Integers, fractions like 3/4, or decimals
+          <span className="text-[13px] leading-[1.4] text-ink-2">
+            Integers, fractions like 3/4, or decimals.
           </span>
         </div>
       )}

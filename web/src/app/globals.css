@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* The Broadsheet design (design/paideia.pen, decision record 25): three
+/* The Broadsheet design (decision records 25 and 28): three
    colour roles, newsprint, ink and one orange, with tints of the first two.
    Components use only these names, so a theme is a change of values here
    and nothing else. Every text pairing meets WCAG AA in both themes; the

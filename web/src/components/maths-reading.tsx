@@ -1,10 +1,10 @@
 "use client";
 
 // Reading a document's maths with the local vision model (decision record
-// 26), offered from the document's menu, never done unasked: which pages set
-// maths in maths fonts, a range to read, how long it should take, and what
-// earlier readings kept. Once started, the reading shows on the document's
-// row like any other background work, and can be cancelled there.
+// 26), offered on the Maths tab of the document's page, never done unasked:
+// which pages set maths in maths fonts, a range to read, how long it should
+// take, and what earlier readings kept. Once started, the reading shows in
+// the background work like any other, and can be cancelled there.
 
 import { useState, type FormEvent } from "react";
 
@@ -31,11 +31,9 @@ const field =
 export function MathsPanel({
   document,
   environmentId,
-  onClose,
 }: {
   document: Document;
   environmentId: string;
-  onClose: () => void;
 }) {
   const maths = useMaths(document.id);
   const read = useReadMaths(environmentId, document.id);
@@ -43,18 +41,34 @@ export function MathsPanel({
   const [first, setFirst] = useState(1);
   const [last, setLast] = useState(pages);
   const [showingKept, setShowingKept] = useState(false);
+  // The reading just started: how many pages, and how long they should take.
+  const [started, setStarted] = useState<{ pages: number; seconds: number } | null>(null);
 
   const label = `Maths of ${document.filename}`;
+  if (started) {
+    return (
+      <section aria-label={label} className="flex max-w-[640px] flex-col items-start gap-3">
+        <p role="status" className="text-base leading-[1.55]">
+          Reading the maths of {started.pages} {started.pages === 1 ? "page" : "pages"},{" "}
+          {duration(started.seconds)}. The text takes it in once the reading is done; the
+          background work shows how far it has got.
+        </p>
+        <button type="button" onClick={() => setStarted(null)} className={button.link}>
+          Choose other pages
+        </button>
+      </section>
+    );
+  }
   if (maths.isPending) {
     return (
-      <section aria-label={label} className="border border-ink p-4">
+      <section aria-label={label}>
         <Loading what="the pages with maths" />
       </section>
     );
   }
   if (maths.error) {
     return (
-      <section aria-label={label} className="border border-ink p-4">
+      <section aria-label={label}>
         <LoadError
           what="the pages with maths"
           error={maths.error}
@@ -76,28 +90,29 @@ export function MathsPanel({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!toRead.length) return;
-    read.mutate({ first, last }, { onSuccess: onClose });
+    const estimate = {
+      pages: toRead.length,
+      seconds: toRead.filter((p) => !waiting.has(p)).length * seconds_per_page,
+    };
+    read.mutate({ first, last }, { onSuccess: () => setStarted(estimate) });
   }
 
   if (!maths_pages.length) {
     return (
-      <section aria-label={label} className="flex flex-col items-start gap-3 border border-ink p-4">
-        <p className="text-base">
+      <section aria-label={label} className="max-w-[640px]">
+        <p className="text-base leading-[1.55]">
           No page of “{document.filename}” sets maths in a maths font, so there is no
           maths to read.
         </p>
-        <button type="button" onClick={onClose} className={button.link}>
-          Close
-        </button>
       </section>
     );
   }
 
   return (
-    <section aria-label={label} className="flex flex-col gap-4 border border-ink p-4">
-      <div className="flex flex-col gap-1.5">
-        <h4 className="display text-xl leading-tight">Read the maths</h4>
-        <p className="max-w-2xl text-sm text-ink-2">
+    <section aria-label={label} className="flex max-w-[640px] flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <h3 className="display text-[28px] leading-[1.05] tracking-[-0.015em]">Read the maths</h3>
+        <p className="text-[15px] leading-[1.55] text-ink-2">
           A PDF&apos;s text keeps the words but loses the maths: a matrix becomes a row of
           numbers. The local model reads each page&apos;s picture instead, and a page is used
           only if it agrees with the PDF&apos;s own text. {maths_pages.length} of {pages}{" "}
@@ -108,7 +123,7 @@ export function MathsPanel({
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1">
-            <span className="label">From page</span>
+            <span className="text-[13px] leading-[1.4] text-ink-2">From page</span>
             <input
               type="number"
               min={1}
@@ -119,7 +134,7 @@ export function MathsPanel({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="label">To page</span>
+            <span className="text-[13px] leading-[1.4] text-ink-2">To page</span>
             <input
               type="number"
               min={1}
@@ -129,7 +144,7 @@ export function MathsPanel({
               className={field}
             />
           </label>
-          <p role="status" className="label pb-1.5 text-ink-2">
+          <p role="status" className="pb-1.5 text-[15px] leading-[1.4] text-ink-2">
             {!valid
               ? `Choose pages from 1 to ${pages}.`
               : !inRange.length
@@ -143,13 +158,15 @@ export function MathsPanel({
         </div>
 
         {read.error && (
-          <p role="alert" className="label flex items-center gap-2">
-            <Mark />
+          <p role="alert" className="flex items-start gap-2 text-[15px] leading-[1.45]">
+            <span className="pt-[7px]">
+              <Mark />
+            </span>
             {read.error.message}
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-5">
+        <div>
           <button
             type="submit"
             disabled={!toRead.length || read.isPending}
@@ -157,15 +174,12 @@ export function MathsPanel({
           >
             {read.isPending ? "Starting…" : "Read the maths"}
           </button>
-          <button type="button" onClick={onClose} className={button.link}>
-            Close
-          </button>
         </div>
       </form>
 
       {(maths.data.read.length > 0 || kept_text.length > 0) && (
         <div className="flex flex-col gap-2 border-t border-rule pt-3">
-          <p className="label text-ink-2">
+          <p className="text-[13px] leading-[1.4] text-ink-2">
             Maths read on {maths.data.read.length}{" "}
             {maths.data.read.length === 1 ? "page" : "pages"}
             {kept_text.length > 0 && (
@@ -184,10 +198,10 @@ export function MathsPanel({
             )}
           </p>
           {showingKept && (
-            <ul aria-label="Pages that keep the PDF's own text" className="flex flex-col gap-1 text-sm">
+            <ul aria-label="Pages that keep the PDF's own text" className="flex flex-col gap-1 text-[15px] leading-[1.55]">
               {kept_text.map(({ page, reason }) => (
                 <li key={page} className="flex gap-3">
-                  <span className="label w-16 shrink-0 pt-0.5 text-ink-3">Page {page}</span>
+                  <span className="label w-16 shrink-0 pt-[3px] text-ink-3">Page {page}</span>
                   <span className="text-ink-2">{reason}</span>
                 </li>
               ))}

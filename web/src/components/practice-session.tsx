@@ -4,13 +4,15 @@
 // choice, true or false, or, for a short answer or flashcard, your own answer
 // before revealing the stored one and marking whether you knew it. Then the
 // right answer, why, the passages it comes from, and when the item comes
-// back. Nothing here is a score: it only decides when items return.
+// back. Nothing here is a score: it only decides when items return. The
+// question is set in the display face, no larger than 38 px; everything
+// said about it is in the sans (decision record 28).
 
 import { useEffect, useRef, useState } from "react";
 
 import { CitationChips } from "@/components/cited-points";
 import { MathsText } from "@/components/maths-text";
-import { Loading, LoadError } from "@/components/query-states";
+import { Empty, Loading, LoadError } from "@/components/query-states";
 import { button, Mark } from "@/components/ui";
 import { ExerciseForm } from "@/components/exercise-form";
 import { useAnswer, usePracticeSession } from "@/hooks/use-practice";
@@ -66,30 +68,29 @@ export function PracticeSession({
   );
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-start gap-4">
-        <p className="display text-[22px] text-ink-2 italic">Nothing to practise here right now.</p>
-        {back}
-      </div>
+      <Empty title="Nothing to practise here right now." action={back}>
+        None of these concepts has a question waiting. Questions come back on their own
+        days, or once their stage is prepared.
+      </Empty>
     );
   }
   if (index >= items.length) {
     const tomorrow = results.filter((r) => r.gap_days <= 1).length;
     return (
-      <section aria-labelledby="done-heading" className="flex max-w-xl flex-col gap-4">
+      <section aria-labelledby="done-heading" className="flex max-w-[640px] flex-col items-start gap-4">
         <p className="label">
           {items.length} / {items.length} — done
         </p>
-        <h2 id="done-heading" className="display text-5xl leading-[0.95] tracking-[-0.03em]">
-          Session done
+        <h2 id="done-heading" className="display text-[44px] leading-[0.95] tracking-[-0.03em] tab:text-[56px]">
+          Session done.
         </h2>
-        <p className="text-base leading-relaxed text-ink-2">
+        <p className="text-[16px] leading-[1.55] text-ink-2">
           You practised {items.length} {items.length === 1 ? "item" : "items"}.{" "}
           {tomorrow === results.length
-            ? "Their concepts all come back tomorrow."
+            ? "Their concepts all come back tomorrow; each time you recall one, it comes back further apart."
             : tomorrow > 0
-              ? `${tomorrow} of your answers bring their concept back tomorrow; the rest later.`
-              : "Their concepts come back later."}{" "}
-          Each time you recall a concept, it comes back further apart.
+              ? `${tomorrow} of your answers bring their concept back tomorrow; the rest come back later, further apart each time you recall them.`
+              : "Their concepts come back later, further apart each time you recall them."}
         </p>
         {back}
       </section>
@@ -106,7 +107,7 @@ export function PracticeSession({
           {"■".repeat(index + 1)}
           {"□".repeat(items.length - index - 1)}
         </span>
-        <span className="label font-semibold">
+        <span className="label shrink-0 font-semibold">
           {index + 1} of {items.length}
         </span>
       </div>
@@ -168,14 +169,14 @@ function ItemCard({
   return (
     <article className="grid gap-8 desk:grid-cols-[minmax(0,1fr)_300px] desk:gap-12">
       <div className="flex min-w-0 flex-col gap-6">
-        <p className="label text-[10px] text-ink-3">
+        <p className="label text-ink-2">
           {KIND_LABEL[item.kind]} · {item.concept.name}
         </p>
         <p
           className={
             item.kind === "exercise"
-              ? "text-xl leading-relaxed"
-              : "display text-[30px] leading-[1.05] tracking-[-0.02em] tab:text-[40px] desk:text-[46px]"
+              ? "max-w-[640px] text-[18px] leading-[1.7]"
+              : "display max-w-[720px] text-[28px] leading-[1.08] tracking-[-0.02em] text-balance tab:text-[34px] desk:text-[38px]"
           }
         >
           <span className="sr-only">Question {number}: </span>
@@ -195,8 +196,8 @@ function ItemCard({
 
         {result?.steps && (
           <section aria-label="Worked solution" className="flex flex-col gap-3 border-t border-rule pt-4">
-            <h3 className="label text-[10px] text-ink-3">Worked solution</h3>
-            <ol className="flex flex-col gap-2 text-base leading-relaxed">
+            <h3 className="label text-ink-2">Worked solution</h3>
+            <ol className="flex max-w-[640px] flex-col gap-2 text-[17px] leading-[1.6]">
               {result.steps.map((step, n) => (
                 <li key={n} className="overflow-x-auto">
                   <MathsText text={step} />
@@ -245,11 +246,11 @@ function ItemCard({
                       {LETTERS[n]}
                     </span>
                   </span>
-                  <span className={`min-w-0 flex-1 text-base leading-snug ${wrong ? "text-ink-2 line-through" : ""}`}>
+                  <span className={`min-w-0 flex-1 text-[17px] leading-[1.4] ${wrong ? "text-ink-2 line-through" : ""}`}>
                     <MathsText text={option} />
                   </span>
-                  {right && <span className="label text-[10px]">✓ Answer</span>}
-                  {wrong && <span className="label text-[10px]">✕ Your choice</span>}
+                  {right && <span className="label shrink-0">✓ Answer</span>}
+                  {wrong && <span className="label shrink-0">✕ Your choice</span>}
                 </label>
               );
             })}
@@ -297,7 +298,7 @@ function ItemCard({
             )}
             {revealed ? (
               <>
-                <p className="border-l-2 border-ink bg-paper-2 px-4 py-3 text-base leading-relaxed">
+                <p className="max-w-[640px] border-l-2 border-ink bg-paper-2 px-4 py-3 text-[17px] leading-[1.6]">
                   <MathsText text={item.answer} />
                 </p>
                 <div className="flex flex-wrap gap-3">
@@ -328,7 +329,7 @@ function ItemCard({
         )}
 
         {answer.error && (
-          <p role="alert" className="label flex items-center gap-2">
+          <p role="alert" className="flex items-center gap-2.5 text-[15px] leading-[1.55]">
             <Mark />
             {answer.error.message}
           </p>
@@ -337,8 +338,8 @@ function ItemCard({
 
       {result && (
         <div role="status" className="flex flex-col gap-3 border-t border-ink pt-4 desk:border-t-0 desk:border-l desk:pt-1 desk:pl-6">
-          <p className="label text-[10px] text-ink-3">Marking</p>
-          <p className="display text-[34px] leading-none tracking-[-0.02em] tab:text-[40px]">
+          <p className="label text-ink-2">Marking</p>
+          <p className="display text-[34px] leading-none tracking-[-0.02em] tab:text-[38px]">
             {result.graded_by === "learner"
               ? result.correct
                 ? "Marked as known."
@@ -353,7 +354,7 @@ function ItemCard({
                       className={
                         item.kind === "multiple_choice"
                           ? "sr-only"
-                          : "block pt-2 text-xl leading-snug text-ink-2"
+                          : "block pt-3 font-sans text-[17px] leading-[1.5] tracking-normal text-ink-2"
                       }
                     >
                       The answer: <MathsText text={result.answer} />
@@ -367,14 +368,16 @@ function ItemCard({
             </p>
           )}
           <CitationChips environmentId={environmentId} citations={result.sources} showFilename />
-          <p className="label flex items-baseline gap-1.5 border-t border-rule pt-3 text-[10px] text-ink-2">
-            <span aria-hidden>◷</span>
-            <span>
+          <div className="flex flex-col gap-1 border-t border-rule pt-3">
+            <p className="label text-ink-2">
+              <span aria-hidden>◷ </span>Comes back
+            </p>
+            <p className="text-[15px] leading-[1.5]">
               {item.concept.name} comes back for review{" "}
               {result.gap_days === 1 ? "tomorrow" : `in ${result.gap_days} days`},{" "}
               {formatDateTime(result.due_at)}.
-            </span>
-          </p>
+            </p>
+          </div>
           <button type="button" onClick={onNext} className={`${button.primary} mt-2 w-full tab:w-fit`}>
             {last ? "Finish" : "Next"}
           </button>

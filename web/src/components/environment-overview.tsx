@@ -1,33 +1,59 @@
 "use client";
 
-// The Overview tab, the environment's front page (decision records 19 and
-// 25): a headline saying what today holds, the figures at a glance, today's
-// study plan, then the roadmap, recent material and background work beside
-// a margin column with the summary and the map. Every section reads data
-// its own tab fetches too, and loads, fails and tries again on its own.
-// One column on a phone.
+// The Overview tab, the environment's front page (decision records 19, 25
+// and 28). It shows one thing first: what today holds, as a headline and
+// as today's plan. The figures follow the headline in one line, every other
+// section is one line of an index, and background work is folded at the
+// foot. An environment with no documents yet opens instead on adding its
+// first PDF, with a note on what an environment holds.
 
+import { Note } from "@/components/note";
 import {
-  AtAGlance,
-  MapPreview,
+  EnvironmentIndex,
+  Figures,
   OverviewHeadline,
   ProcessingActivity,
-  RecentMaterial,
-  RoadmapProgress,
-  SummaryPreview,
+  StartWithAPdf,
 } from "@/components/overview-sections";
+import { Loading } from "@/components/query-states";
 import { TodayPlan } from "@/components/today-plan";
 import { Opening, Standfirst } from "@/components/ui";
+import { UploadZone } from "@/components/upload-zone";
+import { useDocuments } from "@/hooks/use-documents";
 import { useEnvironment } from "@/hooks/use-environments";
 import { formatDate } from "@/lib/format";
 
 export function EnvironmentOverview({ id }: { id: string }) {
   const { data: environment } = useEnvironment(id);
+  const documents = useDocuments(id);
   // The shell renders this tab only once the environment has loaded.
   if (!environment) return null;
+  if (documents.isPending) return <Loading what="the overview" lines={4} />;
+
+  if (documents.data?.length === 0) {
+    return (
+      <div className="flex flex-col gap-10 desk:flex-row desk:gap-12">
+        <div className="min-w-0 flex-1">
+          <StartWithAPdf
+            name={environment.name}
+            upload={<UploadZone environmentId={id} variant="band" />}
+          />
+        </div>
+        <Note
+          id="new-environment"
+          title="A new environment — what it holds"
+          guideStep={1}
+          className="desk:w-[300px] desk:shrink-0 desk:self-start desk:pt-8"
+        >
+          An environment keeps one subject together: its PDFs, their summaries, the concepts found
+          in them, a roadmap and your practice. Nothing is shared with your other environments.
+        </Note>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-12">
       <Opening
         kicker={
           <>
@@ -35,29 +61,19 @@ export function EnvironmentOverview({ id }: { id: string }) {
           </>
         }
         headline={<OverviewHeadline environmentId={id} />}
+        below={<Figures environmentId={id} />}
         aside={
           <>
             {environment.description && <Standfirst>{environment.description}</Standfirst>}
-            <p className="label text-[10px] text-ink-3">
-              Created {formatDate(environment.created_at)} · changed{" "}
-              {formatDate(environment.updated_at)}
+            <p className="text-[13px] leading-[1.4] text-ink-2">
+              Created {formatDate(environment.created_at)} · changed {formatDate(environment.updated_at)}
             </p>
           </>
         }
       />
-      <AtAGlance environmentId={id} />
       <TodayPlan environmentId={id} />
-      <div className="grid gap-10 tab:grid-cols-[minmax(0,1fr)_260px] desk:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-w-0 flex-col gap-10">
-          <RoadmapProgress environmentId={id} />
-          <RecentMaterial environmentId={id} />
-          <ProcessingActivity environmentId={id} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-10">
-          <SummaryPreview environmentId={id} />
-          <MapPreview environmentId={id} />
-        </div>
-      </div>
+      <EnvironmentIndex environmentId={id} />
+      <ProcessingActivity environmentId={id} />
     </div>
   );
 }

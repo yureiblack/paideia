@@ -60,11 +60,14 @@ export function Opening({
   headline,
   headlineId,
   aside,
+  below,
 }: {
   kicker: ReactNode;
   headline: ReactNode;
   headlineId?: string;
   aside?: ReactNode;
+  // A line under the headline, such as the figures at a glance.
+  below?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4 desk:flex-row desk:items-end desk:gap-10">
@@ -76,6 +79,7 @@ export function Opening({
         >
           {headline}
         </p>
+        {below}
       </div>
       {aside && <div className="flex flex-col gap-3 desk:w-60 desk:shrink-0 desk:pb-1.5">{aside}</div>}
     </div>

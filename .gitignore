@@ -33,3 +33,7 @@ context/
 
 # Uploaded PDFs and anything else the app stores locally. Never committed.
 data/
+
+# The interface's design file, drawn in Pencil. Kept on the designer's
+# machine, not in the repository (decision record 28).
+design/
