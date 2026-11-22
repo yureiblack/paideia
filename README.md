@@ -65,15 +65,22 @@ material changes, not when you remember to ask.
 
 ## What it does
 
-Each environment has seven tabs:
+Home opens on where you left off: the next session of the environment you
+opened last, and the document you were reading. A first visit is welcomed
+with what Paideia does, its five steps and one action, and a guide is one
+click away in the masthead. Each place also explains itself, in a short
+note, the first time it is opened.
 
-| Tab | What it shows |
+Each environment has seven sections, grouped as the Overview, the Library
+and Learn:
+
+| Section | What it shows |
 |---|---|
-| **Overview** | Today's study plan, worked out from your answers: concepts to strengthen, reviews due, the next stage to learn, new material to skim. Each part has its reason and an estimate of the time it takes. Also each stage's progress, and the map in a few lines. |
-| **Materials** | Every PDF, read page by page. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. A document's maths can be read by the local vision model, for a range of pages, when you ask: each page is checked against the PDF's own text. |
-| **Search** | Keyword search and search by meaning, fused and then reranked. Every result is a citation. "Show in page" opens the passage, highlighted in its page, and "Show scoring" shows how each result was ranked. |
+| **Overview** | Today's study plan, worked out from your answers: concepts to strengthen, reviews due, the next stage to learn, new material to skim. Each part has its reason and an estimate of the time it takes. Under it, every other section in one line of what it holds. |
+| **Materials** | Every PDF, read page by page, with the steps of its reading shown as they happen. Each document has its own page for reading: its text page by page, its summary, and its maths, as three tabs. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. A document's maths can be read by the local vision model, for a range of pages, when you ask: each page is checked against the PDF's own text. |
 | **Summary** | A summary of all the material, built from each document's summary. Every key point cites its passages. |
 | **Knowledge map** | The concepts, with definitions and the passages that explain them. For each concept: what it builds on, what builds on it, its parts, and what it is related to. Every relationship cites the passages it was found in. |
+| **Search** | Keyword search and search by meaning, fused and then reranked. Every result is a citation. "Show in page" opens the passage, highlighted in its page, and "Show scoring" shows how each result was ranked. |
 | **Roadmap** | The material as an ordered path in stages. Each concept shows what it builds on, and where it is taught. |
 | **Practice** | Four kinds of items per concept, mixed within a session. For linear algebra, exercises too, which the app writes, solves and marks itself, with new numbers on every review and a worked solution. Each answer shows its source and when the concept comes back. Also how each concept is going, weakest first, and past sessions. |
 
@@ -494,15 +501,16 @@ neighbouring one, not the one that says it.
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 91%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 62 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 93 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.
   - They query the page by role and name, and use no snapshots.
 - **End to end:** one Playwright journey through the running app.
-  - It goes from creating an environment to a second PDF updating it, then
-    reads a third PDF's maths and practises a computed exercise, in
-    fourteen steps.
+  - It goes from the first visit's welcome and creating an environment to a
+    second PDF updating it, then reads a third PDF's maths on the
+    document's own page and practises a computed exercise, in fourteen
+    steps.
   - Everything in it is real except the language model, which is a
     stand-in.
 - **CI:** GitHub Actions runs three jobs on every pull request and every
@@ -565,8 +573,9 @@ migration, and the install lines again if they change `requirements.txt` or
 
 [docs/setup.md](docs/setup.md) has every step in full, the settings, the
 development commands, and how to run each kind of test.
-[docs/api.md](docs/api.md) lists every endpoint. The interface's design is
-in `design/paideia.pen`, which opens in [Pencil](https://pen.dev).
+[docs/api.md](docs/api.md) lists every endpoint. The interface was designed
+in [Pencil](https://pen.dev); the design file is kept outside the
+repository, and decision records 25 and 28 describe it.
 
 ## Screenshots
 
@@ -702,7 +711,7 @@ Known limits, each stated in its decision record:
   ([26](docs/architecture/26-reading-maths.md)). Linear algebra exercises
   are written, solved and marked by the backend
   ([27](docs/architecture/27-computed-exercises.md)), from a catalogue of
-  nine small types. A maths benchmark is planned as phase 28.
+  nine small types. A maths benchmark is planned as phase 29.
 - **Reading maths checks which characters a page shows, not their order.**
   A matrix with two columns swapped would pass. A textbook takes hours to
   read, and a PDF whose maths is drawn as pictures has none to offer
@@ -789,11 +798,10 @@ web/                    Next.js frontend
   src/app/              pages and layouts; globals.css holds the colours and themes
   src/components/       UI pieces, with their tests beside them
   src/hooks/            data fetching
-  src/lib/              API client, types, config
+  src/lib/              API client, types, config, what the browser remembers
   src/test/             what the component tests share
   e2e/                  the end-to-end journey (Playwright)
 data/                   uploaded files and the model cache, never committed
-design/paideia.pen      the interface's design, opened in Pencil
 docs/architecture/      decision records, with an index
 docs/evaluation/        the benchmark's corpus, questions, key facts, results and report
 docs/images/            the screenshots and the demo above
