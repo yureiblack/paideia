@@ -20,6 +20,7 @@ const KIND: Record<MaterialUpdate["kind"], string> = {
   added: "Added",
   new_version: "New version of",
   reprocessed: "Read again:",
+  maths: "Read the maths of",
   deleted: "Removed",
 };
 

@@ -64,6 +64,29 @@ export function useReprocessDocument(environmentId: string) {
   });
 }
 
+// The document's maths pages and how far reading them has got (record 26).
+const mathsKey = (documentId: string) =>
+  ["documents", documentId, "maths"] as const;
+
+export function useMaths(documentId: string) {
+  return useQuery({
+    queryKey: mathsKey(documentId),
+    queryFn: () => api.getMaths(documentId),
+  });
+}
+
+export function useReadMaths(environmentId: string, documentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ first, last }: { first: number; last: number }) =>
+      api.readMaths(documentId, first, last),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: mathsKey(documentId) });
+      return queryClient.invalidateQueries({ queryKey: environmentKey(environmentId) });
+    },
+  });
+}
+
 export function useDeleteDocument(environmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
