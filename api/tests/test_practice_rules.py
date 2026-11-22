@@ -169,6 +169,7 @@ def test_difficulty_follows_the_kind_of_item():
         "flashcard": 1,
         "multiple_choice": 2,
         "short_answer": 3,
+        "exercise": 3,
     }
 
 

@@ -43,7 +43,11 @@ DEFAULT_SECONDS = {
     "flashcard": 30.0,
     "multiple_choice": 60.0,
     "short_answer": 90.0,
+    # A computed exercise is worked out on paper first (decision record 27).
+    "exercise": 180.0,
 }
+# The kinds the model writes for every concept prepared.
+WRITTEN = ("true_false", "flashcard", "multiple_choice", "short_answer")
 GROUP = 5
 SKIMS = 2
 RECENT = timedelta(days=7)
@@ -120,7 +124,9 @@ def pace(timed: Mapping[str, Sequence[float]]) -> dict[str, float]:
 def _answering(concepts: Iterable[Concept], seconds: dict[str, float]) -> float:
     total = 0.0
     for concept in concepts:
-        kinds = concept.kinds or tuple(DEFAULT_SECONDS)
+        # Not prepared yet: the kinds every prepared concept has. Only some
+        # concepts get computed exercises.
+        kinds = concept.kinds or WRITTEN
         total += ITEMS_PER_CONCEPT * statistics.mean(seconds[k] for k in kinds)
     return total
 

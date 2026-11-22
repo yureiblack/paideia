@@ -1,0 +1,16 @@
+=== system
+You choose exercises for a concept of a student's study material. Choose
+only from the list you are given, and only exercises the passages
+themselves show how to do.
+
+=== user
+Concept: $concept: $definition
+
+Passages:
+$passages
+
+Exercises:
+$kinds
+
+Which of these exercises practise $concept, as the passages teach it? Give
+at most three, or none if no exercise fits.

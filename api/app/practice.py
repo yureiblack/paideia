@@ -42,8 +42,15 @@ from app import maths
 
 KINDS = ("short_answer", "multiple_choice", "true_false", "flashcard")
 
-# Effort, from recognising to recalling unprompted. Not a measured difficulty.
-DIFFICULTY = {"true_false": 1, "flashcard": 1, "multiple_choice": 2, "short_answer": 3}
+# Effort, from recognising to recalling unprompted, and working out a
+# computed exercise (decision record 27). Not a measured difficulty.
+DIFFICULTY = {
+    "true_false": 1,
+    "flashcard": 1,
+    "multiple_choice": 2,
+    "short_answer": 3,
+    "exercise": 3,
+}
 
 # Days until an item comes back, by box. A new item is in box 0, due at once.
 INTERVALS = (1, 2, 4, 8, 16)
