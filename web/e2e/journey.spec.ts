@@ -1,4 +1,5 @@
-// A learner's journey through one subject, end to end (decision record 22):
+// A learner's journey through one subject, end to end (decision records 22
+// and 28):
 // the roadmap's twelve scenarios, in order, through the page as a learner
 // uses it, against the real API, worker, database, PDF reading, embeddings
 // and reranker. Only the language model is a stand-in (api/tests/e2e/model.py):
@@ -57,14 +58,19 @@ test("a learner's journey through one subject", async ({ page }) => {
 
   await test.step("1. Create an environment", async () => {
     await page.goto("/");
-    await page.getByRole("button", { name: "New environment" }).click();
+    // A first visit is welcomed, with one action.
+    await expect(page.getByRole("heading", { level: 1, name: "A library that reads with you." })).toBeVisible();
+    await page.getByRole("button", { name: "Create your first environment" }).click();
     await page.getByRole("textbox", { name: "Name" }).fill("Operating Systems");
     await page.getByRole("button", { name: "Create environment" }).click();
 
+    // A new environment opens on adding its first PDF, with a note on what
+    // an environment holds.
     await expect(page.getByRole("heading", { level: 1, name: "Operating Systems" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Recent material" })).toContainText(
-      "No materials yet.",
-    );
+    await expect(page.getByText("Start with a PDF.")).toBeVisible();
+    await expect(
+      page.getByRole("complementary", { name: "A new environment — what it holds" }),
+    ).toBeVisible();
   });
 
   await test.step("2. Upload a PDF", async () => {
@@ -224,11 +230,10 @@ test("a learner's journey through one subject", async ({ page }) => {
     await expect(page.getByRole("list", { name: "Stages" }).getByRole("article")).toHaveCount(2);
 
     await tab(page, "Overview").click();
-    const documents = page
-      .getByRole("region", { name: "At a glance" })
-      .locator("dt", { hasText: /^Documents$/ })
-      .locator("xpath=following-sibling::dd[1]");
-    await expect(documents).toContainText("2 read");
+    const materials = page
+      .getByRole("region", { name: "In this environment" })
+      .getByRole("link", { name: /^Materials/ });
+    await expect(materials).toContainText("2 documents, all read.");
   });
 
   await test.step("13. Read a document's maths", async () => {
@@ -238,13 +243,19 @@ test("a learner's journey through one subject", async ({ page }) => {
     await expect(card).toContainText("Ready · 1 page");
     await expect(update(page, WEEK_3)).toContainText("Done");
 
-    // Never read unasked: offered from the document's menu, with an estimate.
+    // Never read unasked: offered from the document's menu, on the
+    // document's own page, with an estimate.
     await card.getByRole("button", { name: `More for ${WEEK_3}` }).click();
-    await card.getByRole("button", { name: "Read the maths" }).click();
-    const offer = card.getByRole("region", { name: `Maths of ${WEEK_3}` });
+    await card.getByRole("link", { name: "Read the maths" }).click();
+    const offer = page.getByRole("region", { name: `Maths of ${WEEK_3}` });
     await expect(offer.getByRole("status")).toContainText("1 page to read · about a minute");
     await offer.getByRole("button", { name: "Read the maths" }).click();
 
+    // What changed is reported with the material's other updates.
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "Materials" })
+      .click();
     const reading = page
       .getByRole("region", { name: "Updates" })
       .getByRole("article")
@@ -255,12 +266,16 @@ test("a learner's journey through one subject", async ({ page }) => {
     await reading.getByRole("button", { name: "What changed" }).click();
     await expect(reading).toContainText("1 of 1 page read.");
 
-    // The page's text now holds the formula, typeset.
-    await card.getByRole("button", { name: "Read text" }).click();
-    await expect(card.getByRole("region", { name: "Page 1" }).locator(".katex")).toBeVisible();
+    // The document's page now holds the formula, typeset.
+    await card.getByRole("link", { name: `Read ${WEEK_3}` }).click();
+    await expect(page.getByRole("tab", { name: "Text", selected: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Page 1" }).locator(".katex")).toBeVisible();
   });
 
   await test.step("14. Practise a computed exercise", async () => {
+    // A document's page keeps the contents out of the way until asked.
+    await expect(tab(page, "Practice")).toBeHidden();
+    await page.getByRole("button", { name: "Show contents" }).click();
     await tab(page, "Practice").click();
     const stage = page
       .getByRole("list", { name: "Stages to practise" })

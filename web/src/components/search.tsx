@@ -3,48 +3,76 @@
 // The Search tab: ask in your own words and get back the passages that best
 // answer it, each cited with its document and pages. "Show in page" opens a
 // citation: the page the passage sits on, with the passage marked. Search
-// runs when the form is submitted, not on every keystroke. "Show scoring"
-// reveals how each result was ranked: its place in keyword search and in
-// semantic search, their fused score, and the reranker's verdict, plus every
-// candidate.
+// runs when the form is submitted, not on every keystroke. Passages are
+// held to a reading width (decision record 28). Scoring stays off until
+// asked for; on, it shows how each result was ranked: its place in keyword
+// search and in semantic search, their fused score, and the reranker's
+// verdict, plus every candidate. With nothing found, the page says so
+// plainly and suggests what to try: other words, a concept's name from the
+// knowledge map, or later, while documents are still being read.
 
-import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRef, useState, type FormEvent } from "react";
 
+import { sectionNumber } from "@/components/environment-tabs";
 import { MathsText } from "@/components/maths-text";
 import { Empty, Loading, LoadError } from "@/components/query-states";
-import { button, OpenSign, Standfirst } from "@/components/ui";
-import { useSearch } from "@/hooks/use-search";
 import { pagesLabel, SourcePanel } from "@/components/source-panel";
+import { button, OpenSign } from "@/components/ui";
+import { useDocuments } from "@/hooks/use-documents";
+import { useGraph } from "@/hooks/use-graph";
+import { useSearch } from "@/hooks/use-search";
 import {
   SEARCH_QUERY_MAX_LENGTH,
+  type Document,
   type SearchCandidate,
   type SearchDebug,
   type SearchResult,
 } from "@/lib/types";
+
+// Passages and their pages are read at about 70 characters a line.
+const READING_WIDTH = "max-w-[660px]";
 
 export function Search({ environmentId }: { environmentId: string }) {
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [showScoring, setShowScoring] = useState(false);
   const search = useSearch(environmentId, query, showScoring);
+  const documents = useDocuments(environmentId);
+  const field = useRef<HTMLInputElement>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setQuery(draft.trim());
   }
 
+  function clear() {
+    setDraft("");
+    setQuery("");
+    field.current?.focus();
+  }
+
+  const ready = documents.data?.filter((d) => d.status === "ready").length ?? null;
   const debug = search.data?.debug ?? null;
   const scoresById = new Map(
     debug?.candidates.map((candidate) => [candidate.chunk_id, candidate]),
   );
+  const results = query && search.data && !search.isPending ? search.data.results : null;
+  // "4 documents that have finished reading", "1 document that has".
+  const covered =
+    ready === null
+      ? "the documents that have"
+      : `${ready} ${ready === 1 ? "document that has" : "documents that have"}`;
 
   return (
     <div className="flex flex-col gap-7">
       <p className="label max-tab:sr-only">
-        <span aria-hidden>03 / </span>Search
+        <span aria-hidden>{sectionNumber("Search")} / </span>Search
+        <span className="text-ink-2"> — matches your words and their meaning</span>
       </p>
       <form role="search" onSubmit={handleSubmit} className="flex flex-col gap-3 tab:flex-row tab:items-end tab:gap-5">
         <input
+          ref={field}
           type="search"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -58,29 +86,33 @@ export function Search({ environmentId }: { environmentId: string }) {
         </button>
       </form>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="label text-[10px] text-ink-2">
-          {query && search.data && !search.isPending
-            ? `${search.data.results.length} ${search.data.results.length === 1 ? "passage" : "passages"}`
-            : "Searches materials that have finished reading"}
+        <p className="text-[13px] leading-[1.4] text-ink-2">
+          {results
+            ? `${results.length} ${results.length === 1 ? "passage" : "passages"} from ${covered} finished reading`
+            : `Searches ${covered} finished reading`}
         </p>
-        <label className="label flex cursor-pointer items-center gap-2 text-[10px] text-ink-3">
+        <label className="label flex cursor-pointer items-center gap-2 text-ink-2">
           <input
             type="checkbox"
             checked={showScoring}
             onChange={(event) => setShowScoring(event.target.checked)}
             className="peer sr-only"
           />
-          Show scoring
+          <span>
+            <span className="sr-only">Show </span>Scoring
+          </span>
           <span aria-hidden className={`px-1.5 py-0.5 ${showScoring ? "bg-ink text-paper" : "text-ink-3"}`}>On</span>
           <span aria-hidden className={`px-1.5 py-0.5 ${showScoring ? "text-ink-3" : "bg-ink text-paper"}`}>Off</span>
         </label>
       </div>
 
-      {!query ? (
-        <Standfirst>
+      {ready === 0 && (!query || (results && results.length === 0)) ? (
+        <NothingToSearch environmentId={environmentId} />
+      ) : !query ? (
+        <p className={`${READING_WIDTH} text-[15px] leading-[1.55] text-ink-2`}>
           Search matches your words and their meaning, so passages need not contain your exact
           words. It covers materials that have finished reading.
-        </Standfirst>
+        </p>
       ) : search.isPending ? (
         <Loading what="results" lines={4} />
       ) : search.isError ? (
@@ -91,10 +123,12 @@ export function Search({ environmentId }: { environmentId: string }) {
           retrying={search.isFetching}
         />
       ) : search.data.results.length === 0 ? (
-        <Empty>
-          Nothing to search yet. Upload materials and wait for them to finish
-          reading.
-        </Empty>
+        <NothingFound
+          environmentId={environmentId}
+          query={query}
+          documents={documents.data ?? []}
+          onClear={clear}
+        />
       ) : (
         <>
           <ol className="border-t border-ink" aria-label="Search results">
@@ -116,6 +150,93 @@ export function Search({ environmentId }: { environmentId: string }) {
   );
 }
 
+const isBeingRead = (d: Document) => d.status === "uploaded" || d.status === "processing";
+
+// Nothing has finished reading, so there is nothing to search.
+function NothingToSearch({ environmentId }: { environmentId: string }) {
+  return (
+    <Empty
+      title="Nothing to search yet."
+      action={
+        <Link
+          href={`/environments/${encodeURIComponent(environmentId)}/materials`}
+          className={button.link}
+        >
+          Go to Materials <span aria-hidden>→</span>
+        </Link>
+      }
+    >
+      Search covers documents that have finished reading. Upload one; it can be searched as
+      soon as its pages are read.
+    </Empty>
+  );
+}
+
+// A search that found nothing: say so plainly, and what to try instead.
+function NothingFound({
+  environmentId,
+  query,
+  documents,
+  onClear,
+}: {
+  environmentId: string;
+  query: string;
+  documents: Document[];
+  onClear: () => void;
+}) {
+  const graph = useGraph(environmentId);
+  const names = conceptsToTry(query, graph.data?.nodes.map((n) => n.name) ?? []);
+  const reading = documents.filter(isBeingRead).length;
+  return (
+    <section aria-labelledby="nothing-found" className="flex flex-col items-start gap-4">
+      <h2 id="nothing-found" className="display text-[28px] leading-[1.05] tracking-[-0.015em] tab:text-[32px]">
+        Nothing in these documents answers that.
+      </h2>
+      <div className="flex flex-col gap-2">
+        <p className="label text-ink-2">Try</p>
+        <ul className="flex max-w-[660px] flex-col gap-2 text-[16px] leading-[1.5]">
+          <li>
+            <span aria-hidden>— </span>Fewer or other words.
+          </li>
+          {names.length > 0 && (
+            <li>
+              <span aria-hidden>— </span>A concept&apos;s name from the knowledge map, such as{" "}
+              {names.join(" or ")}.
+            </li>
+          )}
+          {reading > 0 && (
+            <li>
+              <span aria-hidden>— </span>Again later: {reading}{" "}
+              {reading === 1 ? "document is" : "documents are"} still being read, and search
+              covers only those that have finished.
+            </li>
+          )}
+        </ul>
+      </div>
+      <button type="button" onClick={onClear} className={button.link}>
+        Clear the search
+      </button>
+    </section>
+  );
+}
+
+// One or two concept names to suggest: any that share a word with the
+// query first, then the first in the index.
+function conceptsToTry(query: string, names: string[]): string[] {
+  const words = query
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((w) => w.length > 3);
+  const sharing = names.filter((name) =>
+    name
+      .toLowerCase()
+      .split(/\W+/)
+      .some((w) => words.includes(w)),
+  );
+  const rest = [...names].sort((a, b) => a.localeCompare(b));
+  return [...new Set([...sharing, ...rest])].slice(0, 2);
+}
+
 function ResultCard({
   environmentId,
   number,
@@ -134,10 +255,10 @@ function ResultCard({
   return (
     <article className="flex flex-col gap-2.5 py-[18px]">
       <div className="flex items-baseline gap-4">
-        <span className="label text-[10px] text-ink-3">{String(number).padStart(2, "0")}</span>
+        <span className="label text-ink-3">{String(number).padStart(2, "0")}</span>
         <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5">
-          <h3 className="label truncate text-[10px]">{citation.filename}</h3>
-          <p className="label text-[10px] text-ink-2">
+          <h3 className="label truncate">{citation.filename}</h3>
+          <p className="label text-ink-2">
             <span aria-hidden>· </span>
             {pagesLabel(citation.page_start, citation.page_end)}
             {citation.heading && ` · ${citation.heading}`}
@@ -154,8 +275,8 @@ function ResultCard({
           <span className="font-semibold">{result.score.toFixed(2)}</span>
         </span>
       </div>
-      <div className="flex flex-col gap-2.5 tab:pl-9">
-        <p className="max-w-3xl text-base leading-relaxed whitespace-pre-wrap">
+      <div className={`flex flex-col gap-2.5 tab:pl-9 ${READING_WIDTH} tab:max-w-[696px]`}>
+        <p className="text-[17px] leading-[1.6] whitespace-pre-wrap">
           <MathsText text={citation.excerpt} />
         </p>
         {scores && <StageScores scores={scores} />}
@@ -163,7 +284,7 @@ function ResultCard({
           type="button"
           onClick={() => setShowingPage(!showingPage)}
           aria-expanded={showingPage}
-          className={`${button.link} w-fit text-[10px]`}
+          className={`${button.link} w-fit`}
         >
           {showingPage ? "Hide page" : "Show in page"} <OpenSign open={showingPage} />
         </button>
@@ -191,8 +312,8 @@ function StageScores({ scores }: { scores: SearchCandidate }) {
     <dl className="grid grid-cols-2 gap-x-6 gap-y-1 border-t border-rule pt-2 tab:flex tab:flex-wrap tab:gap-x-7">
       {stages.map(([label, value]) => (
         <div key={label} className="flex gap-2">
-          <dt className="label text-[10px] text-ink-3">{label}</dt>
-          <dd className="label text-[10px] tracking-[0.04em]">{value}</dd>
+          <dt className="label text-ink-3">{label}</dt>
+          <dd className="label tracking-[0.04em]">{value}</dd>
         </div>
       ))}
     </dl>
@@ -211,7 +332,7 @@ function Candidates({ debug }: { debug: SearchDebug }) {
       <h3 id="candidates-heading" className="label">
         Every candidate
       </h3>
-      <p className="max-w-3xl text-sm leading-normal text-ink-2">
+      <p className="max-w-[640px] text-[15px] leading-[1.55] text-ink-2">
         Keyword search found {lexical} (of up to {debug.top_k_lexical}),
         semantic search {semantic} (of up to {debug.top_k_dense}). Merged, they
         made {debug.candidates.length} candidates. The reranker read the first{" "}
@@ -219,7 +340,7 @@ function Candidates({ debug }: { debug: SearchDebug }) {
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="label border-b border-ink text-[10px] text-ink-3">
+          <thead className="label border-b border-ink text-ink-3">
             <tr>
               <th scope="col" className={cell}>#</th>
               <th scope="col" className={cell}>Passage</th>
@@ -234,7 +355,7 @@ function Candidates({ debug }: { debug: SearchDebug }) {
             {debug.candidates.map((c, index) => (
               <tr key={c.chunk_id} className={`border-b border-rule ${c.final_rank === null ? "text-ink-3" : ""}`}>
                 <td className={cell}>{index + 1}</td>
-                <td className={`max-w-64 truncate font-sans text-xs ${cell}`}>
+                <td className={`max-w-64 truncate font-sans text-[13px] ${cell}`}>
                   {c.filename} · {pagesLabel(c.page_start, c.page_end).toLowerCase()}
                   {c.heading && ` · ${c.heading}`}
                 </td>

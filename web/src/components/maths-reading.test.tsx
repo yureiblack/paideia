@@ -1,11 +1,12 @@
-// Offering to read a document's maths (decision record 26): never unasked,
-// with how many pages hold maths, a range, and how long it should take; pages
-// already read, or kept as the PDF had them, are not offered again.
+// Offering to read a document's maths (decision record 26), on the Maths tab
+// of its page: never unasked, with how many pages hold maths, a range, and how
+// long it should take; pages already read, or kept as the PDF had them, are
+// not offered again.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { duration, MathsPanel } from "@/components/maths-reading";
 import type { Document, MathsOverview } from "@/lib/types";
@@ -43,13 +44,12 @@ function open(maths: MathsOverview, started: { status?: number; body?: unknown }
       answer: { status: 202, body: { id: "j1" }, ...started },
     },
   ]);
-  const onClose = vi.fn();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <MathsPanel document={document} environmentId="e1" onClose={onClose} />
+      <MathsPanel document={document} environmentId="e1" />
     </QueryClientProvider>,
   );
-  return { sent, onClose };
+  return { sent };
 }
 
 describe("duration", () => {
@@ -81,8 +81,8 @@ describe("MathsPanel", () => {
     expect(screen.getByRole("status")).toHaveTextContent("2 pages to read · about a minute");
   });
 
-  it("reads the range chosen, then closes", async () => {
-    const { sent, onClose } = open(overview);
+  it("reads the range chosen, then says the reading has started", async () => {
+    const { sent } = open(overview);
     const to = await screen.findByRole("spinbutton", { name: "To page" });
 
     await userEvent.clear(to);
@@ -94,7 +94,10 @@ describe("MathsPanel", () => {
       path: "/api/documents/d1/maths",
       body: { first_page: 1, last_page: 4 },
     });
-    expect(onClose).toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Reading the maths of 1 page, about a minute.",
+    );
+    expect(screen.queryByRole("button", { name: "Read the maths" })).toBeNull();
   });
 
   it("offers nothing to read where every page has been read", async () => {

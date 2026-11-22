@@ -5,11 +5,14 @@
 // (waiting, being written, failed with the reason and Try again) and, once
 // ready, the overview and key points, each with chips for the passages it
 // cites. A chip opens that passage in its page, so every claim can be
-// checked against the material itself.
+// checked against the material itself. How it was written stays folded
+// until asked for (decision record 28).
+
+import { useState } from "react";
 
 import { CitedPoints } from "@/components/cited-points";
 import { MathsText } from "@/components/maths-text";
-import { button, Mark } from "@/components/ui";
+import { button, Mark, OpenSign } from "@/components/ui";
 import { Loading, LoadError } from "@/components/query-states";
 import { formatDateTime } from "@/lib/format";
 import type { CurrentSummary } from "@/lib/types";
@@ -33,6 +36,8 @@ export function DocumentSummaryPanel({
   retrying: boolean;
   retryError: Error | null;
 }) {
+  const [showingHow, setShowingHow] = useState(false);
+
   if (loadError) {
     return (
       <LoadError
@@ -46,7 +51,7 @@ export function DocumentSummaryPanel({
   if (summary === undefined) return <Loading what="the summary" lines={3} />;
   if (summary === null || summary.status === "pending") {
     return (
-      <p className="display text-base text-ink-3 italic" role="status">
+      <p className="max-w-[640px] text-base leading-[1.55] text-ink-2" role="status">
         Waiting to be summarized. Summaries are written one at a time, as soon
         as the model is free.
       </p>
@@ -54,7 +59,7 @@ export function DocumentSummaryPanel({
   }
   if (summary.status === "generating") {
     return (
-      <p className="display text-base text-ink-3 italic" role="status">
+      <p className="max-w-[640px] text-base leading-[1.55] text-ink-2" role="status">
         Writing the summary with the local model… usually under a minute; a
         long document can take several.
       </p>
@@ -62,9 +67,11 @@ export function DocumentSummaryPanel({
   }
   if (summary.status === "failed") {
     return (
-      <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="label flex items-center gap-2">
-          <Mark />
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="flex max-w-[640px] items-start gap-2 text-base leading-[1.55]">
+          <span className="pt-2">
+            <Mark />
+          </span>
           The summary could not be written: {summary.error}
         </p>
         <button
@@ -76,8 +83,10 @@ export function DocumentSummaryPanel({
           {retrying ? "Asking…" : "Try again"}
         </button>
         {retryError && (
-          <p role="alert" className="label flex items-center gap-2">
-            <Mark />
+          <p role="alert" className="flex items-start gap-2 text-[15px] leading-[1.45]">
+            <span className="pt-[7px]">
+              <Mark />
+            </span>
             {retryError.message}
           </p>
         )}
@@ -85,27 +94,36 @@ export function DocumentSummaryPanel({
     );
   }
   return (
-    <section
-      aria-label="Summary"
-      className="flex flex-col gap-4 border-l-2 border-ink pl-4 tab:pl-5"
-    >
-      <p className="display max-w-3xl text-xl leading-[1.2] tab:text-[22px]">
+    <section aria-label="Summary" className="flex max-w-[640px] flex-col gap-5">
+      <p className="text-xl leading-[1.5] text-ink-2">
         <MathsText text={summary.overview} />
       </p>
       <CitedPoints environmentId={environmentId} points={summary.key_points} />
-      <p className="text-xs leading-normal text-ink-3">
-        Written by {summary.model} from this document&apos;s passages
-        {summary.sections !== null &&
-          summary.sections > 1 &&
-          `, read in ${summary.sections} sections`}
-        , {formatDateTime(summary.updated_at)}
-        {summary.seconds !== null && `, in ${summary.seconds.toFixed(1)} s`}, with
-        prompt {summary.prompt_versions.join(" and ")}.
-        {summary.earlier_versions > 0 &&
-          ` ${summary.earlier_versions} earlier ${
-            summary.earlier_versions === 1 ? "summary is" : "summaries are"
-          } kept.`}
-      </p>
+      <div className="flex flex-col items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setShowingHow(!showingHow)}
+          aria-expanded={showingHow}
+          className="label text-ink-2 hover:text-ink"
+        >
+          How this was written <OpenSign open={showingHow} />
+        </button>
+        {showingHow && (
+          <p className="text-[13px] leading-[1.4] text-ink-2">
+            Written by {summary.model} from this document&apos;s passages
+            {summary.sections !== null &&
+              summary.sections > 1 &&
+              `, read in ${summary.sections} sections`}
+            , {formatDateTime(summary.updated_at)}
+            {summary.seconds !== null && `, in ${summary.seconds.toFixed(1)} s`}, with
+            prompt {summary.prompt_versions.join(" and ")}.
+            {summary.earlier_versions > 0 &&
+              ` ${summary.earlier_versions} earlier ${
+                summary.earlier_versions === 1 ? "summary is" : "summaries are"
+              } kept.`}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

@@ -3,13 +3,17 @@
 // How each practised concept is going, on the Practice tab (decision record
 // 19): its answers and how many were recalled, the current gap between
 // reviews and when it comes back, weakest first. Concepts needing attention
-// lead, then the lowest share recalled. From the practice overview the tab
-// already has; nothing new is asked of the backend.
+// lead, then the lowest share recalled. Each says in a status word why it
+// needs attention or where it stands, and in a line of detail in the sans
+// how it was answered and when it comes back (decision record 28). From
+// the practice overview the tab already has; nothing new is asked of the
+// backend.
 
 import Link from "next/link";
 
+import { ConceptMark, conceptStatus } from "@/components/concept-progress";
 import { Empty } from "@/components/query-states";
-import { Mark, SectionHead } from "@/components/ui";
+import { SectionHead } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import type { PracticeConcept } from "@/lib/types";
 
@@ -47,38 +51,38 @@ export function ConceptPerformance({
       ) : (
         <ul aria-label="Concepts, weakest first">
           {practised.map((c) => (
-            <li key={c.concept_id} className="flex flex-col gap-1.5 border-b border-rule py-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <li key={c.concept_id} className="flex flex-col gap-1.5 border-b border-rule py-3.5">
+              <div className="flex items-baseline justify-between gap-4">
                 <Link
                   href={`/environments/${encodeURIComponent(environmentId)}/knowledge-map?concept=${encodeURIComponent(c.concept_id)}`}
-                  className="min-w-0 font-semibold hover:underline hover:decoration-accent hover:underline-offset-4"
+                  className="min-w-0 text-[15px] leading-[1.4] font-semibold hover:underline hover:decoration-accent hover:underline-offset-4"
                 >
                   {c.name}
                 </Link>
-                <span className="label text-[10px] tabular-nums text-ink-2">
+                <div
+                  role="meter"
+                  aria-label={`${c.name}: share recalled`}
+                  aria-valuemin={0}
+                  aria-valuemax={c.exposures}
+                  aria-valuenow={c.recalled}
+                  aria-valuetext={`${c.recalled} of ${c.exposures} recalled`}
+                  className="label shrink-0 tracking-[0.12em]"
+                >
+                  <span aria-hidden>{recallBlocks(c.recalled, c.exposures)}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <p className={`label flex items-center gap-1.5 ${c.attention ? "text-ink" : "text-ink-2"}`}>
+                  <ConceptMark concept={c} />
+                  {conceptStatus(c)}
+                </p>
+                <p className="text-[13px] leading-[1.4] text-ink-2 tabular-nums">
                   {c.recalled} of {c.exposures} recalled
                   {c.gap_days !== null &&
                     ` · every ${c.gap_days} ${c.gap_days === 1 ? "day" : "days"}`}
                   {c.next_review_at && ` · next ${formatDate(c.next_review_at)}`}
-                </span>
-              </div>
-              <div
-                role="meter"
-                aria-label={`${c.name}: share recalled`}
-                aria-valuemin={0}
-                aria-valuemax={c.exposures}
-                aria-valuenow={c.recalled}
-                aria-valuetext={`${c.recalled} of ${c.exposures} recalled`}
-                className="label text-xs tracking-[0.12em]"
-              >
-                <span aria-hidden>{recallBlocks(c.recalled, c.exposures)}</span>
-              </div>
-              {(c.attention || c.strong) && (
-                <p className="label flex items-center gap-1.5 text-[10px]">
-                  {c.attention ? <Mark /> : <span aria-hidden>●</span>}
-                  {c.attention ?? "Strong: recalled after a long gap."}
                 </p>
-              )}
+              </div>
             </li>
           ))}
         </ul>

@@ -193,9 +193,11 @@ describe("PracticeSession", () => {
     await screen.findByRole("status");
     await userEvent.click(screen.getByRole("button", { name: "Finish" }));
 
-    expect(screen.getByRole("heading", { name: "Session done" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Session done." })).toBeInTheDocument();
     expect(
-      screen.getByText(/1 of your answers bring their concept back tomorrow; the rest later\./),
+      screen.getByText(
+        /1 of your answers bring their concept back tomorrow; the rest come back later, further apart each time you recall them\./,
+      ),
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Back to practice" }));
     expect(onDone).toHaveBeenCalledOnce();

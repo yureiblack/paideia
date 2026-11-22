@@ -102,9 +102,9 @@ function UpdateCard({ update, latest }: { update: MaterialUpdate; latest: boolea
   return (
     <article className="flex flex-col gap-3 py-3">
       <div className="flex flex-col gap-1.5 tab:flex-row tab:items-baseline tab:gap-5">
-        {latest && <span className="label text-[10px] text-ink-3">Latest</span>}
+        {latest && <span className="label text-ink-3">Latest</span>}
         <h3 className="min-w-0 flex-1 text-sm">{title}</h3>
-        <div className="label flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
+        <div className="label flex flex-wrap items-center gap-x-5 gap-y-1">
           <span className="flex items-center gap-1.5 text-ink-2">
             {update.status === "failed" && <Mark />}
             {running ? "Updating…" : `${STATUS[update.status]} · ${formatDateTime(update.finished_at ?? update.started_at)}`}
@@ -125,7 +125,7 @@ function UpdateCard({ update, latest }: { update: MaterialUpdate; latest: boolea
                   {step.state === "failed" ? <Mark /> : MARK[step.state]}
                 </span>
                 <span className="text-sm">
-                  <span className="label text-[10px]">{step.label}</span>
+                  <span className="label">{step.label}</span>
                   <span className="sr-only"> ({step.state})</span>
                   {step.detail && <span className="text-ink-2"> · {step.detail}</span>}
                   {step.state === "running" && <span className="text-ink-3"> · working…</span>}
@@ -200,7 +200,7 @@ function Report({ update }: { update: MaterialUpdate }) {
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 tab:flex-row tab:gap-5">
-      <h5 className="label w-40 shrink-0 text-[10px] text-ink-3">{title}</h5>
+      <h5 className="label w-40 shrink-0 text-ink-3">{title}</h5>
       <ul className="flex flex-col gap-0.5 text-sm" aria-label={title}>
         {children}
       </ul>

@@ -73,12 +73,23 @@ export function Reference({ error }: { error: Error | null }) {
   );
 }
 
-// Nothing to show yet: what that means, and what to do next.
-export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+// Nothing to show yet: what will appear, and the one action that makes it
+// appear (decision record 28). A title is optional, for a page that is
+// empty as a whole; the sentence is in the sans, like every sentence.
+export function Empty({
+  title,
+  children,
+  action,
+}: {
+  title?: ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-start gap-4 border-y border-rule py-4">
-      <div className="display max-w-2xl text-[19px] leading-[1.25] text-ink-2 italic">{children}</div>
-      {action}
+    <div className="flex flex-col items-start gap-3 border-y border-rule py-4">
+      {title && <p className="display text-[28px] leading-[1.05] tracking-[-0.015em] tab:text-[32px]">{title}</p>}
+      <div className="max-w-[640px] text-[15px] leading-[1.55] text-ink-2">{children}</div>
+      {action && <div className="pt-1">{action}</div>}
     </div>
   );
 }

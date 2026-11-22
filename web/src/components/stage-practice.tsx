@@ -4,7 +4,8 @@
 // the Practice tab and the Roadmap tab's stage cards. Preparing asks the
 // local model for four items per concept, written in the background one
 // concept at a time; this follows along, and names any concept whose items
-// could not be written, or whose material changed since.
+// could not be written, or whose material changed since. The counts are
+// labels; what went wrong is said in the sans (decision record 28).
 
 import Link from "next/link";
 
@@ -45,8 +46,16 @@ export function StagePractice({
       <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${compact ? "tab:flex-row-reverse tab:justify-start" : ""}`}>
         {items > 0 &&
           (onPractise ? (
-            <button type="button" onClick={onPractise} className={compact ? `${button.link} text-[10px]` : button.primary}>
-              Practise this stage
+            <button type="button" onClick={onPractise} className={compact ? button.link : button.primary}>
+              {compact ? (
+                <>
+                  Practise<span className="sr-only"> this stage</span> <span aria-hidden>→</span>
+                </>
+              ) : (
+                <>
+                  Practise this stage <span aria-hidden>→</span>
+                </>
+              )}
             </button>
           ) : (
             <Link
@@ -56,27 +65,29 @@ export function StagePractice({
               Practise this stage <span aria-hidden>→</span>
             </Link>
           ))}
-        <span className="label text-[10px] text-ink-2">
+        <span className="label text-ink-2">
           {busy.length > 0
             ? `Writing practice items… ${concepts.length - busy.length - missing.length} of ${concepts.length} concepts ready`
             : items > 0
-              ? `${items} practice ${items === 1 ? "item" : "items"}${due ? `, ${due} of ${concepts.length} concepts due today` : ""}`
-              : "No practice items yet"}
+              ? `${items} ${items === 1 ? "item" : "items"}${
+                  due ? (compact ? ` · ${due} due` : ` · ${due} of ${concepts.length} due today`) : ""
+                }`
+              : "No items yet"}
         </span>
         {missing.length > 0 && busy.length === 0 && (
           <button
             type="button"
             onClick={() => prepare.mutate(missing.map((c) => c.concept_id))}
             disabled={prepare.isPending}
-            className={`${button.link} text-[10px]`}
+            className={button.link}
           >
-            {items > 0 ? "Prepare the rest" : "Prepare practice"}
+            {items > 0 ? "Prepare the rest" : "Prepare practice"} <span aria-hidden>[+]</span>
           </button>
         )}
       </div>
       <Problems concepts={concepts} />
       {prepare.error && (
-        <p role="alert" className="label flex items-center gap-2">
+        <p role="alert" className="flex items-center gap-2.5 text-[13px] leading-[1.4]">
           <Mark />
           {prepare.error.message}
         </p>
@@ -90,7 +101,7 @@ function Problems({ concepts }: { concepts: PracticeConcept[] }) {
   const outdated = concepts.filter((c) => c.state === "outdated");
   if (!failed.length && !outdated.length) return null;
   return (
-    <ul className="flex flex-col gap-1 text-xs text-ink-2">
+    <ul className="flex flex-col gap-1 text-[13px] leading-[1.4] text-ink-2">
       {failed.map((c) => (
         <li key={c.concept_id} className="flex items-center gap-2 text-ink">
           <Mark />

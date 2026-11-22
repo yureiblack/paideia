@@ -7,10 +7,12 @@
 // a session (interleaving). Low stakes: nothing here is a grade.
 //
 // At the top, what is due today (in the learner's own day) with Start
-// practice; then how each practised concept is going, weakest first, with
+// practice, and the first time the tab is opened, a note on how answers are
+// marked; then how each practised concept is going, weakest first, with
 // why one needs attention or is strong, beside the past sessions; then each
-// roadmap stage with Prepare practice and Practise this stage. A session
-// replaces the page until it is done.
+// roadmap stage with Prepare practice and Practise this stage. Before any
+// stage is prepared, the top says practice is prepared stage by stage and
+// offers the first. A session replaces the page until it is done.
 // ?stage= (from the Roadmap tab) starts that stage's session at once, and
 // ?concepts= (from today's plan) a session for those concepts.
 
@@ -18,14 +20,17 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { ConceptPerformance } from "@/components/concept-performance";
+import { sectionNumber } from "@/components/environment-tabs";
+import { Note } from "@/components/note";
 import { PracticeHistory } from "@/components/practice-history";
 import { PracticeSession } from "@/components/practice-session";
 import { Empty, Loading, LoadError } from "@/components/query-states";
-import { button, OpenSign, SectionHead } from "@/components/ui";
 import { StagePractice } from "@/components/stage-practice";
-import { usePractice } from "@/hooks/use-practice";
+import { button, Mark, OpenSign, SectionHead } from "@/components/ui";
+import { usePractice, usePreparePractice } from "@/hooks/use-practice";
 import { useRoadmap } from "@/hooks/use-roadmap";
 import { formatDateTime } from "@/lib/format";
+import type { PracticeConcept, RoadmapStage } from "@/lib/types";
 
 type Session = { conceptIds: string[] | null; title: string; started: number };
 
@@ -45,6 +50,11 @@ export function Practice({
   const [fromLink, setFromLink] = useState(stage);
   const [planned, setPlanned] = useState(focus);
   const [showHow, setShowHow] = useState(false);
+  const kicker = (
+    <>
+      <span aria-hidden>{sectionNumber("Practice")} / </span>Practice
+    </>
+  );
 
   if (practice.isError || roadmap.isError) {
     const failed = [practice, roadmap].filter((q) => q.isError);
@@ -95,46 +105,62 @@ export function Practice({
   const dueNow = practice.data.concepts.filter(
     (c) => c.review === "due" || c.review === "new",
   );
+  const answered = practice.data.concepts.some((c) => c.exposures > 0);
+  const howToggle = (
+    <button
+      type="button"
+      onClick={() => setShowHow(!showHow)}
+      aria-expanded={showHow}
+      className="label w-fit text-left text-ink-2 hover:text-ink"
+    >
+      How practice works <OpenSign open={showHow} />
+    </button>
+  );
   return (
     <div className="flex flex-col gap-10">
       <section aria-labelledby="practice-heading" className="flex flex-col gap-5">
-        <div className="flex flex-col gap-4 desk:flex-row desk:items-end desk:gap-10">
-          <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+        {items === 0 ? (
+          <>
             <h2 id="practice-heading" className="label max-tab:sr-only">
-              <span aria-hidden>07 / </span>Practice
+              {kicker}
             </h2>
-            <p className="display text-[44px] leading-[0.92] tracking-[-0.03em] text-balance tab:text-[60px] desk:text-[68px]">
-              {items === 0
-                ? "No practice items yet: prepare a stage below."
-                : today > 0
+            <NothingPrepared
+              environmentId={environmentId}
+              stages={stages}
+              concepts={practice.data.concepts}
+            />
+            {howToggle}
+          </>
+        ) : (
+          <div className="flex flex-col gap-4 desk:flex-row desk:items-end desk:gap-10">
+            <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+              <h2 id="practice-heading" className="label max-tab:sr-only">
+                {kicker}
+              </h2>
+              <p className="display text-[44px] leading-[0.92] tracking-[-0.03em] text-balance tab:text-[60px] desk:text-[68px]">
+                {today > 0
                   ? `Due today: ${dueText(due_concepts, new_concepts)}.`
                   : `Nothing due today.${next_review_at ? ` Next review ${formatDateTime(next_review_at)}.` : ""}`}
-            </p>
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 desk:w-60 desk:shrink-0 desk:pb-1.5">
+              {today > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSession({ conceptIds: null, title: "Due today", started: Date.now() })
+                  }
+                  className={`${button.primary} w-full tab:w-fit`}
+                >
+                  Start practice <span aria-hidden>→</span>
+                </button>
+              )}
+              {howToggle}
+            </div>
           </div>
-          <div className="flex flex-col gap-3 desk:w-60 desk:shrink-0 desk:pb-1.5">
-            {today > 0 && (
-              <button
-                type="button"
-                onClick={() =>
-                  setSession({ conceptIds: null, title: "Due today", started: Date.now() })
-                }
-                className={`${button.primary} w-full tab:w-fit`}
-              >
-                Start practice <span aria-hidden>→</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowHow(!showHow)}
-              aria-expanded={showHow}
-              className="label w-fit text-[10px] text-ink-3 hover:text-ink"
-            >
-              How practice works <OpenSign open={showHow} />
-            </button>
-          </div>
-        </div>
+        )}
         {showHow && (
-          <p className="display max-w-3xl border-l border-ink pl-3.5 text-[17px] leading-[1.3] text-ink-2 italic">
+          <p className="max-w-[640px] border-l border-ink pl-3.5 text-[15px] leading-[1.55] text-ink-2">
             Study support built on well-studied techniques: answering from memory,
             coming back to concepts at growing intervals, and mixing concepts. Items are
             written by the local model from your material and checked before they are
@@ -145,71 +171,163 @@ export function Practice({
           </p>
         )}
         {dueNow.length > 0 && (
-          <ul className="flex flex-wrap gap-x-4 gap-y-1.5" aria-label="Due today">
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[15px] leading-[1.5]" aria-label="Due today">
             {dueNow.map((c) => (
-              <li key={c.concept_id} className="label text-[10px]">
+              <li key={c.concept_id}>
                 <Link href={exploreHref(c.concept_id)} className="border-b border-rule hover:border-accent">
                   {c.name}
                 </Link>
-                {c.review === "new" && <span className="text-ink-3"> (new)</span>}
+                {c.review === "new" && <span className="text-[13px] text-ink-2"> (new)</span>}
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <div className="grid gap-10 desk:grid-cols-[minmax(0,1fr)_300px]">
-        <ConceptPerformance environmentId={environmentId} concepts={practice.data.concepts} />
-        <PracticeHistory environmentId={environmentId} />
-      </div>
+      <Note id="practice" title="Practice — how it is marked" guideStep={4}>
+        Questions are written from your passages, and each answer shows the page behind it.
+        A concept you recall comes back further apart; one you miss comes back tomorrow.
+      </Note>
 
-      <section aria-labelledby="by-stage-heading" className="flex flex-col">
-        <SectionHead id="by-stage-heading" right={`${stages.length} ${stages.length === 1 ? "stage" : "stages"}`}>
-          By stage
-        </SectionHead>
-        {stages.length === 0 ? (
-          <Empty>
-            Practice is prepared stage by stage, from the roadmap, once materials have
-            been read and their concepts found.
-          </Empty>
-        ) : (
-          <ol aria-label="Stages to practise">
-            {stages.map((stage) => (
-              <li
-                key={stage.number}
-                className="flex flex-col gap-2 border-b border-rule py-3 tab:flex-row tab:items-center tab:gap-5"
-              >
-                <span className="label w-7 shrink-0 text-[10px] text-ink-3">
-                  <span className="sr-only">Stage </span>
-                  {String(stage.number).padStart(2, "0")}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <h3 className="display text-xl leading-tight">{stage.title}</h3>
-                  <p className="truncate text-xs text-ink-3">
-                    {stage.concepts.map((c) => c.name).join(", ")}
-                  </p>
-                </div>
-                <div className="tab:max-w-[50%] tab:shrink-0">
-                  <StagePractice
-                    compact
-                    environmentId={environmentId}
-                    conceptIds={stage.concepts.map((c) => c.id)}
-                    stageNumber={stage.number}
-                    onPractise={() =>
-                      setSession({
-                        conceptIds: stage.concepts.map((c) => c.id),
-                        title: `Stage ${stage.number}: ${stage.title}`,
-                        started: Date.now(),
-                      })
-                    }
-                  />
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+      {(items > 0 || answered) && (
+        <div className="grid gap-10 desk:grid-cols-[minmax(0,1fr)_300px]">
+          <ConceptPerformance environmentId={environmentId} concepts={practice.data.concepts} />
+          <PracticeHistory environmentId={environmentId} />
+        </div>
+      )}
+
+      {(stages.length > 0 || items > 0) && (
+        <section aria-labelledby="by-stage-heading" className="flex flex-col">
+          <SectionHead id="by-stage-heading" right={`${stages.length} ${stages.length === 1 ? "stage" : "stages"}`}>
+            By stage
+          </SectionHead>
+          {stages.length === 0 ? (
+            <Empty>
+              Practice is prepared stage by stage, from the roadmap, once materials have
+              been read and their concepts found.
+            </Empty>
+          ) : (
+            <ol aria-label="Stages to practise">
+              {stages.map((stage) => (
+                <li
+                  key={stage.number}
+                  className="flex flex-col gap-2 border-b border-rule py-3 tab:flex-row tab:items-center tab:gap-5"
+                >
+                  <span className="label w-7 shrink-0 text-ink-3">
+                    <span className="sr-only">Stage </span>
+                    {String(stage.number).padStart(2, "0")}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <h3 className="display text-xl leading-tight">{stage.title}</h3>
+                    <p className="truncate text-[13px] leading-[1.4] text-ink-2">
+                      {stage.concepts.map((c) => c.name).join(", ")}
+                    </p>
+                  </div>
+                  <div className="tab:max-w-[50%] tab:shrink-0">
+                    <StagePractice
+                      compact
+                      environmentId={environmentId}
+                      conceptIds={stage.concepts.map((c) => c.id)}
+                      stageNumber={stage.number}
+                      onPractise={() =>
+                        setSession({
+                          conceptIds: stage.concepts.map((c) => c.id),
+                          title: `Stage ${stage.number}: ${stage.title}`,
+                          started: Date.now(),
+                        })
+                      }
+                    />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
     </div>
+  );
+}
+
+// Before any practice is prepared: what preparing means, and the one
+// action, preparing the first stage that still needs it.
+function NothingPrepared({
+  environmentId,
+  stages,
+  concepts,
+}: {
+  environmentId: string;
+  stages: RoadmapStage[];
+  concepts: PracticeConcept[];
+}) {
+  const prepare = usePreparePractice(environmentId);
+  const byId = new Map(concepts.map((c) => [c.concept_id, c]));
+  const of = (stage: RoadmapStage) =>
+    stage.concepts.flatMap((c) => byId.get(c.id) ?? []);
+  const busy = stages.find((s) =>
+    of(s).some((c) => c.state === "pending" || c.state === "generating"),
+  );
+  const next = stages.find((s) =>
+    of(s).some((c) => c.state === "none" || c.state === "failed" || c.state === "outdated"),
+  );
+
+  if (stages.length === 0) {
+    return (
+      <Empty
+        title="Practice is prepared stage by stage."
+        action={
+          <Link
+            href={`/environments/${encodeURIComponent(environmentId)}/roadmap`}
+            className={button.link}
+          >
+            See the roadmap <span aria-hidden>→</span>
+          </Link>
+        }
+      >
+        Questions are written from a stage&apos;s passages when you ask. The stages come from
+        the roadmap, once your documents have been read and their concepts found.
+      </Empty>
+    );
+  }
+  const target = busy ?? next;
+  return (
+    <Empty
+      title="Practice is prepared stage by stage."
+      action={
+        target && (
+          <div className="flex flex-col items-start gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                prepare.mutate(
+                  of(target)
+                    .filter((c) => c.state === "none" || c.state === "failed" || c.state === "outdated")
+                    .map((c) => c.concept_id),
+                )
+              }
+              disabled={busy !== undefined || prepare.isPending}
+              className={button.primary}
+            >
+              {busy ? `Preparing stage ${busy.number}…` : `Prepare stage ${target.number}`}
+              {!busy && <span aria-hidden>[+]</span>}
+            </button>
+            <p className="text-[13px] leading-[1.4] text-ink-2">
+              Preparing takes a minute or two for each stage, in the background.
+            </p>
+            {prepare.error && (
+              <p role="alert" className="flex items-center gap-2.5 text-[13px] leading-[1.4]">
+                <Mark />
+                {prepare.error.message}
+              </p>
+            )}
+          </div>
+        )
+      }
+    >
+      Questions are written from a stage&apos;s passages when you ask.{" "}
+      {target && target.number > 1
+        ? `Stage ${target.number} is the first still to prepare; the rest can follow.`
+        : "Start with the first stage; the rest can follow."}
+    </Empty>
   );
 }
 

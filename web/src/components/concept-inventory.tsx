@@ -6,7 +6,8 @@
 // grouped by first letter, each with its learner state and how many
 // relationships it has. A concept's name opens its entry beside the index.
 // Documents whose concepts are still coming, or could not be extracted,
-// wait behind one notice, with Extract or Try again for each.
+// wait behind one notice, with Extract or Try again for each; before there
+// are any concepts, that notice is all the page shows of it (statesOnly).
 
 import Link from "next/link";
 import { useState } from "react";
@@ -23,12 +24,15 @@ export function ConceptInventory({
   selectedId = null,
   relationships,
   exploreHref,
+  statesOnly = false,
 }: {
   environmentId: string;
   selectedId?: string | null;
   // Relationships per concept id, once the graph has loaded.
   relationships?: Record<string, number>;
   exploreHref?: (id: string) => string;
+  // Only the documents still to extract, for a page with no concepts yet.
+  statesOnly?: boolean;
 }) {
   const query = useConcepts(environmentId);
   const practice = usePractice(environmentId);
@@ -56,15 +60,17 @@ export function ConceptInventory({
   const readyCount = documents.length - unsettled.length;
   const states = new Map((practice.data?.concepts ?? []).map((c) => [c.concept_id, c]));
 
+  if (statesOnly) {
+    return unsettled.length > 0 ? (
+      <ExtractionStates environmentId={environmentId} documents={unsettled} />
+    ) : null;
+  }
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-xs leading-snug text-ink-3">
-        <span className="label text-[10px] text-ink-2">
-          {concepts.length} {concepts.length === 1 ? "concept" : "concepts"} from {readyCount}{" "}
-          {readyCount === 1 ? "document" : "documents"}
-        </span>
-        <br />
-        Proposed by the local model and checked before being kept.
+      <p className="text-[13px] leading-[1.4] text-ink-2">
+        {concepts.length} {concepts.length === 1 ? "concept" : "concepts"} from {readyCount}{" "}
+        {readyCount === 1 ? "document" : "documents"}, proposed by the local model and
+        checked before being kept.
       </p>
 
       {unsettled.length > 0 && (
@@ -72,19 +78,19 @@ export function ConceptInventory({
       )}
 
       {concepts.length === 0 ? (
-        <p className="display text-lg text-ink-3 italic">
+        <p className="text-[15px] leading-[1.55] text-ink-2">
           No concepts yet. They appear here once materials have been read.
         </p>
       ) : (
         <>
           <label className="flex items-baseline gap-3 border-b-2 border-ink pb-2 focus-within:border-accent">
-            <span className="label text-[10px] text-ink-3">Filter</span>
+            <span className="label text-ink-2">Filter</span>
             <input
               type="search"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               aria-label="Filter concepts by name"
-              className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none"
             />
           </label>
           <ul aria-label="Concepts">
@@ -109,7 +115,7 @@ export function ConceptInventory({
               );
             })}
           </ul>
-          <p className="label flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-[9px] text-ink-3">
+          <p className="label flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-ink-3">
             <span>○ New</span>
             <span>◐ Learning</span>
             <span>◷ Due</span>
@@ -143,7 +149,7 @@ function ConceptRow({
       className={`flex min-h-11 items-center gap-2.5 tab:min-h-7 ${selected ? "-mx-2 bg-ink px-2 text-paper" : ""}`}
     >
       <ConceptMark concept={state} />
-      <h3 className="min-w-0 flex-1 truncate text-sm">
+      <h3 className="min-w-0 flex-1 truncate text-[15px]">
         {href ? (
           <Link href={href} className="hover:underline hover:decoration-accent hover:underline-offset-4">
             {concept.name}
@@ -153,7 +159,7 @@ function ConceptRow({
         )}
       </h3>
       {relationships !== undefined && (
-        <span className={`label text-[10px] ${selected ? "text-paper" : "text-ink-3"}`}>
+        <span className={`label ${selected ? "text-paper" : "text-ink-3"}`}>
           {relationships}
           <span className="sr-only"> {relationships === 1 ? "relationship" : "relationships"}</span>
         </span>
@@ -194,7 +200,7 @@ function ExtractionStates({
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="label flex w-fit items-center gap-2 text-[10px]"
+        className="label flex w-fit items-center gap-2 text-left"
       >
         <Mark />
         {documents.length} {documents.length === 1 ? "document" : "documents"} still to extract{" "}
@@ -204,26 +210,26 @@ function ExtractionStates({
         <ul className="flex flex-col" aria-label="Documents still to extract">
           {documents.map((d) => (
             <li key={d.document_id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-rule py-2">
-              <span className="min-w-0 flex-1 truncate text-sm">{d.filename}</span>
-              <span className="label text-[9px] text-ink-3">
-                {stateLabel(d)}
-                {d.error && `: ${d.error}`}
-              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px]">{d.filename}</span>
+              <span className="label text-ink-2">{stateLabel(d)}</span>
               {d.document_status === "ready" &&
                 (d.status === "failed" || d.status === "none") && (
                   <button
                     type="button"
                     onClick={() => retry.mutate(d.document_id)}
                     disabled={retry.isPending}
-                    className={`${button.link} text-[10px]`}
+                    className={button.link}
                   >
                     {d.status === "failed" ? "Try again" : "Extract"}
                   </button>
                 )}
+              {d.error && (
+                <span className="basis-full text-[13px] leading-[1.4] text-ink-2">{d.error}</span>
+              )}
             </li>
           ))}
           {retry.error && (
-            <li role="alert" className="label flex items-center gap-2 pt-2">
+            <li role="alert" className="flex items-center gap-2.5 pt-2 text-[13px] leading-[1.4]">
               <Mark />
               {retry.error.message}
             </li>
