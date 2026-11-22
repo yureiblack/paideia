@@ -322,7 +322,17 @@ export type PracticeKind =
   | "short_answer"
   | "multiple_choice"
   | "true_false"
-  | "flashcard";
+  | "flashcard"
+  | "exercise";
+
+// What a computed exercise asks to be filled in (decision record 27).
+export type ExerciseForm =
+  | { type: "number"; label?: string }
+  | { type: "vector"; size: number; labels?: string[] }
+  | { type: "matrix"; rows: number; columns: number }
+  | { type: "vectors"; count: number; size: number }
+  | { type: "independence"; size: number; options: string[] }
+  | { type: "eigen"; size: number };
 
 export type PracticeItem = {
   id: string;
@@ -334,6 +344,9 @@ export type PracticeItem = {
   answer: string | null;
   box: number;
   due_at: string;
+  // A computed exercise: its type, which variant of its numbers is shown
+  // (sent back with the answer), and its cells.
+  exercise?: { type: string; variant: number; form: ExerciseForm } | null;
 };
 
 export type AttemptInput = {
@@ -341,6 +354,8 @@ export type AttemptInput = {
   truth?: boolean;
   text?: string;
   knew?: boolean;
+  cells?: string[];
+  variant?: number;
   seconds?: number;
 };
 
@@ -354,6 +369,9 @@ export type AttemptResult = {
   // When the item's concept comes back for review, and the gap until then.
   due_at: string;
   gap_days: number;
+  // A computed exercise: which cells were right, and its worked solution.
+  right?: boolean[] | null;
+  steps?: string[] | null;
 };
 
 // Today's study plan, worked out by fixed rules. kind: strengthen (concepts

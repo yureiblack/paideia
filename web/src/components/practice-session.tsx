@@ -12,6 +12,7 @@ import { CitationChips } from "@/components/cited-points";
 import { MathsText } from "@/components/maths-text";
 import { Loading, LoadError } from "@/components/query-states";
 import { button, Mark } from "@/components/ui";
+import { ExerciseForm } from "@/components/exercise-form";
 import { useAnswer, usePracticeSession } from "@/hooks/use-practice";
 import { formatDateTime } from "@/lib/format";
 import type { AttemptInput, AttemptResult, PracticeItem, PracticeKind } from "@/lib/types";
@@ -21,6 +22,7 @@ const KIND_LABEL: Record<PracticeKind, string> = {
   multiple_choice: "Multiple choice",
   true_false: "True or false",
   flashcard: "Flashcard",
+  exercise: "Exercise",
 };
 
 export function PracticeSession({
@@ -169,10 +171,40 @@ function ItemCard({
         <p className="label text-[10px] text-ink-3">
           {KIND_LABEL[item.kind]} · {item.concept.name}
         </p>
-        <p className="display text-[30px] leading-[1.05] tracking-[-0.02em] tab:text-[40px] desk:text-[46px]">
+        <p
+          className={
+            item.kind === "exercise"
+              ? "text-xl leading-relaxed"
+              : "display text-[30px] leading-[1.05] tracking-[-0.02em] tab:text-[40px] desk:text-[46px]"
+          }
+        >
           <span className="sr-only">Question {number}: </span>
           <MathsText text={item.prompt} />
         </p>
+
+        {item.kind === "exercise" && item.exercise && (
+          <ExerciseForm
+            form={item.exercise.form}
+            pending={answer.isPending}
+            right={result?.right ?? null}
+            onSubmit={(cells, choice) =>
+              submit({ cells, choice, variant: item.exercise?.variant })
+            }
+          />
+        )}
+
+        {result?.steps && (
+          <section aria-label="Worked solution" className="flex flex-col gap-3 border-t border-rule pt-4">
+            <h3 className="label text-[10px] text-ink-3">Worked solution</h3>
+            <ol className="flex flex-col gap-2 text-base leading-relaxed">
+              {result.steps.map((step, n) => (
+                <li key={n} className="overflow-x-auto">
+                  <MathsText text={step} />
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
         {item.kind === "multiple_choice" && item.options && (
           <fieldset disabled={!!result} className="flex flex-col border-t border-ink">

@@ -38,6 +38,19 @@ const shortItem: PracticeItem = {
   due_at: "2026-11-15T09:00:00Z",
 };
 
+const exerciseItem: PracticeItem = {
+  id: "i3",
+  concept: { id: "c2", name: "Determinant" },
+  kind: "exercise",
+  difficulty: 3,
+  prompt: "Find the determinant of \\[A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}.\\]",
+  options: null,
+  answer: null,
+  box: 0,
+  due_at: "2026-11-15T09:00:00Z",
+  exercise: { type: "determinant", variant: 2, form: { type: "number", label: "\\det A" } },
+};
+
 function result(overrides: Partial<AttemptResult>): AttemptResult {
   return {
     correct: true,
@@ -115,6 +128,31 @@ describe("PracticeSession", () => {
     const attempt = sent.find((s) => s.method === "POST");
     expect(attempt?.path).toBe("/api/learning-items/i1/attempts");
     expect(attempt?.body).toEqual({ choice: 0, seconds: expect.any(Number) });
+  });
+
+  it("marks an exercise by its numbers and shows its worked solution", async () => {
+    const { sent } = start([exerciseItem], {
+      i3: result({
+        correct: false,
+        answer: "\\(\\det A = -2\\)",
+        right: [false],
+        steps: ["\\[\\det A = (1)(4) - (2)(3) = -2\\]"],
+      }),
+    });
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Your answer" }), "-3");
+    await userEvent.click(screen.getByRole("button", { name: "Check" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Not quite. The answer:");
+    const worked = screen.getByRole("region", { name: "Worked solution" });
+    expect(worked.querySelectorAll("li")).toHaveLength(1);
+    expect(worked.querySelector(".katex")).not.toBeNull();
+    expect(screen.getByRole("textbox", { name: "Your answer" })).toHaveAttribute("aria-invalid", "true");
+    expect(sent.find((s) => s.method === "POST")?.body).toEqual({
+      cells: ["-3"],
+      variant: 2,
+      seconds: expect.any(Number),
+    });
   });
 
   it("lets the learner mark a short answer after seeing the stored one", async () => {
