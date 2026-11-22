@@ -43,6 +43,7 @@ from app.services import summaries as summary_service
 logger = logging.getLogger(__name__)
 
 LABELS = {
+    "maths": "Reading the maths",
     "read": "Reading the document",
     "document_summary": "Its summary",
     "environment_summary": "Environment summary",
@@ -59,6 +60,9 @@ DOCUMENT_STEPS = (
     "roadmap",
 )
 DELETION_STEPS = ("environment_summary", "knowledge_graph", "roadmap")
+# Reading a document's maths: the pages first, then the document read again
+# with them, and everything after as for any change (decision record 26).
+MATHS_STEPS = ("maths", *DOCUMENT_STEPS)
 
 
 # --- snapshots ------------------------------------------------------------------
@@ -214,10 +218,34 @@ def _describe_read(session, update, result, llm):
     if result is None:
         return "done", "Already read."
     return "done", (
-        f"{result['passages']} passages: {result['new']} new, {result['kept']} kept, "
+        f"{_count(result['passages'], 'passage')}: {result['new']} new, {result['kept']} kept, "
         f"{result['removed']} removed. {result['embedded']} embedded, "
         f"{result['reused']} found already embedded by their text."
     )
+
+
+def _count(n: int, one: str, many: str | None = None) -> str:
+    """ "1 stage", "2 stages": a number with its noun."""
+    return f"{n} {one if n == 1 else many or one + 's'}"
+
+
+def _pages(numbers: list[int]) -> str:
+    shown = ", ".join(str(n) for n in numbers[:8])
+    return shown + (f" and {len(numbers) - 8} more" if len(numbers) > 8 else "")
+
+
+def _describe_maths(session, update, result, llm):
+    if result is None:
+        return "skipped", "The document was deleted meanwhile."
+    read, kept = result["read"], sorted(int(p) for p in result["kept"])
+    if not read and not kept:
+        return "done", "No page was read."
+    detail = f"{len(read)} of {_count(len(read) + len(kept), 'page')} read."
+    if len(kept) == 1:
+        detail += f" Page {kept[0]} keeps the PDF's own text."
+    elif kept:
+        detail += f" Pages {_pages(kept)} keep the PDF's own text."
+    return "done", detail
 
 
 def _describe_document_summary(session, update, result, llm):
@@ -264,7 +292,9 @@ def _describe_environment_summary(session, update, result, llm):
         return "done", "Back to the summary written earlier for these documents."
     if how == "new" and artifact is not None:
         documents = len((artifact.metadata_json or {}).get("based_on", []))
-        return "done", f"Rebuilt from {documents} document summaries."
+        return "done", (
+            f"Rebuilt from {_count(documents, 'document summary', 'document summaries')}."
+        )
     return "done", "Unchanged."
 
 
@@ -283,7 +313,9 @@ def _describe_concepts(session, update, result, llm):
         select(Concept.id).where(Concept.environment_id == update.environment_id)
     ).all()
     added = sum(str(i) not in known for i in new)
-    return "done", f"{kept} concepts in this document, {added} new to the environment."
+    return "done", (
+        f"{_count(kept, 'concept')} in this document, {added} new to the environment."
+    )
 
 
 def _describe_graph(session, update, result, llm):
@@ -303,12 +335,13 @@ def _describe_graph(session, update, result, llm):
         meta = artifact.metadata_json or {}
         if not meta.get("asked"):
             return "done", (
-                f"Built from remembered decisions only ({meta.get('remembered', 0)} "
-                "pairs); nothing new asked."
+                "Built from remembered decisions only "
+                f"({_count(meta.get('remembered', 0), 'pair')}); nothing new asked."
             )
+        remembered = meta.get("remembered", 0)
         return "done", (
-            f"The model was asked about {meta.get('asked', 0)} new pairs; "
-            f"{meta.get('remembered', 0)} were remembered."
+            f"The model was asked about {_count(meta.get('asked', 0), 'new pair')}; "
+            f"{remembered} {'was' if remembered == 1 else 'were'} remembered."
         )
     return "done", "Unchanged: no new pairs of concepts."
 
@@ -324,18 +357,19 @@ def _describe_roadmap(session, update, result, llm):
     if how == "earlier":
         return (
             "done",
-            f"Back to the stage titles written earlier: {len(state.stages)} stages.",
+            f"Back to the stage titles written earlier: {_count(len(state.stages), 'stage')}.",
         )
     if how == "new" and artifact is not None:
         meta = artifact.metadata_json or {}
         return "done", (
-            f"{meta.get('stages', len(state.stages))} stages: "
+            f"{_count(meta.get('stages', len(state.stages)), 'stage')}: "
             f"{meta.get('asked', 0)} titled now, {meta.get('remembered', 0)} kept."
         )
-    return "done", f"Unchanged: {len(state.stages)} stages."
+    return "done", f"Unchanged: {_count(len(state.stages), 'stage')}."
 
 
 DESCRIBE = {
+    "maths": _describe_maths,
     "read": _describe_read,
     "document_summary": _describe_document_summary,
     "environment_summary": _describe_environment_summary,
@@ -441,7 +475,10 @@ def report(before: dict, after: dict, update: MaterialUpdate) -> dict:
     kept = practised_before & practised_after
     if kept:
         unchanged.append(
-            {"name": "Practice items", "detail": f"Those of {len(kept)} concepts kept."}
+            {
+                "name": "Practice items",
+                "detail": f"Those of {_count(len(kept), 'concept')} kept.",
+            }
         )
     if outdated:
         updated.append(

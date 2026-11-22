@@ -1,6 +1,6 @@
 """Gives the end-to-end tests a world of their own before the API starts:
 their database dropped, created and migrated, their data folder and Redis
-database emptied, and the two PDFs the journey uploads written to the folder
+database emptied, and the three PDFs the journey uploads written to the folder
 given. Emptying Redis forgets a worker that an earlier run left behind
 without saying goodbye, which the API would otherwise still count.
 
@@ -15,6 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import pymupdf
 import redis
 from alembic import command
 from sqlalchemy import make_url
@@ -22,6 +23,7 @@ from sqlalchemy import make_url
 from app.config import REPO_ROOT, Settings, settings
 from tests import pdfs
 from tests.conftest import _recreate_database, alembic_config
+from tests.e2e.model import EIGENVALUES_FORMULA, EIGENVALUES_PROSE
 
 WEEK_1 = pdfs.html_pdf(
     "<h2>Processes</h2><p>A process is a program in execution. The kernel gives "
@@ -46,7 +48,26 @@ WEEK_2 = pdfs.html_pdf(
     "with only some of its pages resident.</p>",
 )
 
-FILES = {"Week 1 processes.pdf": WEEK_1, "Week 2 memory.pdf": WEEK_2}
+
+def _week_3() -> bytes:
+    """A lecture whose one page sets a formula in a maths font."""
+    document = pymupdf.open(
+        stream=pdfs.html_pdf(f"<h2>Eigenvalues</h2><p>{EIGENVALUES_PROSE}</p>"),
+        filetype="pdf",
+    )
+    document[0].insert_text((72, 400), EIGENVALUES_FORMULA, fontname="symb")
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+WEEK_3 = _week_3()
+
+FILES = {
+    "Week 1 processes.pdf": WEEK_1,
+    "Week 2 memory.pdf": WEEK_2,
+    "Week 3 eigenvalues.pdf": WEEK_3,
+}
 
 
 def main(pdf_folder: Path) -> None:

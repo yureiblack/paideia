@@ -120,3 +120,41 @@ def two_column_pdf(left: str, right: str) -> bytes:
     data = document.tobytes()
     document.close()
     return data
+
+
+def maths_pdf(*pages: tuple[str, str] | str, header: str | None = None) -> bytes:
+    """Pages of prose, each either a plain string or (prose, formula): the
+    formula set in the Symbol font, as a maths page names a maths font, on
+    its own line below the prose. Optionally a running header."""
+    document = pymupdf.open()
+    for page_content in pages:
+        page = document.new_page()
+        if header:
+            page.insert_text((72, 40), header, fontsize=8)
+        prose, formula = (
+            page_content if isinstance(page_content, tuple) else (page_content, "")
+        )
+        page.insert_textbox(pymupdf.Rect(72, 100, 540, 300), prose)
+        if formula:
+            page.insert_text((72, 330), formula, fontname="symb", fontsize=12)
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def figure_pdf(label: str, framed: str) -> bytes:
+    """One page with a figure, a large drawing holding a short label, and a
+    framed box of text, a large drawing holding a long paragraph."""
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_textbox(pymupdf.Rect(72, 80, 540, 120), "Some prose above.")
+    figure = pymupdf.Rect(100, 150, 500, 350)
+    page.draw_rect(figure)
+    page.draw_line(figure.tl, figure.br)
+    page.insert_text((250, 250), label)
+    frame = pymupdf.Rect(72, 400, 540, 560)
+    page.draw_rect(frame)
+    page.insert_textbox(frame + (10, 10, -10, -10), framed)
+    data = document.tobytes()
+    document.close()
+    return data

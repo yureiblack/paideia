@@ -212,8 +212,8 @@ def test_the_combining_call_may_cite_only_what_the_notes_cited(
 
 
 def test_the_answer_schema_allows_only_the_given_numbers_and_bounds_every_list():
-    consecutive = summaries.answer_schema([4, 5, 6]).model_json_schema()
-    scattered = summaries.answer_schema([1, 3, 5]).model_json_schema()
+    consecutive = summaries.answer_schema([4, 5, 6], "").model_json_schema()
+    scattered = summaries.answer_schema([1, 3, 5], "").model_json_schema()
 
     sources_of = lambda schema: schema["$defs"]["KeyPoint"]["properties"]["sources"]
     assert sources_of(consecutive)["items"] == {
@@ -228,12 +228,12 @@ def test_the_answer_schema_allows_only_the_given_numbers_and_bounds_every_list()
     assert consecutive["properties"]["key_points"]["maxItems"] == summaries.MAX_POINTS
     assert consecutive["properties"]["key_points"]["minItems"] == 3
     # A document of one passage is not asked for three points about it.
-    one = summaries.answer_schema([1]).model_json_schema()
+    one = summaries.answer_schema([1], "").model_json_schema()
     assert one["properties"]["key_points"]["minItems"] == 1
 
 
 def test_an_answer_citing_a_number_it_was_not_given_is_rejected():
-    schema = summaries.answer_schema([1, 2])
+    schema = summaries.answer_schema([1, 2], "")
 
     with pytest.raises(ValueError):
         schema.model_validate(
@@ -244,7 +244,7 @@ def test_an_answer_citing_a_number_it_was_not_given_is_rejected():
 def test_an_overview_whose_formula_would_not_render_is_asked_for_again():
     """Decision record 24: the overview cannot be dropped, so a broken
     formula in it makes the answer malformed, which the provider retries."""
-    schema = summaries.answer_schema([1])
+    schema = summaries.answer_schema([1], r"It uses \(A^{-1}\).")
     point = {"point": "y", "sources": [1]}
 
     fine = schema.model_validate({"overview": r"Uses $A^{-1}$.", "key_points": [point]})
@@ -253,6 +253,50 @@ def test_an_overview_whose_formula_would_not_render_is_asked_for_again():
         schema.model_validate(
             {"overview": r"Uses $\frac{1}{2$.", "key_points": [point]}
         )
+
+
+def test_an_overview_with_maths_its_sources_do_not_show_is_asked_for_again():
+    """Decision record 26: the model may quote maths, never work it out."""
+    schema = summaries.answer_schema(
+        [1], r"Its polynomial is \(\lambda^2 - 6\lambda + 1\)."
+    )
+    point = {"point": "y", "sources": [1]}
+
+    quoted = schema.model_validate(
+        {"overview": r"It is $\lambda^2 - 6\lambda + 1$.", "key_points": [point]}
+    )
+    assert quoted.overview == r"It is \(\lambda^2 - 6\lambda + 1\)."  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="Maths not in its sources"):
+        schema.model_validate(
+            {"overview": r"Its roots are $3 \pm 2\sqrt{2}$.", "key_points": [point]}
+        )
+
+
+def test_a_point_with_maths_its_passages_do_not_show_is_dropped(
+    session: Session, session_factory
+):
+    lecture = processed(
+        session,
+        session_factory,
+        document(
+            [H("Eigenvalues"), P(r"Here \(f(\lambda) = \lambda^2 - 6\lambda + 1\).")]
+        ),
+    )
+
+    def answer(prompt, schema):
+        return {
+            "overview": r"About $f(\lambda)$.",
+            "key_points": [
+                {"point": r"It is $\lambda^2 - 6\lambda + 1$.", "sources": [1]},
+                {"point": r"Its roots are $3 \pm 2\sqrt{2}$.", "sources": [1]},
+            ],
+        }
+
+    artifact = summarize(session, session_factory, lecture, MockProvider(answer=answer))
+
+    assert [kp["text"] for kp in artifact.content["key_points"]] == [
+        r"It is \(\lambda^2 - 6\lambda + 1\)."
+    ]
 
 
 def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
@@ -276,7 +320,15 @@ def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
 def test_formulas_are_stored_as_latex_and_a_point_that_would_not_render_is_dropped(
     session: Session, session_factory
 ):
-    lecture = processed(session, session_factory)
+    lecture = processed(
+        session,
+        session_factory,
+        document(
+            [H("Angles"), P(r"The angle \(\beta\) costs $5 and $10.")],
+            [H("Determinants"), P(r"Then \(\det A \neq 0\) holds.")],
+            [H("Halves"), P(r"A half is \(\frac{1}{2}\).")],
+        ),
+    )
 
     def answer(prompt, schema):
         # As JSON gives it: "\b" of "\begin" read as a backspace.

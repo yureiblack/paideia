@@ -28,5 +28,16 @@ def answer(prompt, schema) -> dict:
     return value
 
 
+# The page whose maths the journey reads (decision record 26), and how the
+# vision model reads it: the formula set in the Symbol font, whose text layer
+# reads l for the λ it draws, so the reading writes l too and agrees with it.
+EIGENVALUES_PROSE = (
+    "An eigenvalue of a matrix is a root of its characteristic polynomial. "
+    "For the matrix of the example, the polynomial is"
+)
+EIGENVALUES_FORMULA = "l2 - 6l + 1 = 0"
+EIGENVALUES_READ = f"## Eigenvalues\n\n{EIGENVALUES_PROSE}\n\n$$l^2 - 6l + 1 = 0$$"
+
+
 def provider() -> MockProvider:
-    return MockProvider(answer=answer)
+    return MockProvider(answer=answer, transcription=EIGENVALUES_READ)

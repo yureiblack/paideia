@@ -11,6 +11,7 @@ import { useCallback, useRef, useState, type ChangeEvent } from "react";
 
 import { DocumentSummaryPanel } from "@/components/document-summary";
 import { MaterialUpdates } from "@/components/material-updates";
+import { MathsPanel } from "@/components/maths-reading";
 import { MathsText } from "@/components/maths-text";
 import { Empty, Loading, LoadError } from "@/components/query-states";
 import { button, Mark, Opening, Standfirst, useDismiss } from "@/components/ui";
@@ -209,6 +210,7 @@ function DocumentRow({
   const [showingSummary, setShowingSummary] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [offeringMaths, setOfferingMaths] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -269,6 +271,20 @@ function DocumentRow({
               {document.status === "ready" && (
                 <button type="button" onClick={handleSummary} aria-expanded={showingSummary} className={item}>
                   <span className="flex-1">{showingSummary ? "Hide summary" : summaryLabel(summary.data)}</span>
+                  <span aria-hidden>→</span>
+                </button>
+              )}
+              {document.status === "ready" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setOfferingMaths(!offeringMaths);
+                  }}
+                  aria-expanded={offeringMaths}
+                  className={item}
+                >
+                  <span className="flex-1">Read the maths</span>
                   <span aria-hidden>→</span>
                 </button>
               )}
@@ -361,6 +377,14 @@ function DocumentRow({
             </button>
           </div>
         </div>
+      )}
+
+      {offeringMaths && document.status === "ready" && (
+        <MathsPanel
+          document={document}
+          environmentId={environmentId}
+          onClose={() => setOfferingMaths(false)}
+        />
       )}
 
       {(reprocess.error ?? remove.error ?? newVersion.error) && (

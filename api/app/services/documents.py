@@ -32,6 +32,7 @@ from app.db import SessionFactory
 from app.embedding import Embedder, EmbeddingError
 from app.models import Document, DocumentChunk, DocumentPage, Environment
 from app.parsing import ParsedDocument, ParseError, Parser
+from app.services import maths_reading
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,8 @@ def process_document(
                     "Upload it again."
                 )
             parsed = parser.parse(path)
+            # Pages whose maths was read replace their text layer (record 26).
+            parsed = maths_reading.with_transcriptions(session, document, parsed)
             chunks = chunk_document(document_id, parsed)
         except ParseError as exc:
             parsed, error = None, str(exc)

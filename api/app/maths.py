@@ -38,6 +38,7 @@ fails when the two disagree.
 
 import json
 import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -439,3 +440,234 @@ def sizes(text: str) -> tuple[int, int]:
             prose_chars += 1
             formula_chars += span.body_end - span.body_start
     return prose_chars, formula_chars
+
+
+# --- what maths shows (decision record 26) ----------------------------------------
+#
+# A formula's LaTeX and a PDF's text layer write the same maths differently: a
+# matrix in the layer is a list of numbers, a fraction two lines, "≠" an
+# equals sign under a separate stroke. What both keep is which characters are
+# shown, in order: digits, letters and operators. shown() reduces any text to
+# them; a transcription is checked with it (app/transcription.py), and the
+# maths the model writes is looked up in its passages with it (unquoted).
+
+
+# The character each command draws, where the text layer has that character:
+# Greek letters, operators, relations, arrows and named functions. Commands
+# not listed draw no character the layer has (\frac, \hat, spacing...).
+_DRAWS = {
+    **{
+        name: chr(code)
+        for name, code in {
+            "alpha": 0x3B1,
+            "beta": 0x3B2,
+            "gamma": 0x3B3,
+            "delta": 0x3B4,
+            "epsilon": 0x3B5,
+            "varepsilon": 0x3B5,
+            "zeta": 0x3B6,
+            "eta": 0x3B7,
+            "theta": 0x3B8,
+            "vartheta": 0x3B8,
+            "iota": 0x3B9,
+            "kappa": 0x3BA,
+            "lambda": 0x3BB,
+            "mu": 0x3BC,
+            "nu": 0x3BD,
+            "xi": 0x3BE,
+            "pi": 0x3C0,
+            "varpi": 0x3C0,
+            "rho": 0x3C1,
+            "varrho": 0x3C1,
+            "sigma": 0x3C3,
+            "varsigma": 0x3C2,
+            "tau": 0x3C4,
+            "upsilon": 0x3C5,
+            "phi": 0x3C6,
+            "varphi": 0x3C6,
+            "chi": 0x3C7,
+            "psi": 0x3C8,
+            "omega": 0x3C9,
+            "Gamma": 0x393,
+            "Delta": 0x394,
+            "Theta": 0x398,
+            "Lambda": 0x39B,
+            "Xi": 0x39E,
+            "Pi": 0x3A0,
+            "Sigma": 0x3A3,
+            "Upsilon": 0x3A5,
+            "Phi": 0x3A6,
+            "Psi": 0x3A8,
+            "Omega": 0x3A9,
+        }.items()
+    },
+    "cdot": "·",
+    "cdots": "···",
+    "times": "×",
+    "pm": "±",
+    "mp": "∓",
+    "div": "÷",
+    "le": "≤",
+    "leq": "≤",
+    "ge": "≥",
+    "geq": "≥",
+    "ne": "≠",
+    "neq": "≠",
+    "to": "→",
+    "rightarrow": "→",
+    "longrightarrow": "→",
+    "xrightarrow": "→",
+    "mapsto": "↦",
+    "leftarrow": "←",
+    "longleftarrow": "←",
+    "xleftarrow": "←",
+    "Rightarrow": "⇒",
+    "xRightarrow": "⇒",
+    "Longrightarrow": "⇒",
+    "implies": "⇒",
+    "Leftrightarrow": "⇔",
+    "Longleftrightarrow": "⇔",
+    "iff": "⇔",
+    "in": "∈",
+    "notin": "∉",
+    "subset": "⊂",
+    "subseteq": "⊆",
+    "supset": "⊃",
+    "supseteq": "⊇",
+    "cup": "∪",
+    "cap": "∩",
+    "infty": "∞",
+    "perp": "⊥",
+    "approx": "≈",
+    "equiv": "≡",
+    "cong": "≅",
+    "sim": "∼",
+    "ast": "*",
+    "star": "*",
+    "lt": "<",
+    "gt": ">",
+    **{
+        name: name
+        for name in (
+            "det",
+            "dim",
+            "rank",
+            "ker",
+            "sin",
+            "cos",
+            "tan",
+            "cot",
+            "sec",
+            "csc",
+            "log",
+            "ln",
+            "exp",
+            "min",
+            "max",
+            "lim",
+            "sup",
+            "inf",
+            "gcd",
+            "deg",
+            "arg",
+            "Pr",
+        )
+    },
+}
+# Commands whose braced argument names a layout, not text: \begin{array}{cc|c}.
+_LAYOUT = re.compile(r"\\(begin|end)\{[a-zA-Z*]+\}(\{[^{}]*\})?")
+_SIZE = re.compile(r"\\(left|right|middle|[Bb]igg?[lrm]?)\b\.?")
+_RULE_CELL = re.compile(r"^\s*(-+|—+|\||\\vert|\\mid|\\rule\{[^}]*\}\{[^}]*\})?\s*$")
+_MATRIX = re.compile(
+    r"(\\begin\{[a-zA-Z]*matrix\*?\})(.*?)(\\end\{[a-zA-Z]*matrix\*?\})", re.DOTALL
+)
+
+
+def _without_rules(latex: str) -> str:
+    """A matrix's cells that only draw a rule, a dash or a bar standing for
+    a row or column vector, are decoration: the text layer has no such
+    character, or has it as a bar the check does not count."""
+
+    def rows(m: re.Match) -> str:
+        kept = []
+        for row in re.split(r"\\\\", m.group(2)):
+            cells = [cell for cell in row.split("&") if not _RULE_CELL.match(cell)]
+            kept.append(" & ".join(cells))
+        return m.group(1) + r" \\ ".join(kept) + m.group(3)
+
+    return _MATRIX.sub(rows, latex)
+
+
+def _drawn(latex: str) -> str:
+    """The characters a formula draws that a text layer would have."""
+    # Row breaks first: a row break followed by v is a break and a letter,
+    # not a backslash and a command named v.
+    text = _LAYOUT.sub(" ", _without_rules(latex)).replace("\\\\", " ")
+    text = _SIZE.sub(" ", text)
+    text = re.sub(r"\\([A-Za-z]+)", lambda m: f" {_DRAWS.get(m.group(1), '')} ", text)
+    text = re.sub(r"\\.", " ", text)  # \{ \} \, and the like
+    # Every minus in a formula is a minus, never a hyphen.
+    return re.sub(r"[{}^_&]", " ", text).replace("-", "−")
+
+
+def _plain(text: str) -> str:
+    """Page text with each formula replaced by the characters it draws."""
+    found, _ = spans(text)
+    return "".join(
+        text[s.body_start : s.body_end]
+        if s.kind == "prose"
+        else " " + _drawn(text[s.body_start : s.body_end]) + " "
+        for s in found
+    )
+
+
+_OPERATORS = set("+−=<>≤≥≠·×÷±∓→←↦⇒⇔∈∉⊂⊆⊃⊇∪∩∞⊥≈≡≅∼*")
+# A text layer's way of writing characters it has no single code for.
+_LAYER_FORMS = [
+    (re.compile("\u0338\\s*="), "≠"),  # an equals sign struck through
+    (re.compile("\u0338\\s*∈"), "∉"),
+    (re.compile("(−\\s*)+→"), "→"),  # a long arrow: minus signs and an arrow
+    (re.compile("(=\\s*)+⇒"), "⇒"),  # a long implication
+    (re.compile("⇐\\s*⇒"), "⇔"),
+    (re.compile("[⋅∙]"), "·"),
+    (re.compile("[∗⋆]"), "*"),
+]
+# A hyphen between two letters, or ending a line after one, joins words; it
+# is not a minus. Any other hyphen-minus is.
+_WORD_HYPHEN = re.compile(r"(?<=[^\W\d_])-(?=[^\W\d_]|\s*$)", re.MULTILINE)
+
+
+def shown(text: str) -> str:
+    """The digits, letters and operators the text shows, in order, each
+    formula as the characters it draws: "\\(\\lambda^2 - 6\\lambda\\)" and the
+    text layer's "λ2 −6λ" both show "λ2−6λ"."""
+    text = unicodedata.normalize("NFKC", _plain(text))
+    for pattern, replacement in _LAYER_FORMS:
+        text = pattern.sub(replacement, text)
+    text = _WORD_HYPHEN.sub(" ", text).replace("-", "−")
+    return "".join(c for c in text if c.isalnum() or c in _OPERATORS)
+
+
+def _states(found: str) -> bool:
+    """Whether maths showing these characters states something: a digit or
+    an operator. Letters and symbols alone only name something."""
+    return any(c.isdigit() or c in _OPERATORS for c in found)
+
+
+def unquoted(text: str, sources: str) -> list[str]:
+    """The formulas in text whose maths its sources do not show (decision
+    record 26): the model may quote maths, never work it out. A formula
+    with a digit or an operator must show exactly what some stretch of the
+    sources shows, spacing and layout aside; one of symbols alone, only
+    symbols the sources show."""
+    seen = shown(sources)
+    symbols = set(seen)
+    missing = []
+    for latex in formulas(text):
+        found = shown(f"\\({latex}\\)")
+        if _states(found):
+            if found not in seen:
+                missing.append(latex)
+        elif not set(found) <= symbols:
+            missing.append(latex)
+    return missing

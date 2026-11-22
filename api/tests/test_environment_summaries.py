@@ -37,6 +37,11 @@ SCHEDULING = document(
     [H("Round robin"), P("Round robin gives every task a time quantum.")],
     [H("Shortest job first"), P("Shortest job first runs the shortest burst.")],
 )
+# Maths the summaries below quote (decision record 26: never worked out).
+EIGENVALUES = document(
+    [H("Eigenvalues"), P(r"Each \(\lambda\) solves \(\det(A) = 0\).")],
+    [H("Squares"), P(r"Its square is \(x^2\).")],
+)
 MEMORY = document(
     [H("Paging"), P("Paging maps pages to frames.")],
     [H("TLB"), P("The TLB caches page translations.")],
@@ -148,7 +153,7 @@ def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write(
         }
 
     llm = MockProvider(answer=answer)
-    env, _ = course(session, session_factory, llm, ("a.pdf", SCHEDULING))
+    env, _ = course(session, session_factory, llm, ("a.pdf", EIGENVALUES))
 
     refresh(session, session_factory, env, llm)
 
@@ -164,7 +169,13 @@ def test_a_key_point_whose_formula_would_not_render_is_dropped(
     # Decision record 24, as for document summaries.
     def answer(prompt, schema):
         if prompt.name != "environment_summary":
-            return simple_answer(prompt, schema)
+            return {
+                "overview": r"About $\lambda$.",
+                "key_points": [
+                    {"point": "Plain.", "sources": [1]},
+                    {"point": r"Its square is $x^2$.", "sources": [2]},
+                ],
+            }
         return {
             "overview": r"About $\lambda$.",
             "key_points": [
@@ -174,12 +185,42 @@ def test_a_key_point_whose_formula_would_not_render_is_dropped(
         }
 
     llm = MockProvider(answer=answer)
-    env, _ = course(session, session_factory, llm, ("a.pdf", SCHEDULING))
+    env, _ = course(session, session_factory, llm, ("a.pdf", EIGENVALUES))
 
     summary = refresh(session, session_factory, env, llm).summary
 
     assert summary.overview == r"About \(\lambda\)."
     assert [kp.text for kp in summary.key_points] == [r"Kept: \(x^2\)."]
+
+
+def test_a_key_point_with_maths_its_notes_do_not_show_is_dropped(
+    session: Session, session_factory
+):
+    # Decision record 26: written from the documents' summaries, it may quote
+    # their maths, never work it out.
+    def answer(prompt, schema):
+        if prompt.name != "environment_summary":
+            return {
+                "overview": r"About $\lambda$.",
+                "key_points": [
+                    {"point": "Plain.", "sources": [1]},
+                    {"point": r"Its square is $x^2$.", "sources": [2]},
+                ],
+            }
+        return {
+            "overview": r"About $\lambda$.",
+            "key_points": [
+                {"point": r"Quoted: $x^2$.", "sources": [1]},
+                {"point": r"Worked out: $x^2 = 4$.", "sources": [2]},
+            ],
+        }
+
+    llm = MockProvider(answer=answer)
+    env, _ = course(session, session_factory, llm, ("a.pdf", EIGENVALUES))
+
+    summary = refresh(session, session_factory, env, llm).summary
+
+    assert [kp.text for kp in summary.key_points] == [r"Quoted: \(x^2\)."]
 
 
 def test_a_passage_cited_by_several_points_is_numbered_once(

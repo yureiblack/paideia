@@ -12,6 +12,7 @@ import { expect, test, type Page } from "@playwright/test";
 const PDFS = path.join(__dirname, ".state", "pdfs");
 const WEEK_1 = "Week 1 processes.pdf";
 const WEEK_2 = "Week 2 memory.pdf";
+const WEEK_3 = "Week 3 eigenvalues.pdf";
 
 function tab(page: Page, name: string) {
   return page
@@ -228,6 +229,35 @@ test("a learner's journey through one subject", async ({ page }) => {
       .locator("dt", { hasText: /^Documents$/ })
       .locator("xpath=following-sibling::dd[1]");
     await expect(documents).toContainText("2 read");
+  });
+
+  await test.step("13. Read a document's maths", async () => {
+    await tab(page, "Materials").click();
+    await page.getByLabel("Choose a PDF to upload").setInputFiles(path.join(PDFS, WEEK_3));
+    const card = documentCard(page, WEEK_3);
+    await expect(card).toContainText("Ready · 1 page");
+    await expect(update(page, WEEK_3)).toContainText("Done");
+
+    // Never read unasked: offered from the document's menu, with an estimate.
+    await card.getByRole("button", { name: `More for ${WEEK_3}` }).click();
+    await card.getByRole("button", { name: "Read the maths" }).click();
+    const offer = card.getByRole("region", { name: `Maths of ${WEEK_3}` });
+    await expect(offer.getByRole("status")).toContainText("1 page to read · about a minute");
+    await offer.getByRole("button", { name: "Read the maths" }).click();
+
+    const reading = page
+      .getByRole("region", { name: "Updates" })
+      .getByRole("article")
+      .filter({
+        has: page.getByRole("heading", { name: `Read the maths of ${WEEK_3}`, exact: true }),
+      });
+    await expect(reading).toContainText("Done");
+    await reading.getByRole("button", { name: "What changed" }).click();
+    await expect(reading).toContainText("1 of 1 page read.");
+
+    // The page's text now holds the formula, typeset.
+    await card.getByRole("button", { name: "Read text" }).click();
+    await expect(card.getByRole("region", { name: "Page 1" }).locator(".katex")).toBeVisible();
   });
 
   expect(problems).toEqual([]);

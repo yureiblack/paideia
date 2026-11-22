@@ -286,8 +286,11 @@ def _write(
         "flashcard": rules.flashcard(fc.front, fc.back, fc.sources),
     }
     texts = {p.number: p.text for p in passages}
+    sources = "\n\n".join(texts.values())
     kept, dropped = [], {}
     for kind, draft in candidates.items():
+        if not isinstance(draft, str):
+            draft = rules.unquoted_maths(draft, sources) or draft
         if isinstance(draft, str):
             dropped[kind] = draft
             continue

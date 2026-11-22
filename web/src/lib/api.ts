@@ -14,6 +14,7 @@ import type {
   GraphState,
   Job,
   MaterialUpdate,
+  MathsOverview,
   Neighbourhood,
   AttemptInput,
   AttemptResult,
@@ -259,6 +260,18 @@ export const api = {
 
   deleteDocument: (documentId: string) =>
     request<void>(documentPath(documentId), { method: "DELETE" }),
+
+  // The document's maths pages and how far reading them has got.
+  getMaths: (documentId: string) =>
+    request<MathsOverview>(`${documentPath(documentId)}/maths`),
+
+  // Read the maths of these pages with the local vision model, then read the
+  // document again with them. Returns the reading's job.
+  readMaths: (documentId: string, firstPage: number, lastPage: number) =>
+    request<Job>(
+      `${documentPath(documentId)}/maths`,
+      withJson("POST", { first_page: firstPage, last_page: lastPage }),
+    ),
 
   getPreview: (chunkId: string) =>
     request<SourcePreview>(`/api/chunks/${encodeURIComponent(chunkId)}/preview`),

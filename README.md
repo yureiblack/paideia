@@ -70,7 +70,7 @@ Each environment has seven tabs:
 | Tab | What it shows |
 |---|---|
 | **Overview** | Today's study plan, worked out from your answers: concepts to strengthen, reviews due, the next stage to learn, new material to skim. Each part has its reason and an estimate of the time it takes. Also each stage's progress, and the map in a few lines. |
-| **Materials** | Every PDF, read page by page. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. |
+| **Materials** | Every PDF, read page by page. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. A document's maths can be read by the local vision model, for a range of pages, when you ask: each page is checked against the PDF's own text. |
 | **Search** | Keyword search and search by meaning, fused and then reranked. Every result is a citation. "Show in page" opens the passage, highlighted in its page, and "Show scoring" shows how each result was ranked. |
 | **Summary** | A summary of all the material, built from each document's summary. Every key point cites its passages. |
 | **Knowledge map** | The concepts, with definitions and the passages that explain them. For each concept: what it builds on, what builds on it, its parts, and what it is related to. Every relationship cites the passages it was found in. |
@@ -90,6 +90,8 @@ and the code around it decides everything that has to be right every time:
 | How a pair is related | The model picks one of six statements about the pair. Below a confidence of 0.5, it counts as no relationship. |
 | The order to learn in | Fixed rules, from the graph. The model only writes each stage's title. |
 | Which practice items are kept | The model writes them. The backend keeps an item only if its answer is found in the passages it cites. |
+| A page's maths, read from its image | The model transcribes the page. The backend uses it only if its digits, operators and letters agree with the PDF's own text. |
+| The maths in what the model writes | The model may quote maths, never work it out. A formula it writes must show what its passages show. |
 | Whether an answer is right | The stored answer, or the learner after seeing it. Never the model. |
 | When a concept comes back, and today's plan | Fixed rules, from the answers. |
 | What a change of material redoes | Fingerprints of each result's inputs. |
@@ -164,6 +166,7 @@ erDiagram
     ENVIRONMENTS ||--o{ DOCUMENTS : holds
     DOCUMENTS ||--o{ DOCUMENT_PAGES : "read into"
     DOCUMENTS ||--o{ DOCUMENT_CHUNKS : "cut into"
+    DOCUMENTS ||--o{ PAGE_TRANSCRIPTIONS : "maths read"
     ENVIRONMENTS ||--o{ GENERATED_ARTIFACTS : "model output"
     DOCUMENTS |o--o{ GENERATED_ARTIFACTS : "about"
     ENVIRONMENTS ||--o{ CONCEPTS : has
@@ -188,6 +191,11 @@ erDiagram
         text filename
         text sha256 "unique per environment"
         text status
+    }
+    PAGE_TRANSCRIPTIONS {
+        int page_number
+        text sha256 "per version of the file"
+        text status "accepted or rejected"
     }
     DOCUMENT_CHUNKS {
         int ordinal
@@ -295,8 +303,8 @@ flowchart LR
    are written.
 2. **Read.** PyMuPDF extracts each page's paragraphs and headings. Running
    headers, footers and page numbers are dropped, and words broken across
-   lines are rejoined. A PDF longer than the page limit, 1,000 by default,
-   fails here.
+   lines are rejoined. A page whose maths was read uses that reading
+   instead. A PDF longer than the page limit, 1,000 by default, fails here.
 3. **Chunk.** Passages follow paragraphs and headings: about 800 characters,
    at most 1,200. Each passage records its pages and character offsets. Its
    id derives from its content, so reading the same PDF again gives the
@@ -312,6 +320,14 @@ flowchart LR
 
 Practice is prepared when the learner asks for it, stage by stage, as its own
 background job.
+
+A document's maths is read when the learner asks for it too, for a range of
+pages (record 26). The vision model transcribes each page from its image,
+with the maths in LaTeX. A page is used only if what it shows agrees with
+the PDF's own text; if not, it is read again in two halves, and otherwise
+keeps its text. Then the document is read again with the pages read, and
+only what changed is redone. It takes about a minute a page, so a textbook
+takes hours.
 
 ## Incremental updates
 
@@ -471,19 +487,20 @@ neighbouring one, not the one that says it.
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 611 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 743 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
-  - Coverage, lines and branches, is 90%, reported but never enforced.
+  - Coverage, lines and branches, is 91%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 22 component tests with Vitest and Testing Library.
+- **Frontend:** 55 tests with Vitest and Testing Library, most of them of
+  components.
   - They run the real API client, with each test supplying the API's
     answers.
   - They query the page by role and name, and use no snapshots.
 - **End to end:** one Playwright journey through the running app.
-  - It goes from creating an environment to a second PDF updating it, in
-    twelve steps.
+  - It goes from creating an environment to a second PDF updating it, then
+    reads a third PDF's maths, in thirteen steps.
   - Everything in it is real except the language model, which is a
     stand-in.
 - **CI:** GitHub Actions runs three jobs on every pull request and every
@@ -678,11 +695,15 @@ ones:
 Known limits, each stated in its decision record:
 
 - **Maths is in progress.** Maths written as LaTeX is typeset and checked
-  ([24](docs/architecture/24-maths-notation.md)). Reading maths from PDFs
-  with the local vision model, linear algebra exercises the backend solves
-  and marks, and a maths benchmark are planned as phases 26 to 28. Until
-  then, a PDF's formulas reach the passages as its text layer has them,
-  which for matrices is a row of numbers.
+  ([24](docs/architecture/24-maths-notation.md)). A PDF's maths can be read
+  by the local vision model, and what the model writes may only quote it
+  ([26](docs/architecture/26-reading-maths.md)). Linear algebra exercises
+  the backend solves and marks, and a maths benchmark, are planned as
+  phases 27 and 28.
+- **Reading maths checks which characters a page shows, not their order.**
+  A matrix with two columns swapped would pass. A textbook takes hours to
+  read, and a PDF whose maths is drawn as pictures has none to offer
+  ([26](docs/architecture/26-reading-maths.md)).
 
 - **One learner per installation,** with no accounts, and one worker.
   Several workers would need the model lock moved into Postgres or Redis,
@@ -729,8 +750,10 @@ api/                    FastAPI backend
   app/                  application code
     models.py           database tables, as Python classes
     schemas.py          request and response shapes
-    parsing.py          PDF to page-numbered paragraphs and headings
+    parsing.py          PDF to page-numbered paragraphs and headings; maths pages and page images
+    transcription.py    a page the vision model read, made into page text and checked against the PDF
     chunking.py         page text to deterministic chunks
+    maths.py            formulas: finding, repairing and checking them, and what they show
     embedding.py        text to vectors, through a local model
     reranking.py        scoring passages against a query, through a local model
     llm.py              the language model behind a replaceable interface

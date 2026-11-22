@@ -165,14 +165,18 @@ def clean_aliases(aliases: Iterable[str], *taken: str) -> list[str]:
     return kept
 
 
-def validate(proposed: Iterable, allowed: set[int]) -> tuple[list[ValidConcept], int]:
+def validate(
+    proposed: Iterable, allowed: set[int], sources: str
+) -> tuple[list[ValidConcept], int]:
     """The concepts worth keeping from what the model proposed, and how many
     were dropped.
 
     Each proposal needs name, definition, aliases and sources (passage
     numbers). One is dropped when its name normalizes to nothing or has no
-    letters, its name or definition is empty or too long, or none of its
-    passage numbers is one the model was given. Proposals with the same
+    letters, its name or definition is empty or too long, none of its
+    passage numbers is one the model was given, or its definition has maths
+    the passages it was given (sources) do not show: the model may quote
+    maths, never work it out (decision record 26). Proposals with the same
     normalized name are merged: the first name and definition are kept, and
     passages and aliases are combined.
     """
@@ -196,6 +200,7 @@ def validate(proposed: Iterable, allowed: set[int]) -> tuple[list[ValidConcept],
             or prose_chars > MAX_DEFINITION
             or formula_chars > maths.FORMULA_CHARS
             or not passages
+            or maths.unquoted(definition, sources)
         ):
             dropped += 1
             continue

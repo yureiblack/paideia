@@ -14,7 +14,8 @@ The rules (decision record 04):
 - Every heading starts a new chunk, and opens it. Consecutive headings stay
   together with the paragraph that follows them.
 - A paragraph longer than MAX_CHARS is split at sentence ends; a single
-  sentence longer than that, at a space.
+  sentence longer than that, at a space. Neither cut falls inside a formula
+  (decision record 26), unless one formula alone is longer than MAX_CHARS.
 - Chunks do not overlap.
 - Each chunk records where it starts and ends, as (page, character offset)
   into the stored page text, so its exact passage can always be found again.
@@ -31,6 +32,7 @@ from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from app import maths
 from app.parsing import PARAGRAPH_BREAK, ParsedDocument, ParsedPage
 
 TARGET_CHARS = 800
@@ -151,8 +153,15 @@ def _split_long(text: str) -> Iterator[tuple[int, int]]:
     the last space that fits, or hard at MAX_CHARS if it has no space at all.
     Ranges never start or end with whitespace.
     """
+    formulas = [(s.start, s.end) for s in maths.spans(text)[0] if s.kind != "prose"]
+
+    def in_formula(i: int) -> bool:
+        return any(a < i < b for a, b in formulas)
+
     sentences, start = [], 0
     for match in _SENTENCE_END.finditer(text):
+        if in_formula(match.start()):
+            continue
         sentences.append((start, match.end()))
         start = match.end()
     if start < len(text):
@@ -167,6 +176,10 @@ def _split_long(text: str) -> Iterator[tuple[int, int]]:
             yield _trimmed(text, *current)
         while b - a > MAX_CHARS:
             cut = text.rfind(" ", a, a + MAX_CHARS)
+            while cut > a and in_formula(cut):
+                cut = text.rfind(" ", a, cut)
+            if cut <= a:  # no space outside a formula: one formula is too long
+                cut = text.rfind(" ", a, a + MAX_CHARS)
             cut = cut if cut > a else a + MAX_CHARS
             yield _trimmed(text, a, cut)
             a = cut

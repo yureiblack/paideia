@@ -184,12 +184,19 @@ class MockProvider:
     simple_answer, and records every prompt and schema it was given."""
 
     def __init__(
-        self, answer=simple_answer, problem: str | None = None, model_name="mock-llm"
+        self,
+        answer=simple_answer,
+        problem: str | None = None,
+        model_name="mock-llm",
+        transcription=None,
     ):
         self.model_name = model_name
         self.answer = answer
         self.problem = problem  # what check() reports
         self.calls = []  # (prompt, schema) for every request
+        # What transcribe() answers: a text, or transcription(prompt, image).
+        self.transcription = transcription
+        self.images = []  # every image transcribe() was given
 
     def generate_structured(self, prompt, schema):
         from app.llm import Generated
@@ -200,6 +207,21 @@ class MockProvider:
             model=self.model_name,
             prompt_version=prompt.id,
             seconds=1.5,
+        )
+
+    def transcribe(self, prompt, image):
+        from app.llm import Generated, LLMError
+
+        self.images.append(image)
+        text = (
+            self.transcription(prompt, image)
+            if callable(self.transcription)
+            else self.transcription
+        )
+        if text is None:
+            raise LLMError("The language model's answer was empty.")
+        return Generated(
+            value=text, model=self.model_name, prompt_version=prompt.id, seconds=2.0
         )
 
     def check(self):
@@ -213,4 +235,10 @@ class FailingProvider(MockProvider):
         from app.llm import LLMError
 
         self.calls.append((prompt, schema))
+        raise LLMError("Could not reach Ollama. Is it running?")
+
+    def transcribe(self, prompt, image):
+        from app.llm import LLMError
+
+        self.images.append(image)
         raise LLMError("Could not reach Ollama. Is it running?")

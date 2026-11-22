@@ -79,13 +79,13 @@ def test_an_added_document_records_each_step_and_what_changed(client: TestClient
             ),
         ),
         "document_summary": ("done", "Written for this text."),
-        "environment_summary": ("done", "Rebuilt from 1 document summaries."),
+        "environment_summary": ("done", "Rebuilt from 1 document summary."),
         "concepts": ("done", "3 concepts in this document, 3 new to the environment."),
         "knowledge_graph": (
             "done",
             "The model was asked about 3 new pairs; 0 were remembered.",
         ),
-        "roadmap": ("done", "1 stages: 1 titled now, 0 kept."),
+        "roadmap": ("done", "1 stage: 1 titled now, 0 kept."),
     }
     report = update["report"]
     assert report["new_concepts"] == ["Round Robin", "Thread", "Time Quantum"]
@@ -173,7 +173,7 @@ def test_a_new_version_keeps_the_document_and_what_did_not_change(
     # Thread's passage did not change, so its practice is kept; Round
     # Robin's did, so its items wait to be prepared again.
     assert update["report"]["practice_outdated"] == ["Round Robin"]
-    assert {"name": "Practice items", "detail": "Those of 1 concepts kept."} in update[
+    assert {"name": "Practice items", "detail": "Those of 1 concept kept."} in update[
         "report"
     ]["unchanged"]
     assert steps(update)["document_summary"] == ("done", "Written for this text.")

@@ -28,6 +28,11 @@ Rules found by prototyping PyMuPDF 1.28.2 (decision records 03 and 04):
   are rejoined here, guided by the document's own vocabulary.
 - Running headers, footers and page numbers come out as ordinary blocks. They
   are dropped, or they would land in the middle of paragraphs.
+
+Reading a document's maths (decision record 26) needs three more things from
+the PDF, also here: which pages set many characters in maths fonts, a page's
+image for the vision model, and the page's text split into what a
+transcription must contain and what it may leave out.
 """
 
 import math
@@ -306,3 +311,164 @@ def _is_heading(raw: _RawBlock, text: str, body_size: float | None) -> bool:
     if raw.size >= body_size * HEADING_SIZE_RATIO:
         return True
     return raw.bold and raw.size >= body_size * 0.95
+
+
+# --- maths (decision record 26) -------------------------------------------------
+
+# Fonts that set mathematics, by the names PDFs give them: TeX's own (CMMI,
+# CMSY, CMEX, the AMS MSAM and MSBM, Euler, RSFS), every family with "Math"
+# in its name (MathDesign, Cambria Math, Latin Modern Math, STIX Two Math,
+# TeX Gyre ... Math), STIX and XITS, MathTime and MTPro, and Symbol.
+MATHS_FONT = re.compile(
+    r"math|cmmi|cmsy|cmex|msam|msbm|eufm|eurm|eusm|rsfs|stix|xits|mtpro|symbol",
+    re.IGNORECASE,
+)
+# A page holds maths when at least this many of its characters are set in
+# maths fonts. Fewer is a stray symbol in prose, not worth half a minute of
+# the model: on a linear algebra textbook, 386 of 455 pages reach it.
+MATHS_MIN_CHARS = 10
+
+# The extension fonts hold big operators and delimiters, whose text layer is
+# not the symbol drawn: a summation sign reads "X".
+_EXTENSION_FONT = re.compile(r"cmex|-Ex\b|extension", re.IGNORECASE)
+# The symbol fonts, laid out as TeX's CMSY, set symbols in the places of the
+# lowercase letters: a square root reads "p". They set no lowercase letter
+# of text, so those are left out. Their capitals are calligraphic letters.
+_SYMBOL_FONT = re.compile(r"cmsy|-Sy\b", re.IGNORECASE)
+
+# The model scales every image to the same budget of about 1,600 tokens, so
+# a whole page gains nothing above 110 dpi. A half page at 150 dpi is seen
+# about twice as large, which is what a second attempt needs.
+PAGE_DPI = 110
+HALF_PAGE_DPI = 150
+
+# Text inside a large drawing or picture belongs to a figure: its labels may
+# be left out of a transcription. Large means at least this share of the
+# page's width and height; label means at most this many characters, since a
+# framed box of text is a drawing too and its text must not be lost.
+FIGURE_MIN_WIDTH = 0.15
+FIGURE_MIN_HEIGHT = 0.08
+FIGURE_LABEL_CHARS = 60
+
+
+@dataclass(frozen=True)
+class PageLayer:
+    """A page's text layer, as a transcription of the page is checked
+    against it."""
+
+    # Blocks are separated by a blank line, a block's lines by a line break.
+    required: str  # what a faithful transcription contains
+    optional: str  # figure labels, which it may contain or leave out
+    margins: tuple[str, ...]  # lines of the running header and footer
+
+
+def _open(path: Path) -> pymupdf.Document:
+    try:
+        return pymupdf.open(path, filetype="pdf")
+    except (pymupdf.FileNotFoundError, pymupdf.FileDataError) as exc:
+        raise ParseError("The file is not a readable PDF.") from exc
+
+
+def maths_pages(path: Path) -> dict[int, int]:
+    """How many characters each page sets in maths fonts, for the pages with
+    at least MATHS_MIN_CHARS, numbered from 1."""
+    found = {}
+    with _PYMUPDF_LOCK, _open(path) as document:
+        for page in document.pages():
+            chars = sum(
+                len(span["text"].strip())
+                for block in page.get_text("dict", flags=_TEXT_FLAGS)["blocks"]
+                if block.get("type") == 0
+                for line in block["lines"]
+                for span in line["spans"]
+                if MATHS_FONT.search(span["font"])
+            )
+            if chars >= MATHS_MIN_CHARS:
+                found[page.number + 1] = chars
+    return found
+
+
+def _split_at(page: pymupdf.Page) -> float:
+    """Where to cut a page in two: the gap between text blocks nearest its
+    middle, so no line is cut through."""
+    middle = page.rect.height / 2
+    gaps, bottom = [], None
+    for top, low in sorted(
+        (block[1], block[3]) for block in page.get_text("blocks") if block[6] == 0
+    ):
+        if bottom is not None and top > bottom:
+            gaps.append((bottom + top) / 2)
+        bottom = low if bottom is None else max(bottom, low)
+    return min(gaps, key=lambda y: abs(y - middle)) if gaps else middle
+
+
+def page_image(path: Path, page_number: int, half: str | None = None) -> bytes:
+    """A page as a PNG for the vision model: whole, or its "top" or "bottom"
+    half, cut between two blocks of text."""
+    with _PYMUPDF_LOCK, _open(path) as document:
+        page = document[page_number - 1]
+        if half is None:
+            return page.get_pixmap(dpi=PAGE_DPI).tobytes("png")
+        cut, rect = _split_at(page), page.rect
+        clip = (
+            pymupdf.Rect(rect.x0, rect.y0, rect.x1, cut)
+            if half == "top"
+            else pymupdf.Rect(rect.x0, cut, rect.x1, rect.y1)
+        )
+        return page.get_pixmap(dpi=HALF_PAGE_DPI, clip=clip).tobytes("png")
+
+
+def _span_text(text: str, font: str) -> str:
+    """A span's text as a transcription is checked against it: nothing from
+    an extension font, no lowercase letter from a symbol font."""
+    if _EXTENSION_FONT.search(font):
+        return ""
+    if _SYMBOL_FONT.search(font):
+        return re.sub("[a-z]", "", text)
+    return text
+
+
+def page_layer(path: Path, page_number: int) -> PageLayer:
+    """The page's text layer, split as a transcription is checked against
+    it: the running header and footer apart, figure labels apart, the
+    extension fonts' big symbols left out."""
+    with _PYMUPDF_LOCK, _open(path) as document:
+        page = document[page_number - 1]
+        width, height = page.rect.width, page.rect.height
+        figures = [
+            rect
+            for rect in [
+                *page.cluster_drawings(),
+                *(pymupdf.Rect(image["bbox"]) for image in page.get_image_info()),
+            ]
+            if rect.width >= width * FIGURE_MIN_WIDTH
+            and rect.height >= height * FIGURE_MIN_HEIGHT
+        ]
+        blocks = page.get_text("dict", flags=_TEXT_FLAGS)["blocks"]
+    required, optional, margins = [], [], []
+    for block in blocks:
+        if block.get("type") != 0:
+            continue
+        lines = [
+            "".join(
+                _span_text(span["text"], span["font"]) for span in line["spans"]
+            ).strip()
+            for line in block["lines"]
+        ]
+        lines = [line for line in lines if line]
+        if not lines:
+            continue
+        x0, top, x1, bottom = block["bbox"]
+        if bottom <= height * BOILERPLATE_MARGIN or top >= height * (
+            1 - BOILERPLATE_MARGIN
+        ):
+            margins += [*lines, " ".join(lines)]
+            continue
+        text = "\n".join(lines)  # line ends kept: a hyphen there joins a word
+        centre = pymupdf.Point((x0 + x1) / 2, (top + bottom) / 2)
+        in_figure = any(centre in rect for rect in figures)
+        if in_figure and len(text) <= FIGURE_LABEL_CHARS:
+            optional.append(text)
+        else:
+            required.append(text)
+    return PageLayer("\n\n".join(required), "\n\n".join(optional), tuple(margins))

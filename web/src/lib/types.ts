@@ -411,7 +411,7 @@ export type UpdateReport = {
 
 export type MaterialUpdate = {
   id: string;
-  kind: "added" | "new_version" | "reprocessed" | "deleted";
+  kind: "added" | "new_version" | "reprocessed" | "maths" | "deleted";
   document_id: string | null;
   filename: string;
   status: "running" | "done" | "failed" | "cancelled";
@@ -504,3 +504,16 @@ export type SearchResponse = {
 
 // The backend's limit on a search query's length.
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+// A document's maths (decision record 26): the pages that set maths in maths
+// fonts, the ones whose maths has been read and is in use, the ones read by a
+// reading cancelled before it put them in place (waiting: no time to read
+// again), the ones that keep the PDF's own text and why, and how many seconds
+// a page takes to read on this machine.
+export type MathsOverview = {
+  maths_pages: number[];
+  read: number[];
+  waiting: number[];
+  kept_text: { page: number; reason: string }[];
+  seconds_per_page: number;
+};
