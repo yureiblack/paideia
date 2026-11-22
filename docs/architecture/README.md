@@ -3,7 +3,7 @@
 One record per phase of the project. Each one says what was decided, what
 was tried or rejected and why, how it was tested, and what it costs. Records
 are not rewritten when a later one changes a decision; the later record says
-what it replaces. All 24 are accepted.
+what it replaces. All 25 are accepted.
 
 Records 01 to 22 follow the original roadmap; its phase 23, the
 documentation, has no record of its own. From record 24 on, the project
@@ -38,6 +38,7 @@ across it. Between them, record 25 redesigns the interface.
 | 22 | [Automated testing and CI](22-testing-and-ci.md) | mypy, coverage reported but never enforced, component tests, one end-to-end journey with a stand-in model, three CI jobs. | 2026-11-15 |
 | 24 | [Maths notation](24-maths-notation.md) | Maths stored as LaTeX between `\(` `\)` and `\[` `\]`, typeset by a bundled KaTeX with trust off; the model's dollar signs moved and its JSON damage repaired; every formula checked against KaTeX's own commands; prose rules blind to formulas. | 2026-11-19 |
 | 25 | [Interface design](25-interface-design.md) | Designed first in a design file kept with the code; three colours as CSS variables with a chosen light or dark theme; type, rules and marks instead of boxes and badges; one frame for phone, tablet and desktop. | 2026-11-21 |
+| 26 | [Reading maths from PDFs](26-reading-maths.md) | The vision model reads a page's maths when asked, for a range of pages; a page is used only if the digits, operators and letters it shows agree with the PDF's own text, else read again in halves, else kept as it was; readings kept per file version and put in place by reading the document again; the model may quote maths, never work it out. | 2026-11-21 |
 
 How to run the project is in [../setup.md](../setup.md); the benchmark's
 results are in [../evaluation/retrieval-benchmark.md](../evaluation/retrieval-benchmark.md).
