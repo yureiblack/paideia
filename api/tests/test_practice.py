@@ -124,6 +124,36 @@ def test_the_model_reads_formulas_in_the_notation_it_is_asked_to_write():
     assert r"\(" not in prompt.user
 
 
+def test_an_item_with_maths_its_passages_do_not_show_is_dropped():
+    # Decision record 26: the model may quote maths, never work it out.
+    passage = practice._Passage(
+        1,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        "Eigenvalues\n\n"
+        + r"Its polynomial is \(\lambda^2 - 6\lambda + 1\), so each eigenvalue solves it.",
+    )
+
+    def answer(prompt, schema):
+        items = practice_answer(prompt)
+        items["flashcard"]["back"] = r"Its eigenvalues are $3 \pm 2\sqrt{2}$."
+        return items
+
+    llm = MockProvider(answer=answer)
+
+    kept, dropped = practice._write(
+        "Eigenvalue",
+        r"A root of \(\lambda^2 - 6\lambda + 1\).",
+        [passage],
+        "0" * 64,
+        llm,
+        FakeReranker(),
+    )
+
+    assert dropped["flashcard"] == r"maths not in its passages (3 \pm 2\sqrt{2})"
+    assert "flashcard" not in {draft.kind for draft, _ in kept}
+
+
 def test_preparing_a_concept_writes_four_checked_items_from_its_passages(
     session: Session, session_factory
 ):

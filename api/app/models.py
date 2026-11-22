@@ -176,6 +176,55 @@ class DocumentPage(Base):
     content: Mapped[str] = mapped_column(Text)
 
 
+class PageTranscription(Base):
+    """A page of a document as the vision model read it, maths in LaTeX
+    (decision record 26), for one version of the document's file.
+
+    accepted: it agreed with the PDF's own text, and content (with blocks,
+    its paragraphs as [start, end, is_heading]) replaces the page's text
+    layer whenever the document is read. rejected: it did not, even on the
+    second attempt, and reason says why; the page keeps its text layer.
+
+    Rows are kept per file version (sha256), so a new version is never read
+    with another version's pages, and a reading that was cancelled or
+    failed carries on from the pages already done. attempts is 1, or 2 when
+    the page was read again in two halves.
+    """
+
+    __tablename__ = "page_transcriptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id", "sha256", "page_number", "model", "prompt_version"
+        ),
+        CheckConstraint("status IN ('accepted', 'rejected')", name="status"),
+        CheckConstraint("page_number >= 1", name="page_number_positive"),
+        CheckConstraint("attempts IN (1, 2)", name="attempts"),
+    )
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    sha256: Mapped[str] = mapped_column(String(64))
+    page_number: Mapped[int]
+    status: Mapped[str] = mapped_column(Text)
+    content: Mapped[str | None] = mapped_column(Text)
+    blocks: Mapped[list | None] = mapped_column(JSONB)
+    reason: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer)
+    model: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    # The model's time for this page, both attempts: the time estimate for
+    # reading other pages is drawn from it.
+    seconds: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 # What full-text search matches against. The English dictionary reduces words
 # to their stems, so "processes" matches "process". The heading is weighted A
 # and the body B, so a match in a chunk's heading ranks above one in its text.
@@ -634,7 +683,8 @@ class MaterialUpdate(Base):
     """One change to an environment's material, followed step by step so the
     page can show its progress, and what it changed (decision record 17).
 
-    kind is added, new_version, reprocessed or deleted; filename is kept so
+    kind is added, new_version, reprocessed, maths (its maths read by the
+    vision model, record 26) or deleted; filename is kept so
     an update about a deleted document still reads well. steps lists each
     step's name, label, state (waiting, running, done, failed or skipped)
     and a detail; report is what changed, written when the update finishes;
@@ -644,7 +694,8 @@ class MaterialUpdate(Base):
     __tablename__ = "material_updates"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('added', 'new_version', 'reprocessed', 'deleted')", name="kind"
+            "kind IN ('added', 'new_version', 'reprocessed', 'maths', 'deleted')",
+            name="kind",
         ),
         CheckConstraint(
             "status IN ('running', 'done', 'failed', 'cancelled')", name="status"

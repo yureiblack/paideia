@@ -126,6 +126,34 @@ class PageRead(BaseModel):
     content: str
 
 
+class KeptPage(BaseModel):
+    """A page whose maths could not be read: it keeps the PDF's own text."""
+
+    page: int
+    reason: str
+
+
+class MathsRead(BaseModel):
+    """A document's maths (decision record 26): the pages that hold maths, the
+    ones read so far and in use, the ones read by a reading that was
+    cancelled or failed before it put them in place (waiting: reading them
+    again takes no time), the ones that keep the PDF's own text and why, and
+    how many seconds a page takes to read on this machine."""
+
+    maths_pages: list[int]
+    read: list[int]
+    waiting: list[int]
+    kept_text: list[KeptPage]
+    seconds_per_page: float
+
+
+class MathsRequest(BaseModel):
+    """Read the maths of the pages from first_page to last_page."""
+
+    first_page: int = Field(ge=1)
+    last_page: int = Field(ge=1)
+
+
 class ChunkRead(BaseModel):
     """One passage of a document, with where its text sits in the pages."""
 
@@ -664,11 +692,11 @@ class UpdateReport(BaseModel):
 
 class MaterialUpdateRead(BaseModel):
     """One change to an environment's material: a document added, a new
-    version, a reprocess or a deletion; its steps as they run, and when it
-    is done, its report."""
+    version, a reprocess, its maths read, or a deletion; its steps as they
+    run, and when it is done, its report."""
 
     id: uuid.UUID
-    kind: Literal["added", "new_version", "reprocessed", "deleted"]
+    kind: Literal["added", "new_version", "reprocessed", "maths", "deleted"]
     document_id: uuid.UUID | None
     filename: str
     status: Literal["running", "done", "failed", "cancelled"]

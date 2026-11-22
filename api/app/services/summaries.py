@@ -73,10 +73,14 @@ class NotReadyToSummarize(Exception):
     """The document has not been read successfully yet."""
 
 
-def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
+def answer_schema(numbers: Sequence[int], sources: str) -> type[BaseModel]:
     """The shape the model must answer in, allowing only the given passage
     numbers. Ollama constrains generation to this shape, so a number the model
     was not given cannot be written at all; validation checks it again.
+
+    sources is what the model was given to write from. The overview's maths
+    must be found there (decision record 26): one it worked out instead
+    makes the answer malformed, and the model is asked again.
 
     A run of consecutive numbers becomes a range, any other set a list of
     allowed values. Every list has a limit, without which a constrained model
@@ -91,14 +95,23 @@ def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
 
     class KeyPoint(BaseModel):
         # Formulas in the stored form (decision record 24). A point whose
-        # formula would not render is dropped later, by renderable().
+        # formula would not render, or whose maths its sources do not show
+        # (record 26), is dropped later, by renderable().
         point: Annotated[str, AfterValidator(maths.from_model)]
         sources: list[Number] = Field(min_length=1, max_length=MAX_SOURCES)
 
+    def quoted(overview: str) -> str:
+        if missing := maths.unquoted(overview, sources):
+            raise ValueError(f"Maths not in its sources: {missing[0]}")
+        return overview
+
     class Answer(BaseModel):
         # The overview cannot be dropped: a formula in it that would not
-        # render makes the answer malformed, and the model is asked again.
-        overview: Annotated[str, AfterValidator(maths.from_model_checked)]
+        # render, or that its sources do not show, makes the answer
+        # malformed, and the model is asked again.
+        overview: Annotated[
+            str, AfterValidator(maths.from_model_checked), AfterValidator(quoted)
+        ]
         key_points: list[KeyPoint] = Field(
             min_length=min(MIN_POINTS, len(numbers)), max_length=MAX_POINTS
         )
@@ -106,12 +119,17 @@ def answer_schema(numbers: Sequence[int]) -> type[BaseModel]:
     return Answer
 
 
-def renderable(key_points: Sequence) -> list:
-    """The key points whose formulas render. The others are dropped and
-    logged: one broken formula is not worth writing a summary again."""
+def renderable(key_points: Sequence, sources: str) -> list:
+    """The key points whose formulas render and are found in the sources
+    the model wrote from (decision record 26). The others are dropped and
+    logged: one broken or worked-out formula is not worth writing a summary
+    again."""
     kept = []
     for kp in key_points:
-        reason = maths.problem(kp.point)
+        missing = maths.unquoted(kp.point, sources)
+        reason = maths.problem(kp.point) or (
+            f"maths not in its sources ({missing[0]})" if missing else None
+        )
         if reason:
             logger.warning("Dropped a key point: %s: %r", reason, kp.point)
         else:
@@ -262,7 +280,7 @@ def _compose(
     combine them if there are several. Returns the content and the seconds
     the model took. Works on plain values, so no database work waits on it."""
 
-    def ask(prompt: tuple[str, str], numbers: Sequence[int], **values):
+    def ask(prompt: tuple[str, str], numbers: Sequence[int], sources: str, **values):
         rendered = prompting.render(
             *prompt,
             filename=filename,
@@ -270,18 +288,21 @@ def _compose(
             max_points=MAX_POINTS,
             **values,
         )
-        return llm.generate_structured(rendered, answer_schema(numbers))
+        return llm.generate_structured(rendered, answer_schema(numbers, sources))
 
+    texts = ["\n\n".join(text for _, text in section) for section in sections]
     generated = [
         ask(
             SUMMARY_PROMPT,
             [n for n, _ in section],
+            text,
             passages=maths.for_model(
                 "\n\n".join(f"[{n}] {text}" for n, text in section)
             ),
         )
-        for section in sections
+        for section, text in zip(sections, texts, strict=True)
     ]
+    sources = texts[0]
     if len(sections) > 1:
         notes = "\n\n".join(
             f"Section {i} (passages {s[0][0]} to {s[-1][0]})\n"
@@ -291,7 +312,10 @@ def _compose(
         cited = sorted(
             {n for g in generated for kp in g.value.key_points for n in kp.sources}
         )
-        generated.append(ask(COMBINE_PROMPT, cited, notes=maths.for_model(notes)))
+        generated.append(
+            ask(COMBINE_PROMPT, cited, notes, notes=maths.for_model(notes))
+        )
+        sources = notes
 
     final = generated[-1].value
     content = {
@@ -304,7 +328,7 @@ def _compose(
                     for n in dict.fromkeys(kp.sources)
                 ],
             }
-            for kp in renderable(final.key_points)
+            for kp in renderable(final.key_points, sources)
         ],
     }
     return content, round(sum(g.seconds for g in generated), 1)

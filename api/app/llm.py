@@ -15,6 +15,7 @@ models locally. Decision record 08 explains the choice of model and every
 setting below.
 """
 
+import base64
 import threading
 import time
 from collections.abc import Callable
@@ -40,6 +41,12 @@ SEED = 7
 RETRY_TEMPERATURE = 0.3
 
 T = TypeVar("T", bound=BaseModel)
+V = TypeVar("V")
+
+# The longest transcription of one page, in tokens. The densest textbook page
+# tried took about 1,000; a page that needs more is cut off, and then fails
+# its check against the PDF's text, as a shortened page should.
+TRANSCRIPTION_TOKENS = 4096
 
 # One piece of writing at a time in this process: a document's summary or an
 # environment's. The model serves one request at a time well on one machine,
@@ -67,10 +74,10 @@ class Prompt:
 
 
 @dataclass(frozen=True)
-class Generated(Generic[T]):
+class Generated(Generic[V]):
     """An answer and what produced it, so anything generated can be traced."""
 
-    value: T
+    value: V
     model: str
     prompt_version: str
     seconds: float
@@ -83,6 +90,12 @@ class LLMProvider(Protocol):
     def generate_structured(self, prompt: Prompt, schema: type[T]) -> Generated[T]:
         """An answer to the prompt that validates against the schema, or an
         LLMError."""
+        ...
+
+    def transcribe(self, prompt: Prompt, image: bytes) -> Generated[str]:
+        """The model's plain-text answer to the prompt about the image, a PNG,
+        or an LLMError. Never constrained to JSON: LaTeX inside JSON strings
+        came back damaged (decision record 24)."""
         ...
 
     def check(self) -> str | None:
@@ -148,6 +161,55 @@ class OllamaProvider:
         }
 
     def generate_structured(self, prompt: Prompt, schema: type[T]) -> Generated[T]:
+        def read(content: str) -> T:
+            return schema.model_validate_json(content)
+
+        return self._ask(
+            prompt,
+            lambda bad: self._body(prompt, schema, bad),
+            read,
+            "The language model's answer did not have the expected form.",
+        )
+
+    def transcribe(self, prompt: Prompt, image: bytes) -> Generated[str]:
+        def body(bad_answers: int) -> dict:
+            return {
+                "model": self._model,
+                "messages": [
+                    {"role": "system", "content": prompt.system},
+                    {
+                        "role": "user",
+                        "content": prompt.user,
+                        "images": [base64.b64encode(image).decode("ascii")],
+                    },
+                ],
+                "stream": False,
+                "think": False,
+                "options": {
+                    "temperature": RETRY_TEMPERATURE if bad_answers else 0,
+                    "seed": SEED + bad_answers,
+                    "num_ctx": self._context_tokens,
+                    "num_predict": TRANSCRIPTION_TOKENS,
+                },
+            }
+
+        def read(content: str) -> str:
+            if not content.strip():
+                raise ValueError("empty")
+            return content
+
+        return self._ask(prompt, body, read, "The language model's answer was empty.")
+
+    def _ask(
+        self,
+        prompt: Prompt,
+        body: Callable[[int], dict],
+        read: Callable[[str], V],
+        invalid: str,
+    ) -> Generated[V]:
+        """Send the request body (given how many invalid answers came back so
+        far) and read the answer's content, retrying as the class describes.
+        invalid is the reason given when every answer could not be read."""
         started = time.perf_counter()
         bad_answers = 0
         problem = LLMError("The language model could not be used.")
@@ -155,9 +217,7 @@ class OllamaProvider:
             if attempt:
                 self._sleep(float(2 ** (attempt - 1)))  # 1 s, then 2 s, then 4 s
             try:
-                response = self._client.post(
-                    "/api/chat", json=self._body(prompt, schema, bad_answers)
-                )
+                response = self._client.post("/api/chat", json=body(bad_answers))
             except httpx2.ConnectError:
                 problem = LLMError(
                     f"Could not reach Ollama at {self._base_url}. Is it running? "
@@ -183,13 +243,10 @@ class OllamaProvider:
             if response.status_code >= 400:
                 raise LLMError(f"Ollama refused the request: {_error(response)}")
             try:
-                content = response.json()["message"]["content"]
-                value = schema.model_validate_json(content)
+                value = read(response.json()["message"]["content"])
             except (KeyError, ValueError, ValidationError):
                 bad_answers += 1
-                problem = LLMError(
-                    "The language model's answer did not have the expected form."
-                )
+                problem = LLMError(invalid)
                 continue
             return Generated(
                 value=value,

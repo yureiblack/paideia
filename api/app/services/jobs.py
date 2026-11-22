@@ -41,17 +41,17 @@ from sqlalchemy.orm import Session
 
 from app import context
 from app.db import SessionFactory
-from app.llm import LLMProvider
+from app.llm import LLMError, LLMProvider
 from app.models import Document, GeneratedArtifact, Job, MaterialUpdate
 from app.schemas import JobRead
 from app.services import concepts as concept_service
 from app.services import documents as document_service
 from app.services import environment_summaries as environment_summary_service
 from app.services import graph as graph_service
+from app.services import maths_reading, updates
 from app.services import practice as practice_service
 from app.services import roadmap as roadmap_service
 from app.services import summaries as summary_service
-from app.services import updates
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,17 @@ STEPS: dict[str, Callable[[Tools, dict], object]] = {
     "finish_update": lambda t, a: updates.finish(
         t.session_factory, _id(a["update_id"]), t.llm
     ),
+    "transcribe_page": lambda t, a: maths_reading.transcribe_page(
+        t.session_factory,
+        _id(a["document_id"]),
+        int(a["page"]),
+        t.llm,
+        _id(a["update_id"]),
+        int(a["total"]),
+    ),
+    "apply_maths": lambda t, a: maths_reading.apply(
+        t.session_factory, _id(a["document_id"]), int(a["first"]), int(a["last"])
+    ),
 }
 
 
@@ -182,6 +193,32 @@ def document_steps(document_id, environment_id, update_id) -> tuple[list, list]:
         step("finish_update", "Summing up what changed", update_id=update_id),
     ]
     return read, derive
+
+
+def maths_steps(document_id, update_id, pages: list[int], first: int, last: int):
+    """Reading a document's maths (decision record 26): one step per page,
+    so the reading shows its progress and stops between pages when
+    cancelled, then putting the pages read in place."""
+    return [
+        step(
+            "transcribe_page",
+            f"Reading the maths of page {page}",
+            document_id=document_id,
+            page=page,
+            update_id=update_id,
+            total=len(pages),
+        )
+        for page in pages
+    ] + [
+        step(
+            "apply_maths",
+            "Putting the pages read in place",
+            "maths",
+            document_id=document_id,
+            first=first,
+            last=last,
+        )
+    ]
 
 
 def deletion_steps(environment_id, update_id) -> list:
@@ -567,14 +604,17 @@ def _run(tools: Tools, job_id: uuid.UUID, steps: list, update_id) -> None:
                     return
                 job.steps = list(steps)
                 session.commit()
-    except Exception:
+    except Exception as exc:
         logger.exception("Job %s failed", job_id)
+        # The model's own reasons say what to do ("Is Ollama running?"); a
+        # step that calls it directly, reading a page, leaves them to the job.
+        why = str(exc) if isinstance(exc, LLMError) else None
         with factory() as session:
             job = session.get(Job, job_id, with_for_update=True)
             if job is None:  # deleted with its environment, perhaps the cause
                 return
             _retry_or_fail(
-                job, datetime.now(UTC), "An unexpected error stopped this job."
+                job, datetime.now(UTC), why or "An unexpected error stopped this job."
             )
             release(session, job, retrying=job.status == "queued", was_running=True)
             session.commit()

@@ -25,6 +25,7 @@ from app.practice import (
     short_answer,
     tidy,
     true_false,
+    unquoted_maths,
     wanted_truth,
 )
 
@@ -272,3 +273,76 @@ def test_latex_damaged_by_json_is_repaired_in_items():
     draft = short_answer("What is $\x0crac{1}{2}$ of 4?", "Two.", [1])
     assert not isinstance(draft, str)
     assert draft.content["question"] == r"What is \(\frac{1}{2}\) of 4?"
+
+
+# --- maths quoted, never worked out (decision record 26) -------------------------
+
+PASSAGES = r"Its characteristic polynomial is \(\lambda^2 - 6\lambda + 1\)."
+
+
+def test_an_item_whose_maths_its_passages_show_is_kept():
+    draft = short_answer(
+        "What is the characteristic polynomial?",
+        r"It is $\lambda^2 - 6\lambda + 1$.",
+        [1],
+    )
+    assert unquoted_maths(draft, PASSAGES) is None
+
+
+def test_an_answer_with_maths_worked_out_drops_the_item():
+    draft = flashcard("Its eigenvalues?", r"$\lambda = 3 \pm 2\sqrt{2}$.", [1])
+    assert unquoted_maths(draft, PASSAGES) == (
+        r"maths not in its passages (\lambda = 3 \pm 2\sqrt{2})"
+    )
+
+
+def test_wrong_options_may_have_maths_of_their_own():
+    draft = multiple_choice(
+        "Which is its characteristic polynomial?",
+        [
+            r"$\lambda^2 - 6\lambda + 1$",
+            r"$\lambda^2 + 6\lambda + 1$",
+            r"$\lambda^2 - 1$",
+            r"$6\lambda$",
+        ],
+        1,
+        "It is the polynomial of this matrix.",
+        [1],
+        "seed",
+    )
+    assert unquoted_maths(draft, PASSAGES) is None
+
+    wrong_answer = multiple_choice(
+        "Which is its characteristic polynomial?",
+        [
+            r"$\lambda^2 - 6\lambda + 1$",
+            r"$\lambda^2 + 6\lambda + 1$",
+            r"$\lambda^2 - 1$",
+            r"$6\lambda$",
+        ],
+        2,
+        "It is the second.",
+        [1],
+        "seed",
+    )
+    assert unquoted_maths(wrong_answer, PASSAGES) is not None
+
+
+def test_a_false_statement_may_change_the_maths_a_true_one_may_not():
+    false = true_false(
+        r"Its characteristic polynomial is $\lambda^2 + 6\lambda + 1$.",
+        False,
+        "Its middle term has a minus sign.",
+        [1],
+        wanted=False,
+    )
+    true = true_false(
+        r"Its characteristic polynomial is $\lambda^2 + 6\lambda + 1$.",
+        True,
+        "That is its polynomial.",
+        [1],
+        wanted=True,
+    )
+
+    assert unquoted_maths(false, PASSAGES) is None
+    assert unquoted_maths(true, PASSAGES) is not None

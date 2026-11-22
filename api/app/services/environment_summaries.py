@@ -191,6 +191,11 @@ class _Part:
     def numbers(self) -> set[int]:
         return {n for _, ns in self.points for n in ns}
 
+    def sources(self) -> str:
+        """What the notes say, without their citation numbers: the text in
+        which the summary's maths must be found (decision record 26)."""
+        return "\n".join([self.overview, *(point for point, _ in self.points)])
+
 
 def _compose(
     environment_name: str, parts: list[_Part], llm: LLMProvider
@@ -207,7 +212,10 @@ def _compose(
             min_points=min(summaries.MIN_POINTS, len(numbers)),
             max_points=summaries.MAX_POINTS,
         )
-        return llm.generate_structured(prompt, summaries.answer_schema(numbers))
+        sources = "\n\n".join(p.sources() for p in chosen)
+        return llm.generate_structured(
+            prompt, summaries.answer_schema(numbers, sources)
+        )
 
     groups: list[list[_Part]] = [[]]
     size = 0
@@ -312,7 +320,8 @@ def write_environment_summary(
                         ],
                     }
                     for kp in summaries.renderable(
-                        answer.key_points  # type: ignore[attr-defined]
+                        answer.key_points,  # type: ignore[attr-defined]
+                        "\n\n".join(p.sources() for p in parts),
                     )
                 ],
             }

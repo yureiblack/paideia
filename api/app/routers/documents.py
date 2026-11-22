@@ -14,10 +14,12 @@ Everything about one document lives at its own id:
     GET    /api/documents/{document_id}/chunks
     POST   /api/documents/{document_id}/reprocess
     POST   /api/documents/{document_id}/versions   a new version, raw PDF body
+    GET    /api/documents/{document_id}/maths      its maths pages, how far read
+    POST   /api/documents/{document_id}/maths      read the maths of some pages
     DELETE /api/documents/{document_id}
 
-Each upload, new version, reprocess and deletion records an update (record
-17) whose steps follow the background work.
+Each upload, new version, reprocess, maths reading and deletion records an
+update (record 17) whose steps follow the background work.
 
 The upload is the raw PDF as the request body, not a multipart form. FastAPI
 writes a form-uploaded file to disk in full before any of this code runs, so a
@@ -26,7 +28,7 @@ lets the limit stop the transfer.
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
@@ -42,14 +44,22 @@ from app import filenames, storage
 from app.config import settings
 from app.db import SessionDep, SessionFactoryDep
 from app.models import Document
-from app.parsing import Parser, PyMuPDFParser
+from app.parsing import ParseError, Parser, PyMuPDFParser
 from app.routers.deps import DispatcherDep, LLMDep
 from app.routers.environments import EnvironmentDep
 from app.routers.search import EmbedderDep
-from app.schemas import ChunkRead, DocumentRead, PageRead
+from app.schemas import (
+    ChunkRead,
+    DocumentRead,
+    JobRead,
+    KeptPage,
+    MathsRead,
+    MathsRequest,
+    PageRead,
+)
 from app.services import concepts as concept_service
 from app.services import documents as service
-from app.services import jobs, updates
+from app.services import jobs, maths_reading, updates
 
 router = APIRouter(tags=["documents"])
 
@@ -229,6 +239,115 @@ def reprocess_document(
         dispatcher,
     )
     return document
+
+
+def _ready(document: Document) -> None:
+    if document.status != "ready":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="The document has to be read before its maths can be.",
+        )
+
+
+@router.get("/documents/{document_id}/maths", response_model=MathsRead)
+def read_maths(document: DocumentDep, session: SessionDep) -> MathsRead:
+    """The pages of the document that hold maths, which of them have been
+    read and which keep the PDF's own text, and how long a page takes."""
+    _ready(document)
+    try:
+        found = maths_reading.overview(session, document)
+    except ParseError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return MathsRead(
+        maths_pages=sorted(found.maths_pages),
+        read=found.read,
+        waiting=found.waiting,
+        kept_text=[
+            KeptPage(page=page, reason=reason)
+            for page, reason in sorted(found.kept_text.items())
+        ],
+        seconds_per_page=round(found.seconds_per_page, 1),
+    )
+
+
+@router.post(
+    "/documents/{document_id}/maths",
+    response_model=JobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def read_maths_pages(
+    body: MathsRequest,
+    document: DocumentDep,
+    session: SessionDep,
+    session_factory: SessionFactoryDep,
+    parser: ParserDep,
+    embedder: EmbedderDep,
+    llm: LLMDep,
+    dispatcher: DispatcherDep,
+    background: BackgroundTasks,
+) -> JobRead:
+    """Read the maths of the pages from first_page to last_page with the
+    vision model (decision record 26), then read the document again with
+    them. Never done unasked: it takes about a minute a page."""
+    _ready(document)
+    pages = document.page_count or 0
+    if not 1 <= body.first_page <= body.last_page <= pages:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Choose pages from 1 to {pages}, the first no later than the last.",
+        )
+    # Its chain includes reading the document again, which also refuses a
+    # second reading of its maths while the first is queued.
+    _not_queued_already(session, document)
+    try:
+        to_read = maths_reading.to_read(
+            session, document, llm, body.first_page, body.last_page
+        )
+    except maths_reading.NothingToRead as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ParseError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    update = updates.begin(
+        session, document.environment_id, "maths", document, llm, updates.MATHS_STEPS
+    )
+    common: dict[str, Any] = {
+        "environment_id": document.environment_id,
+        "tools": jobs.Tools(session_factory, llm, embedder, parser),
+        "dispatcher": dispatcher,
+        "background": background,
+        "update_id": update.id,
+    }
+    reading_maths = jobs.start(
+        session,
+        kind="maths",
+        title=f"Reading the maths of {document.filename}",
+        lane="model",
+        steps=jobs.maths_steps(
+            document.id, update.id, to_read, body.first_page, body.last_page
+        ),
+        **common,
+    )
+    read, derive = jobs.document_steps(document.id, document.environment_id, update.id)
+    reading = jobs.start(
+        session,
+        kind="read",
+        title=f"Reading {document.filename}",
+        lane="read",
+        steps=read,
+        after=reading_maths,
+        **common,
+    )
+    jobs.start(
+        session,
+        kind="derive",
+        title=f"Updating from {document.filename}",
+        lane="model",
+        steps=derive,
+        after=reading,
+        **common,
+    )
+    return jobs.to_read(reading_maths)
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

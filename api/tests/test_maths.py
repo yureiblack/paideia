@@ -187,3 +187,57 @@ def test_sizes_count_prose_and_latex_apart() -> None:
     text = r"Find \(\det\begin{pmatrix}1&2\\3&4\end{pmatrix}\) now."
     # "Find " + one for the formula + " now." is 11; the LaTeX is 40.
     assert sizes(text) == (11, 40)
+
+
+# --- what maths shows, and maths not quoted (decision record 26) ------------------
+
+
+def test_shown_reduces_latex_and_a_text_layer_alike():
+    assert maths.shown("\\(\\lambda^2 - 6\\lambda + 1\\)") == "λ2−6λ+1"
+    assert maths.shown("λ2 −6λ + 1") == "λ2−6λ+1"
+    assert maths.shown("\\(\\frac{1}{2} \\neq A^{-1}\\)") == "12≠A−1"
+    assert maths.shown("the upper-triangular matrix") == "theuppertriangularmatrix"
+
+
+SOURCES = (
+    "We have \\[f(\\lambda) = \\det(A - \\lambda I_2) = \\lambda^2 - 6\\lambda + 1.\\]"
+    " Expanding along the third row, \\((-1)^{3+1}\\det(A_{31}) = "
+    "(-1)^{3+1}\\det(B_{31}) + (-1)^{3+1}\\det(C_{31})\\). The solutions are "
+    "x = 1 − 5z and y = −1 − 2z, for each (i, j)."
+)
+
+
+@pytest.mark.parametrize(
+    "quoted",
+    [
+        "Its polynomial is \\(\\lambda^2 - 6\\lambda + 1\\).",  # verbatim
+        "Its polynomial is \\(\\lambda^{2} - 6 \\lambda + 1\\).",  # spaced otherwise
+        "Here \\(x = 1 - 5z\\).",  # the passage's prose, as a formula
+        "Each entry \\(a_{ij}\\) at \\((i, j)\\).",  # symbols alone
+        "The matrix \\(A\\) and \\(\\lambda\\).",
+    ],
+)
+def test_maths_the_sources_show_is_quoted(quoted: str) -> None:
+    assert maths.unquoted(quoted, SOURCES) == []
+
+
+@pytest.mark.parametrize(
+    "worked_out, formula",
+    [
+        # Simplified: the factors (-1)^{3+1} are gone.
+        (
+            "So \\(\\det(A_{31}) = \\det(B_{31}) + \\det(C_{31})\\).",
+            "\\det(A_{31}) = \\det(B_{31}) + \\det(C_{31})",
+        ),
+        ("Then \\(x = 1 + 5y\\).", "x = 1 + 5y"),  # a changed equation
+        (
+            "Its roots are \\(\\lambda = 3 \\pm 2\\sqrt{2}\\).",
+            "\\lambda = 3 \\pm 2\\sqrt{2}",
+        ),
+        ("We use \\(\\mu\\).", "\\mu"),  # a symbol the sources never show
+    ],
+)
+def test_maths_the_sources_do_not_show_is_not_quoted(
+    worked_out: str, formula: str
+) -> None:
+    assert maths.unquoted(worked_out, SOURCES) == [formula]

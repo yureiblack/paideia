@@ -114,6 +114,7 @@ def test_validation_drops_what_cannot_be_trusted_and_counts_it():
             proposal("x" * 81),  # too long
         ],
         allowed={1, 2, 3},
+        sources="",
     )
 
     assert [c.normalized_name for c in kept] == ["paging"]
@@ -129,6 +130,7 @@ def test_proposals_with_the_same_name_are_merged():
             ),
         ],
         allowed={1, 2},
+        sources="",
     )
 
     [thread] = kept
@@ -163,7 +165,7 @@ def test_real_alternative_names_are_kept():
 
 
 def test_bracketed_abbreviations_become_aliases():
-    [sjf], _ = validate([proposal("Shortest Job First (SJF)", aliases=[""])], {1})
+    [sjf], _ = validate([proposal("Shortest Job First (SJF)", aliases=[""])], {1}, "")
 
     assert (sjf.name, sjf.normalized_name, sjf.aliases) == (
         "Shortest Job First",
@@ -179,6 +181,7 @@ def test_aliases_never_merge_concepts():
             proposal("Lock", aliases=["mutex"]),
         ],
         allowed={1},
+        sources="",
     )
 
     assert sorted(c.normalized_name for c in kept) == ["lock", "mutex"]
@@ -199,6 +202,7 @@ def test_definitions_keep_their_formulas_and_names_stay_words():
             proposal("Trace", definition=r"The sum $\sum_i a_{ii$."),  # broken
         ],
         allowed={1},
+        sources=r"The determinant \(\det A\) is nonzero exactly when \(A^{-1}\) exists.",
     )
 
     assert dropped == 2
@@ -211,13 +215,40 @@ def test_definitions_keep_their_formulas_and_names_stay_words():
 
 def test_a_definition_damaged_by_json_is_repaired_before_tidying():
     # A form feed, what JSON makes of "\\f", is whitespace to tidy().
-    [kept], _ = validate([proposal("Half", definition="It is $\x0crac{1}{2}$.")], {1})
+    [kept], _ = validate(
+        [proposal("Half", definition="It is $\x0crac{1}{2}$.")], {1}, r"\(\frac{1}{2}\)"
+    )
     assert kept.definition == r"It is \(\frac{1}{2}\)."
 
 
 def test_the_definition_limit_counts_a_formula_as_one_character():
     formula = "$" + "x" * 250 + "$"
-    kept, _ = validate([proposal("Long", definition="y" * 290 + " " + formula)], {1})
+    kept, _ = validate(
+        [proposal("Long", definition="y" * 290 + " " + formula)], {1}, "x"
+    )
     assert kept
-    kept, _ = validate([proposal("Long", definition="y" * 300 + " " + formula)], {1})
+    kept, _ = validate(
+        [proposal("Long", definition="y" * 300 + " " + formula)], {1}, "x"
+    )
     assert not kept
+
+
+def test_a_definition_with_maths_its_passages_do_not_show_is_dropped():
+    # Decision record 26: the model may quote maths, never work it out.
+    passages = r"Its characteristic polynomial is \(\lambda^2 - 6\lambda + 1\)."
+    kept, dropped = validate(
+        [
+            proposal(
+                "Characteristic polynomial",
+                definition=r"It is $\lambda^2 - 6\lambda + 1$.",
+            ),
+            proposal(
+                "Eigenvalue", definition=r"A root, here $\lambda = 3 \pm 2\sqrt{2}$."
+            ),
+        ],
+        allowed={1},
+        sources=passages,
+    )
+
+    assert [c.name for c in kept] == ["Characteristic polynomial"]
+    assert dropped == 1

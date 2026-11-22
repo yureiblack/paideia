@@ -205,6 +205,31 @@ def flashcard(front: str, back: str, sources: Sequence[int]) -> Draft | str:
     return Draft("flashcard", content, tuple(sources), f"{clean_front} {clean_back}")
 
 
+def unquoted_maths(draft: Draft, sources: str) -> str | None:
+    """Why the item is dropped, if it has maths the passages it was written
+    from (sources) do not show: the model may quote maths, never work it out
+    (decision record 26). A wrong option and a false statement are meant to
+    be wrong, so their maths is not looked up."""
+    content = draft.content
+    texts = {
+        "short_answer": lambda: [content["question"], content["answer"]],
+        "multiple_choice": lambda: [
+            content["question"],
+            content["options"][content["correct"]],
+            content["explanation"],
+        ],
+        "true_false": lambda: (
+            ([content["statement"]] if content["truth"] else [])
+            + [content["explanation"]]
+        ),
+        "flashcard": lambda: [content["front"], content["back"]],
+    }[draft.kind]()
+    for text in texts:
+        if missing := maths.unquoted(text, sources):
+            return f"maths not in its passages ({missing[0]})"
+    return None
+
+
 def wanted_truth(key: str) -> bool:
     """Whether a concept's true/false statement should be true: decided by
     its key, so about half are false, and the same concept always gets the

@@ -8,6 +8,7 @@ import uuid
 
 import pytest
 
+from app import maths
 from app.chunking import MAX_CHARS, TARGET_CHARS, chunk_document, passage
 from app.parsing import ParsedDocument, ParsedPage
 from tests.parsed import H, P, document, words
@@ -101,6 +102,23 @@ def test_a_sentence_longer_than_the_maximum_is_cut_at_a_space():
 
 
 # --- headings ---------------------------------------------------------------
+
+
+def test_a_long_paragraph_is_never_split_inside_a_formula():
+    # Decision record 26: half a formula cannot be typeset. A period and a
+    # space inside a displayed formula look like a sentence's end.
+    sentences = " ".join(
+        f"Row {n} gives \\[\\det(A_{{{n}}}) = {n} + 1. \\] and so on."
+        for n in range(60)
+    )
+    long_sentence = "x " * 550 + "\\(" + "a + " * 40 + "b\\) and the end."
+
+    for paragraph in (sentences, long_sentence):
+        chunks = chunk_document(DOC, document([P(paragraph)]))
+
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert maths.problem(chunk.content) is None, chunk.content[-40:]
 
 
 def test_every_heading_starts_a_chunk_and_names_it():

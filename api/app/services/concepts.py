@@ -233,7 +233,11 @@ def write_extraction(
         proposed_count, dropped, seconds = 0, 0, 0.0
         try:
             proposals, given, seconds = _propose(filename, sections, llm)
-            kept, dropped = naming.validate(proposals, given)
+            kept, dropped = naming.validate(
+                proposals,
+                given,
+                "\n\n".join(text for section in sections for _, text in section),
+            )
             proposed_count = len(proposals)
         except LLMError as exc:
             problem = str(exc)
