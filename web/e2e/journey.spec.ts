@@ -75,6 +75,11 @@ test("a learner's journey through one subject", async ({ page }) => {
 
   await test.step("2. Upload a PDF", async () => {
     await tab(page, "Materials").click();
+    // The new environment's overview offers an upload too; wait until it
+    // has made way for Materials, or the file could go to its picker as it
+    // leaves.
+    await expect(page).toHaveURL(/\/materials$/);
+    await expect(page.getByText("Start with a PDF.")).toBeHidden();
     await page.getByLabel("Choose a PDF to upload").setInputFiles(path.join(PDFS, WEEK_1));
 
     await expect(documentCard(page, WEEK_1)).toBeVisible();
