@@ -568,31 +568,51 @@ class PrepareRequest(BaseModel):
     concept_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
 
 
+class ExerciseShown(BaseModel):
+    """A computed exercise as shown (decision record 27): its type, which of
+    its variants this is (how many times it had been answered), and the
+    cells to fill in. The variant is sent back with the answer, which is
+    marked against the same numbers."""
+
+    type: str
+    variant: int
+    form: dict
+
+
 class PracticeItem(BaseModel):
     """A practice item as the learner sees it before answering. prompt is
-    the question, the true/false statement or the flashcard's front. The key
-    is never sent, except answer for short answer and flashcard items, which
-    the learner marks themselves once the page reveals it. difficulty is
-    effort by kind, 1 to 3."""
+    the question, the true/false statement, the flashcard's front, or the
+    exercise. The key is never sent, except answer for short answer and
+    flashcard items, which the learner marks themselves once the page
+    reveals it. difficulty is effort by kind, 1 to 3."""
 
     id: uuid.UUID
     concept: ConceptRef
-    kind: Literal["short_answer", "multiple_choice", "true_false", "flashcard"]
+    kind: Literal[
+        "short_answer", "multiple_choice", "true_false", "flashcard", "exercise"
+    ]
     difficulty: int
     prompt: str
     options: list[str] | None
     answer: str | None
     box: int
     due_at: datetime
+    exercise: ExerciseShown | None = None
 
 
 class AttemptCreate(BaseModel):
     """An answer: choice (index from 0) for multiple choice, truth for
     true/false, knew for short answer and flashcard (the learner's own mark,
-    with text optionally holding what they wrote). seconds is how long it
-    took, if the page measured it."""
+    with text optionally holding what they wrote). An exercise sends the
+    cells as typed and the variant it showed, with choice for one that asks
+    a question first. seconds is how long it took, if the page measured
+    it."""
 
     choice: int | None = Field(default=None, ge=0, le=3)
+    cells: list[Annotated[str, StringConstraints(max_length=64)]] | None = Field(
+        default=None, max_length=24
+    )
+    variant: int | None = Field(default=None, ge=0)
     truth: bool | None = None
     text: str | None = Field(default=None, max_length=2000)
     knew: bool | None = None
@@ -613,6 +633,10 @@ class AttemptResult(BaseModel):
     box: int
     due_at: datetime
     gap_days: int
+    # A computed exercise: which cells were right, and its worked solution,
+    # a step a line.
+    right: list[bool] | None = None
+    steps: list[str] | None = None
 
 
 class PlanSession(BaseModel):

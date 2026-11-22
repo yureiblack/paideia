@@ -23,16 +23,17 @@ import hashlib
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import Hashable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, TypeVar
+from typing import Annotated, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import learner, maths, prompting
+from app import exercises, learner, maths, prompting
 from app import practice as rules
 from app.db import SessionFactory
 from app.llm import ONE_AT_A_TIME, LLMError, LLMProvider
@@ -54,6 +55,7 @@ from app.schemas import (
     AttemptResult,
     ConceptNote,
     ConceptRef,
+    ExerciseShown,
     PracticeConcept,
     PracticeItem,
     PracticeOverview,
@@ -66,6 +68,11 @@ logger = logging.getLogger(__name__)
 
 ARTIFACT_TYPE = "practice_set"
 PROMPT = ("practice_items", "v2")
+# Which computed exercises fit a concept (decision record 27): the model
+# chooses from the catalogue, the concept's passages must use the type's
+# words, and a concept gets at most this many.
+EXERCISE_PROMPT = ("exercise_types", "v1")
+MAX_EXERCISES = 2
 MIN_SUPPORT = 0.5  # the reranker's score of an answer against its passages
 CHANGED = "The material changed before the practice items were written."
 # Nothing records a practice session: answers less than SESSION_GAP apart
@@ -306,6 +313,44 @@ def _write(
     return kept, dropped
 
 
+def exercise_schema() -> type[BaseModel]:
+    kinds = tuple(exercises.KINDS)
+
+    class Answer(BaseModel):
+        # A Literal of the catalogue's names, which the model cannot leave.
+        exercises: list[Literal[kinds]] = Field(max_length=3)  # type: ignore[valid-type]
+
+    return Answer
+
+
+def _exercises(
+    name: str, definition: str, passages: list[_Passage], llm: LLMProvider
+) -> tuple[list[tuple[str, list[_Passage]]], list[str]]:
+    """The computed exercises the model chose for the concept whose words its
+    passages use, at most MAX_EXERCISES, each with those passages; and the
+    ones it chose that they do not use. The model is not asked when no
+    passage uses the words of any type: it never answers none."""
+    fitting = {
+        kind: [p for p in passages if exercises.fits(kind, p.text)]
+        for kind in exercises.KINDS
+    }
+    if not any(fitting.values()):
+        return [], []
+    prompt = prompting.render(
+        *EXERCISE_PROMPT,
+        concept=name,
+        definition=maths.for_model(definition),
+        passages=maths.for_model("\n\n".join(p.text for p in passages)),
+        kinds="\n".join(
+            f"- {kind}: {about.describes}" for kind, about in exercises.KINDS.items()
+        ),
+    )
+    answer = llm.generate_structured(prompt, exercise_schema()).value
+    chosen = list(dict.fromkeys(answer.exercises))  # type: ignore[attr-defined]
+    kept = [(kind, fitting[kind]) for kind in chosen if fitting[kind]]
+    return kept[:MAX_EXERCISES], [kind for kind in chosen if not fitting[kind]]
+
+
 def write_practice(
     session_factory: SessionFactory,
     artifact_id: uuid.UUID,
@@ -353,7 +398,16 @@ def write_practice(
         except Exception:
             logger.exception("Writing practice items %s failed", artifact_id)
             problem = "An unexpected error occurred while writing practice items."
-        if problem is None and not kept:
+        # Exercises are chosen apart: if choosing fails, the items stand.
+        chosen: list[tuple[str, list[_Passage]]] = []
+        refused: list[str] = []
+        exercise_problem: str | None = None
+        if problem is None:
+            try:
+                chosen, refused = _exercises(name, definition, passages, llm)
+            except LLMError as exc:
+                exercise_problem = str(exc)
+        if problem is None and not kept and not chosen:
             problem = "No item passed the checks: " + "; ".join(
                 f"{kind.replace('_', ' ')}: {why}" for kind, why in dropped.items()
             )
@@ -413,11 +467,37 @@ def write_practice(
                         )
                     )
                 session.add(ReviewSchedule(item_id=item.id, box=0, due_at=now))
+            for kind, its_passages in chosen:
+                item = LearningItem(
+                    environment_id=concept.environment_id,
+                    concept_id=concept.id,
+                    kind="exercise",
+                    content={"exercise": kind},
+                    difficulty=rules.DIFFICULTY["exercise"],
+                    evidence_key=artifact.source_version,
+                    model_name=llm.model_name,
+                    prompt_version="/".join(EXERCISE_PROMPT),
+                    metadata_json={"generation_id": str(artifact.id)},
+                )
+                session.add(item)
+                session.flush()
+                for passage in its_passages:
+                    session.add(
+                        LearningItemSource(
+                            item_id=item.id,
+                            chunk_id=passage.chunk_id,
+                            document_id=passage.document_id,
+                        )
+                    )
+                session.add(ReviewSchedule(item_id=item.id, box=0, due_at=now))
             artifact.status = "ready"
             artifact.metadata_json = {
                 **artifact.metadata_json,
                 "kept": len(kept),
                 "dropped": dropped,
+                "exercises": [kind for kind, _ in chosen],
+                "exercises_refused": refused,
+                **({"exercises_error": exercise_problem} if exercise_problem else {}),
             }
             session.commit()
 
@@ -669,9 +749,43 @@ def _sitting(rows: list) -> PracticeSessionRead:
     )
 
 
+def _answer_counts(session: Session, item_ids) -> dict[Hashable, int]:
+    """How many times each item has been answered."""
+    ids = list(item_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Attempt.item_id, func.count())
+        .where(Attempt.item_id.in_(ids))
+        .group_by(Attempt.item_id)
+    )
+    return {item_id: count for item_id, count in rows}
+
+
+def _exercise(item: LearningItem, variant: int) -> exercises.Exercise:
+    """An exercise item's numbers for this variant: seeded by the item and
+    how many times it had been answered, so every review is new and an
+    answer is marked against the numbers it was given (decision record 27)."""
+    return exercises.exercise(item.content["exercise"], f"{item.id}:{variant}")
+
+
 def _shown(
-    item: LearningItem, schedule: ReviewSchedule, concept: Concept
+    item: LearningItem, schedule: ReviewSchedule, concept: Concept, answered: int = 0
 ) -> PracticeItem:
+    if item.kind == "exercise":
+        shown = _exercise(item, answered)
+        return PracticeItem(
+            id=item.id,
+            concept=ConceptRef(id=concept.id, name=concept.name),
+            kind=item.kind,
+            difficulty=item.difficulty,
+            prompt=shown.prompt,
+            options=None,
+            answer=None,
+            box=schedule.box,
+            due_at=schedule.due_at,
+            exercise=ExerciseShown(type=shown.kind, variant=answered, form=shown.form),
+        )
     content = item.content
     prompt = content.get("question") or content.get("statement") or content["front"]
     self_marked = item.kind in ("short_answer", "flashcard")
@@ -746,7 +860,11 @@ def session_items(
                 due_only=False,
             )
         ]
-    return [_shown(*by_id[i], concepts[by_id[i][0].concept_id]) for i in chosen_ids]
+    counts = _answer_counts(session, chosen_ids)
+    return [
+        _shown(*by_id[i], concepts[by_id[i][0].concept_id], counts.get(i, 0))
+        for i in chosen_ids
+    ]
 
 
 def answer(
@@ -762,7 +880,23 @@ def answer(
     if item.retired_at is not None or item.id not in _intact(session, [item]):
         raise NotPractised("This item was replaced and is no longer practised.")
     content, kind = item.content, item.kind
-    if kind == "multiple_choice":
+    response: dict[str, object]
+    marking: exercises.Marking | None = None
+    worked: exercises.Exercise | None = None
+    if kind == "exercise":
+        answered = _answer_counts(session, [item.id]).get(item.id, 0)
+        if data.variant is None or not 0 <= data.variant <= answered:
+            raise ValueError("This exercise's numbers are out of date: load it again.")
+        worked = _exercise(item, data.variant)
+        marking = exercises.mark(worked, data.cells or [], data.choice)  # or Malformed
+        correct, graded_by = marking.correct, "key"
+        right, explanation = worked.key, marking.note or None
+        response = {
+            "variant": data.variant,
+            "cells": list(data.cells or []),
+            **({"choice": data.choice} if data.choice is not None else {}),
+        }
+    elif kind == "multiple_choice":
         if data.choice is None:
             raise ValueError("A multiple-choice answer needs a choice.")
         correct, graded_by = data.choice == content["correct"], "key"
@@ -770,7 +904,7 @@ def answer(
             content["options"][content["correct"]],
             content["explanation"],
         )
-        response: dict[str, object] = {"choice": data.choice}
+        response = {"choice": data.choice}
     elif kind == "true_false":
         if data.truth is None:
             raise ValueError("A true/false answer needs true or false.")
@@ -821,6 +955,8 @@ def answer(
         box=schedule.box,
         due_at=state.next_review_at,
         gap_days=state.gap_days,
+        right=list(marking.right) if marking else None,
+        steps=list(worked.steps) if worked else None,
     )
     session.commit()
     return result

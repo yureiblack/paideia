@@ -27,6 +27,7 @@ RELEASED = {
     "relationship/v1": "1990b4c79f86eed0f846939af9a0aafcd61e3b3b220b7a7251bd5510d3fd4925",
     "roadmap_stages/v1": "28d49ca8cffcb2a49b6102a51353291ebe1b867b5814e15f2b48e7508e583b33",
     "page_transcription/v1": "d1282ff39447cdb0b3799e94bf8acdee15bc056f12fa12a707cf1b6cb0a96333",
+    "exercise_types/v1": "aeac49e2a8705de3805fbc6d5afa41b2624d2703ae8db9a45dbd67cef434d187",
 }
 
 

@@ -574,10 +574,12 @@ class LearningItem(Base):
     """A practice item about one concept, written by the model from the
     concept's passages and checked by the backend (decision record 14).
 
-    kind is short_answer, multiple_choice, true_false or flashcard; content
-    holds what the learner sees and the key: question and answer;
+    kind is short_answer, multiple_choice, true_false, flashcard or exercise;
+    content holds what the learner sees and the key: question and answer;
     question, options and correct (index from 0) with an explanation;
-    statement, truth and explanation; front and back. difficulty is effort
+    statement, truth and explanation; front and back. An exercise holds only
+    its type: the backend writes its numbers afresh for every review and
+    marks it (decision record 27). difficulty is effort
     by kind, 1 to 3. evidence_key fingerprints the concept and its passages
     as the model saw them: an item is practised only while it matches the
     concept's current one, and is retired when a new set replaces it, kept
@@ -588,7 +590,8 @@ class LearningItem(Base):
     __tablename__ = "learning_items"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('short_answer', 'multiple_choice', 'true_false', 'flashcard')",
+            "kind IN ('short_answer', 'multiple_choice', 'true_false', 'flashcard', "
+            "'exercise')",
             name="kind",
         ),
         CheckConstraint("difficulty BETWEEN 1 AND 3", name="difficulty"),

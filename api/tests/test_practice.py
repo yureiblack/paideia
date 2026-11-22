@@ -171,7 +171,9 @@ def test_preparing_a_concept_writes_four_checked_items_from_its_passages(
     thread = named(session, env, "Thread")
     items = items_of(session, thread)
     assert set(items) == set(rules.KINDS)
-    assert {k: i.difficulty for k, i in items.items()} == rules.DIFFICULTY
+    assert {k: i.difficulty for k, i in items.items()} == {
+        k: rules.DIFFICULTY[k] for k in rules.KINDS
+    }
     first_chunk = chunks_of(session, doc)[0]
     for item in items.values():
         [source] = session.scalars(

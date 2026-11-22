@@ -12,10 +12,18 @@ show a relationship.
 
 import re
 
+from app import exercises
 from tests.fakes import MockProvider, simple_answer
 
 
 def answer(prompt, schema) -> dict:
+    if prompt.name == "exercise_types":
+        # The exercise types whose words the passages use, as the real
+        # model's choice is kept only when they do (decision record 27).
+        passages = prompt.user.split("Passages:", 1)[1].split("Exercises:", 1)[0]
+        return {
+            "exercises": [k for k in exercises.KINDS if exercises.fits(k, passages)][:3]
+        }
     value = simple_answer(prompt, schema)
     if "concepts" in value:
         # Every passage starts with its section's heading on a line of its

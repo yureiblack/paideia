@@ -75,7 +75,7 @@ Each environment has seven tabs:
 | **Summary** | A summary of all the material, built from each document's summary. Every key point cites its passages. |
 | **Knowledge map** | The concepts, with definitions and the passages that explain them. For each concept: what it builds on, what builds on it, its parts, and what it is related to. Every relationship cites the passages it was found in. |
 | **Roadmap** | The material as an ordered path in stages. Each concept shows what it builds on, and where it is taught. |
-| **Practice** | Four kinds of items per concept, mixed within a session. Each answer shows its source and when the concept comes back. Also how each concept is going, weakest first, and past sessions. |
+| **Practice** | Four kinds of items per concept, mixed within a session. For linear algebra, exercises too, which the app writes, solves and marks itself, with new numbers on every review and a worked solution. Each answer shows its source and when the concept comes back. Also how each concept is going, weakest first, and past sessions. |
 
 ## Why this is not a chatbot
 
@@ -92,7 +92,8 @@ and the code around it decides everything that has to be right every time:
 | Which practice items are kept | The model writes them. The backend keeps an item only if its answer is found in the passages it cites. |
 | A page's maths, read from its image | The model transcribes the page. The backend uses it only if its digits, operators and letters agree with the PDF's own text. |
 | The maths in what the model writes | The model may quote maths, never work it out. A formula it writes must show what its passages show. |
-| Whether an answer is right | The stored answer, or the learner after seeing it. Never the model. |
+| An exercise's numbers and its answer | The backend makes the numbers and computes the answer exactly, step by step. The model only picks which types of exercise fit a concept, from a fixed list, kept only if the concept's passages use the type's words. |
+| Whether an answer is right | The stored answer, the backend's exact check, or the learner after seeing it. Never the model. |
 | When a concept comes back, and today's plan | Fixed rules, from the answers. |
 | What a change of material redoes | Fingerprints of each result's inputs. |
 
@@ -487,20 +488,21 @@ neighbouring one, not the one that says it.
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 743 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 810 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 91%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 55 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 62 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.
   - They query the page by role and name, and use no snapshots.
 - **End to end:** one Playwright journey through the running app.
   - It goes from creating an environment to a second PDF updating it, then
-    reads a third PDF's maths, in thirteen steps.
+    reads a third PDF's maths and practises a computed exercise, in
+    fourteen steps.
   - Everything in it is real except the language model, which is a
     stand-in.
 - **CI:** GitHub Actions runs three jobs on every pull request and every
@@ -698,8 +700,9 @@ Known limits, each stated in its decision record:
   ([24](docs/architecture/24-maths-notation.md)). A PDF's maths can be read
   by the local vision model, and what the model writes may only quote it
   ([26](docs/architecture/26-reading-maths.md)). Linear algebra exercises
-  the backend solves and marks, and a maths benchmark, are planned as
-  phases 27 and 28.
+  are written, solved and marked by the backend
+  ([27](docs/architecture/27-computed-exercises.md)), from a catalogue of
+  nine small types. A maths benchmark is planned as phase 28.
 - **Reading maths checks which characters a page shows, not their order.**
   A matrix with two columns swapped would pass. A textbook takes hours to
   read, and a PDF whose maths is drawn as pictures has none to offer
@@ -754,6 +757,8 @@ api/                    FastAPI backend
     transcription.py    a page the vision model read, made into page text and checked against the PDF
     chunking.py         page text to deterministic chunks
     maths.py            formulas: finding, repairing and checking them, and what they show
+    exact.py            exact linear algebra on fractions, recording each step
+    exercises.py        linear algebra exercises: generated, solved, worked out and marked
     embedding.py        text to vectors, through a local model
     reranking.py        scoring passages against a query, through a local model
     llm.py              the language model behind a replaceable interface

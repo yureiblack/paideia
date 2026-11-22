@@ -138,8 +138,11 @@ def simple_answer(prompt, schema) -> dict:
     point per allowed number, as few as the schema allows, each citing its
     number. Concepts: one per passage, "Concept 1" and so on, each citing
     its passage. Relationships: every pair related, with confidence 0.8.
-    Roadmap stages: "Title 1" and so on. Practice items: practice_answer."""
+    Roadmap stages: "Title 1" and so on. Practice items: practice_answer.
+    Exercise types: none."""
     properties = schema.model_json_schema()["properties"]
+    if "exercises" in properties:
+        return {"exercises": []}
     if "decisions" in properties:
         return {"decisions": relationship_answer(schema, choice=5, confidence=0.8)}
     if "short_answer" in properties:

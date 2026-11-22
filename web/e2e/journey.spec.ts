@@ -260,5 +260,46 @@ test("a learner's journey through one subject", async ({ page }) => {
     await expect(card.getByRole("region", { name: "Page 1" }).locator(".katex")).toBeVisible();
   });
 
+  await test.step("14. Practise a computed exercise", async () => {
+    await tab(page, "Practice").click();
+    const stage = page
+      .getByRole("list", { name: "Stages to practise" })
+      .getByRole("listitem")
+      .filter({ hasText: "Eigenvalues" });
+    await stage.getByRole("button", { name: "Prepare practice" }).click();
+    await stage.getByRole("button", { name: "Practise this stage" }).click();
+
+    // The stage's items come in some order: answer the others on the way.
+    const session = page.locator("section[aria-labelledby='session-heading']");
+    for (let n = 1; n <= 5; n++) {
+      await expect(session.getByText(new RegExp(`^${n} of \\d+$`))).toBeVisible();
+      const item = session.getByRole("article");
+      const kind = (await item.locator("p").first().textContent()) ?? "";
+      if (kind.startsWith("Exercise")) break;
+      if (kind.startsWith("Multiple choice")) {
+        await item.getByRole("radio").first().check();
+        await item.getByRole("button", { name: "Check" }).click();
+      } else if (kind.startsWith("True or false")) {
+        await item.getByRole("button", { name: "True" }).click();
+      } else {
+        await item.getByRole("button", { name: /^Show the (answer|back)$/ }).click();
+        await item.getByRole("button", { name: "I knew it" }).click();
+      }
+      await item.getByRole("button", { name: /^(Next|Finish)$/ }).click();
+    }
+
+    // An eigenvalue exercise, answered wrongly on purpose: its numbers are
+    // new on every review, so the right answer is not known in advance.
+    const exercise = session.getByRole("article");
+    await expect(exercise).toContainText("Exercise · Eigenvalues");
+    for (const cell of await exercise.getByRole("textbox").all()) await cell.fill("1");
+    await exercise.getByRole("button", { name: "Check" }).click();
+
+    await expect(exercise.getByRole("status")).toContainText("Not quite.");
+    const worked = exercise.getByRole("region", { name: "Worked solution" });
+    await expect(worked).toContainText("So the eigenvalues are");
+    await expect(worked.locator(".katex").first()).toBeVisible();
+  });
+
   expect(problems).toEqual([]);
 });
