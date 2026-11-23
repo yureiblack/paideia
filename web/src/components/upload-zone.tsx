@@ -1,13 +1,16 @@
 "use client";
 
-// Adding PDFs to an environment: the Upload PDF button, and the band that
-// also takes files dropped on it (decision record 28). Several files can be
-// chosen or dropped at once; each is checked here (a PDF, within the size
-// limit) only to spare a pointless upload, then sent one after another. The
-// backend enforces its own limits either way, and says why it refused one.
+// Adding PDFs and pictures to an environment: the Upload PDF or picture
+// button, and the band that also takes files dropped on it (decision records
+// 28 and 29). A picture, PNG or JPEG, such as a scan, a photograph of a
+// board or a screenshot, becomes a document of one page, its text read from
+// the picture. Several files can be chosen or dropped at once; each is
+// checked here (a PDF or a picture, within the size limit) only to spare a
+// pointless upload, then sent one after another. The backend enforces its
+// own limits either way, and says why it refused one.
 //
-// One page has one of these, so "Choose a PDF to upload" names exactly one
-// file input.
+// One page has one of these, so "Choose a PDF or picture to upload" names
+// exactly one file input.
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
@@ -15,8 +18,16 @@ import { button, Mark } from "@/components/ui";
 import { useUploadDocument } from "@/hooks/use-documents";
 import { MAX_UPLOAD_MB } from "@/lib/types";
 
-const isPdf = (file: File) =>
-  file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+// What a file picker offers: PDFs and PNG or JPEG pictures, by type or by
+// extension, as some systems type a file only by its name.
+export const ACCEPTED_FILES = "application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg";
+
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg"];
+const ACCEPTED_ENDINGS = [".pdf", ".png", ".jpg", ".jpeg"];
+
+const isAccepted = (file: File) =>
+  ACCEPTED_TYPES.includes(file.type) ||
+  ACCEPTED_ENDINGS.some((ending) => file.name.toLowerCase().endsWith(ending));
 
 export function UploadZone({
   environmentId,
@@ -40,8 +51,9 @@ export function UploadZone({
     const found: string[] = [];
     const fit: File[] = [];
     for (const file of files) {
-      if (!isPdf(file)) found.push(`“${file.name}” is not a PDF.`);
-      else if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      if (!isAccepted(file)) {
+        found.push(`“${file.name}” is not a PDF or a picture (PNG or JPEG).`);
+      } else if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
         found.push(`“${file.name}” is larger than the ${MAX_UPLOAD_MB} MB limit.`);
       } else fit.push(file);
     }
@@ -77,11 +89,11 @@ export function UploadZone({
       <input
         ref={input}
         type="file"
-        accept="application/pdf,.pdf"
+        accept={ACCEPTED_FILES}
         multiple
         onChange={handleChosen}
         className="hidden"
-        aria-label="Choose a PDF to upload"
+        aria-label="Choose a PDF or picture to upload"
       />
       <button
         type="button"
@@ -89,7 +101,7 @@ export function UploadZone({
         disabled={busy}
         className={`${button.primary} w-full shrink-0 tab:w-fit`}
       >
-        {busy ? "Uploading…" : "Upload PDF"} <span aria-hidden>[+]</span>
+        {busy ? "Uploading…" : "Upload PDF or picture"} <span aria-hidden>[+]</span>
       </button>
     </>
   );
@@ -139,11 +151,12 @@ export function UploadZone({
       >
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <p className="display text-[30px] leading-[1.05] tracking-[-0.02em] tab:text-[36px]">
-            {dragging ? "Drop to upload" : "Drop PDFs here"}
+            {dragging ? "Drop to upload" : "Drop PDFs or pictures here"}
           </p>
           <p className="max-w-[460px] text-[15px] leading-[1.55] text-ink-2">
-            or choose them from this computer. Up to {MAX_UPLOAD_MB} MB each; several at once is
-            fine.
+            or choose them from this computer. A picture, PNG or JPEG, such as a scan or a
+            photograph of a board, has its text read from it. Up to {MAX_UPLOAD_MB} MB each;
+            several at once is fine.
           </p>
         </div>
         {chooser}

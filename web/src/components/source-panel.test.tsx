@@ -22,6 +22,7 @@ function open(content: string, start: number, end: number) {
       page_end: 3,
       heading: null,
       excerpt: content.slice(start, end),
+      figure_id: null,
     },
     pages: [{ page_number: 3, content, highlight_start: start, highlight_end: end }],
   };

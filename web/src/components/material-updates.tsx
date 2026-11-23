@@ -21,6 +21,7 @@ const KIND: Record<MaterialUpdate["kind"], string> = {
   new_version: "New version of",
   reprocessed: "Read again:",
   maths: "Read the maths of",
+  figures: "Read the figures of",
   deleted: "Removed",
 };
 

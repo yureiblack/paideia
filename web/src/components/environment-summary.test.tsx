@@ -23,6 +23,7 @@ function cite(chunk: string, filename: string, page: number): Citation {
     page_end: page,
     heading: null,
     excerpt: `Passage ${chunk}.`,
+    figure_id: null,
   };
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
-// The Materials tab: add PDFs to an environment, see each document's state
-// and the step its reading has got to, and open a document's own page to
-// read it, its summary or its maths (decision record 28). Each row keeps a
+// The Materials tab: add PDFs and pictures to an environment, see each
+// document's state and the step its reading has got to, and open a
+// document's own page to read it, its summary, its maths or its figures
+// (decision records 28 and 29). Each row keeps a
 // ••• menu for a new version, Try again and Delete, and shows the opening of
 // the document's summary. The first upload is explained in a note beside the
 // table while it is being read.
@@ -18,7 +19,7 @@ import { MaterialUpdates } from "@/components/material-updates";
 import { MathsText } from "@/components/maths-text";
 import { Note } from "@/components/note";
 import { Empty, Loading, LoadError } from "@/components/query-states";
-import { UploadZone } from "@/components/upload-zone";
+import { ACCEPTED_FILES, UploadZone } from "@/components/upload-zone";
 import { button, Mark, Opening, useDismiss } from "@/components/ui";
 import {
   useDeleteDocument,
@@ -51,8 +52,8 @@ export function Materials({ environmentId }: { environmentId: string }) {
       <div className="flex flex-col gap-6">
         <p className="label max-tab:sr-only">{kicker}</p>
         <Empty title="No documents yet.">
-          Upload lecture notes, chapters or problem sheets as PDFs. Each is read as soon as it
-          arrives.
+          Upload lecture notes, chapters or problem sheets as PDFs, and scans or photographs as
+          pictures. Each is read as soon as it arrives.
         </Empty>
         <UploadZone environmentId={environmentId} variant="band" />
         <MaterialUpdates environmentId={environmentId} />
@@ -74,7 +75,8 @@ export function Materials({ environmentId }: { environmentId: string }) {
         aside={
           <>
             <p className="text-[15px] leading-[1.55] text-ink-2">
-              PDFs up to {MAX_UPLOAD_MB} MB, read page by page as soon as they arrive.
+              PDFs and pictures (PNG or JPEG) up to {MAX_UPLOAD_MB} MB, read page by page as
+              soon as they arrive.
             </p>
             <UploadZone environmentId={environmentId} variant="button" />
           </>
@@ -116,7 +118,8 @@ export function Materials({ environmentId }: { environmentId: string }) {
 
       {settling && (
         <Note id="first-upload" title="First upload — what happens now" guideStep={2}>
-          Each PDF is read page by page and split into passages; search works from then on.
+          Each PDF or picture is read page by page and split into passages; search works from
+          then on.
           Then its summary is written, its concepts are found, and the knowledge map and roadmap
           are updated. You can leave this page: the rail shows the progress.
         </Note>
@@ -163,7 +166,9 @@ function DocumentRow({
       <div className="flex flex-col gap-2 tab:flex-row tab:items-start tab:gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="display truncate text-2xl leading-none tracking-[-0.015em]">{document.filename}</h3>
-          <p className="text-[13px] leading-[1.4] text-ink-2">{documentDetails(document)}</p>
+          <p className="text-[13px] leading-[1.4] text-ink-2">
+            {[documentDetails(document), readFromPictures(document)].filter(Boolean).join(" · ")}
+          </p>
         </div>
         <p className="label hidden w-16 pt-1.5 tab:block">
           {document.page_count ?? "–"}
@@ -185,6 +190,7 @@ function DocumentRow({
                 ? [
                     { label: summaryLabel(summary.data), href: `${href}?tab=summary` },
                     { label: "Read the maths", href: `${href}?tab=maths` },
+                    { label: "Read the figures", href: `${href}?tab=figures` },
                   ]
                 : []
             }
@@ -221,6 +227,15 @@ export function documentDetails(document: Document): string {
   return `${formatBytes(document.size_bytes)} · added ${formatDate(document.created_at)}`;
 }
 
+// "2 pages read from pictures": how many pages of a document that has been
+// read had their text read by OCR from a picture of the page (decision
+// record 29), or null for none.
+export function readFromPictures(document: Document): string | null {
+  const pages = document.pages_ocr ?? 0;
+  if (document.status !== "ready" || pages <= 0) return null;
+  return `${pages} ${pages === 1 ? "page" : "pages"} read from pictures`;
+}
+
 // What the summary item says, by where the summary stands.
 function summaryLabel(summary: CurrentSummary | null | undefined) {
   switch (summary?.status) {
@@ -241,8 +256,9 @@ function summaryLabel(summary: CurrentSummary | null | undefined) {
 // Each document's queued or running job, if any. A job names the material
 // update it carries out, and the update names its document. Of a document's
 // jobs, the one running is shown, or else the first still waiting in its
-// chain: its maths, then its reading, then what is made from it.
-const CHAIN = ["maths", "read", "derive"];
+// chain: its maths or its figures, then its reading, then what is made from
+// it.
+const CHAIN = ["maths", "figures", "read", "derive"];
 
 function rank(job: Job): number {
   if (job.status === "running") return 0;
@@ -284,7 +300,8 @@ const STEP_OF: Record<string, number> = {
 };
 
 // Which of READING_STEPS a document is at, or null when it is at none:
-// settled, or busy with work outside them, such as reading its maths.
+// settled, or busy with work outside them, such as reading its maths or its
+// figures.
 export function readingStep(document: Document, job: Job | undefined): number | null {
   if (job?.kind === "read") return 0;
   if (job?.kind === "derive") return job.step ? (STEP_OF[job.step] ?? 1) : 1;
@@ -380,8 +397,12 @@ export function StatusBadge({
 export function DocumentNotes({ document }: { document: Document }) {
   const notes: string[] = [];
   if (document.status === "failed" && document.error) notes.push(document.error);
+  // A scan's or a picture's words are read by OCR (decision record 29), but
+  // only where Tesseract is installed: without it, a scan has no text.
   if (document.status === "ready" && document.pages_with_text === 0) {
-    notes.push("No text was found. It may be a scanned PDF.");
+    notes.push(
+      "No text was found. A scan's or a photograph's words are read only where Tesseract is installed, and only if the picture is clear enough.",
+    );
   }
   if (document.repaired) {
     notes.push(
@@ -540,7 +561,7 @@ export function DocumentMenu({
         <input
           ref={versionInput}
           type="file"
-          accept="application/pdf,.pdf"
+          accept={ACCEPTED_FILES}
           onChange={actions.handleVersion}
           className="hidden"
           aria-label={`Choose a new version of ${document.filename}`}

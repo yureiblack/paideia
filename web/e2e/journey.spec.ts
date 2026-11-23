@@ -1,5 +1,5 @@
-// A learner's journey through one subject, end to end (decision records 22
-// and 28):
+// A learner's journey through one subject, end to end (decision records 22,
+// 28 and 29):
 // the roadmap's twelve scenarios, in order, through the page as a learner
 // uses it, against the real API, worker, database, PDF reading, embeddings
 // and reranker. Only the language model is a stand-in (api/tests/e2e/model.py):
@@ -14,6 +14,12 @@ const PDFS = path.join(__dirname, ".state", "pdfs");
 const WEEK_1 = "Week 1 processes.pdf";
 const WEEK_2 = "Week 2 memory.pdf";
 const WEEK_3 = "Week 3 eigenvalues.pdf";
+// A lecture with a captioned chart, and a photograph of a board note
+// (api/tests/e2e/prepare.py); the stand-in model reads the chart.
+const WEEK_4 = "Week 4 scheduling.pdf";
+const CHART_CAPTION = "Figure 1. Round robin time slices.";
+const BOARD = "Board note.png";
+const BOARD_NOTE = "Quantum too short: too many switches";
 
 function tab(page: Page, name: string) {
   return page
@@ -80,7 +86,7 @@ test("a learner's journey through one subject", async ({ page }) => {
     // leaves.
     await expect(page).toHaveURL(/\/materials$/);
     await expect(page.getByText("Start with a PDF.")).toBeHidden();
-    await page.getByLabel("Choose a PDF to upload").setInputFiles(path.join(PDFS, WEEK_1));
+    await page.getByLabel("Choose a PDF or picture to upload").setInputFiles(path.join(PDFS, WEEK_1));
 
     await expect(documentCard(page, WEEK_1)).toBeVisible();
   });
@@ -205,7 +211,7 @@ test("a learner's journey through one subject", async ({ page }) => {
 
   await test.step("11. Add a second PDF", async () => {
     await tab(page, "Materials").click();
-    await page.getByLabel("Choose a PDF to upload").setInputFiles(path.join(PDFS, WEEK_2));
+    await page.getByLabel("Choose a PDF or picture to upload").setInputFiles(path.join(PDFS, WEEK_2));
 
     await expect(documentCard(page, WEEK_2)).toContainText("Ready · 2 pages");
     await expect(update(page, WEEK_2)).toContainText("Done");
@@ -243,7 +249,7 @@ test("a learner's journey through one subject", async ({ page }) => {
 
   await test.step("13. Read a document's maths", async () => {
     await tab(page, "Materials").click();
-    await page.getByLabel("Choose a PDF to upload").setInputFiles(path.join(PDFS, WEEK_3));
+    await page.getByLabel("Choose a PDF or picture to upload").setInputFiles(path.join(PDFS, WEEK_3));
     const card = documentCard(page, WEEK_3);
     await expect(card).toContainText("Ready · 1 page");
     await expect(update(page, WEEK_3)).toContainText("Done");
@@ -319,6 +325,61 @@ test("a learner's journey through one subject", async ({ page }) => {
     const worked = exercise.getByRole("region", { name: "Worked solution" });
     await expect(worked).toContainText("So the eigenvalues are");
     await expect(worked.locator(".katex").first()).toBeVisible();
+  });
+
+  await test.step("15. Read a document's figures, and a picture's text", async () => {
+    await tab(page, "Materials").click();
+    await page
+      .getByLabel("Choose a PDF or picture to upload")
+      .setInputFiles(path.join(PDFS, WEEK_4));
+    const card = documentCard(page, WEEK_4);
+    await expect(card).toContainText("Ready · 1 page");
+    await expect(update(page, WEEK_4)).toContainText("Done");
+
+    // Never read unasked: offered from the menu, with an estimate.
+    await card.getByRole("button", { name: `More for ${WEEK_4}` }).click();
+    await card.getByRole("link", { name: "Read the figures" }).click();
+    const offer = page.getByRole("region", { name: `Figures of ${WEEK_4}` });
+    await expect(offer.getByRole("status")).toContainText("1 figure to read · under a minute");
+    await offer.getByRole("button", { name: "Read the figures" }).click();
+
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "Materials" })
+      .click();
+    const reading = page
+      .getByRole("region", { name: "Updates" })
+      .getByRole("article")
+      .filter({
+        has: page.getByRole("heading", { name: `Read the figures of ${WEEK_4}`, exact: true }),
+      });
+    await expect(reading).toContainText("Done");
+    await reading.getByRole("button", { name: "What changed" }).click();
+    await expect(reading).toContainText("1 of 1 figure read.");
+
+    // The page shows the figure in its place: its picture, and the model's
+    // description marked as the model's.
+    await card.getByRole("link", { name: `Read ${WEEK_4}` }).click();
+    const figure = page
+      .getByRole("region", { name: "Page 1" })
+      .getByRole("figure", { name: CHART_CAPTION });
+    await expect(figure).toContainText("Described by the model");
+    const picture = figure.getByRole("img");
+    await expect
+      .poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth))
+      .toBeGreaterThan(0);
+
+    // A photograph of a board note: stored as a page, its words read.
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "Materials" })
+      .click();
+    await page.getByLabel("Choose a PDF or picture to upload").setInputFiles(path.join(PDFS, BOARD));
+    const board = documentCard(page, BOARD);
+    await expect(board).toContainText("Ready · 1 page");
+    await expect(board).toContainText("1 page read from pictures");
+    await board.getByRole("link", { name: `Read ${BOARD}` }).click();
+    await expect(page.getByRole("region", { name: "Page 1" })).toContainText(BOARD_NOTE);
   });
 
   expect(problems).toEqual([]);
