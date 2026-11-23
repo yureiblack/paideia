@@ -11,7 +11,7 @@ import pytest
 from app import maths
 from app.chunking import MAX_CHARS, TARGET_CHARS, chunk_document, passage
 from app.parsing import ParsedDocument, ParsedPage
-from tests.parsed import H, P, document, words
+from tests.parsed import F, H, P, document, words
 
 DOC = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -209,3 +209,43 @@ def test_a_page_without_block_information_is_one_paragraph():
 
 def test_a_document_without_text_has_no_chunks():
     assert chunk_document(DOC, document([], [])) == []
+
+
+# --- figures read by the model (decision record 29) ------------------------------
+
+FIGURE = "8d4f1b62-3c0e-4a5f-9d27-0b6a1c2e3f40"
+
+
+def test_a_figure_is_a_chunk_of_its_own_and_records_which():
+    parsed = document(
+        [
+            P("Before the figure."),
+            F("Figure 1. Lines. Described by the model: lines.", FIGURE),
+            P("After the figure."),
+        ]
+    )
+
+    chunks = chunk_document(DOC, parsed)
+
+    assert [c.content for c in chunks] == [
+        "Before the figure.",
+        "Figure 1. Lines. Described by the model: lines.",
+        "After the figure.",
+    ]
+    assert [c.figure for c in chunks] == [None, uuid.UUID(FIGURE), None]
+
+
+def test_headings_just_before_a_figure_go_with_it():
+    parsed = document(
+        [
+            H("2.3 Graphs"),
+            F("Figure 2. A graph.", FIGURE),
+            P("The text of the section."),
+        ]
+    )
+
+    chunks = chunk_document(DOC, parsed)
+
+    assert chunks[0].content == "2.3 Graphs\n\nFigure 2. A graph."
+    assert chunks[0].figure == uuid.UUID(FIGURE)
+    assert (chunks[1].heading, chunks[1].figure) == ("2.3 Graphs", None)

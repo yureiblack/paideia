@@ -18,20 +18,30 @@ def P(text: str) -> tuple[str, bool]:
     return (text, False)
 
 
+def F(text: str, figure: str) -> tuple[str, bool, str]:
+    """A figure the model read (decision record 29), by its reading's id."""
+    return (text, False, figure)
+
+
 def words(n: int, word: str = "word") -> str:
     """A sentence of roughly n characters."""
     return (f"{word} " * (n // (len(word) + 1))).strip() + "."
 
 
-def document(*pages: list[tuple[str, bool]]) -> ParsedDocument:
+def document(*pages: list[tuple]) -> ParsedDocument:
     built = []
     for number, paragraphs in enumerate(pages, start=1):
         text, blocks = "", []
-        for paragraph, is_heading in paragraphs:
+        for paragraph, is_heading, *figure in paragraphs:
             if text:
                 text += PARAGRAPH_BREAK
             blocks.append(
-                ParsedBlock(len(text), len(text) + len(paragraph), is_heading)
+                ParsedBlock(
+                    len(text),
+                    len(text) + len(paragraph),
+                    is_heading,
+                    figure=figure[0] if figure else None,
+                )
             )
             text += paragraph
         built.append(ParsedPage(number=number, text=text, blocks=tuple(blocks)))

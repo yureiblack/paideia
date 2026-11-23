@@ -176,7 +176,12 @@ def plan(session: Session, document: Document) -> Plan:
     chunks = list(
         session.scalars(
             select(DocumentChunk)
-            .where(DocumentChunk.document_id == document.id)
+            .where(
+                DocumentChunk.document_id == document.id,
+                # A figure the model read is found by search, but nothing is
+                # written from its description (decision record 29).
+                DocumentChunk.figure_id.is_(None),
+            )
             .order_by(DocumentChunk.ordinal)
         )
     )

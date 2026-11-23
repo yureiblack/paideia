@@ -47,5 +47,20 @@ EIGENVALUES_FORMULA = "l2 - 6l + 1 = 0"
 EIGENVALUES_READ = f"## Eigenvalues\n\n{EIGENVALUES_PROSE}\n\n$$l^2 - 6l + 1 = 0$$"
 
 
+# The figure the journey reads (decision record 29): a chart of time slices,
+# and how the vision model reads it. Its labels are the chart's own, and its
+# description gives no number, so the check accepts it.
+CHART_CAPTION = "Figure 1. Round robin time slices."
+CHART_LABELS = ("P1", "P2", "P3")
+CHART_READ = (
+    "KIND\nchart\n\nTEXT\nP1\nP2\nP3\n\nTABLE\nnone\n\nDESCRIPTION\n"
+    "Three bars of equal width, one for each process, in turn along a time line."
+)
+
+
+def transcription(prompt, image) -> str:
+    return CHART_READ if prompt.name == "figure_reading" else EIGENVALUES_READ
+
+
 def provider() -> MockProvider:
-    return MockProvider(answer=answer, transcription=EIGENVALUES_READ)
+    return MockProvider(answer=answer, transcription=transcription)

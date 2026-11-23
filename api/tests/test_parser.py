@@ -45,11 +45,29 @@ def test_a_blank_page_is_kept_with_empty_text(tmp_path: Path):
     assert parsed.pages_with_text == 2
 
 
-def test_a_scanned_page_parses_but_has_no_text(tmp_path: Path):
+def test_a_scanned_page_is_read_by_ocr(tmp_path: Path):
     parsed = parse(tmp_path, pdfs.scanned_pdf())
 
     assert len(parsed.pages) == 1
-    assert parsed.pages_with_text == 0
+    assert (parsed.pages_with_text, parsed.pages_ocr) == (1, 1)
+    assert parsed.pages[0].ocr
+    assert parsed.pages[0].text.strip() == pdfs.SCANNED_TEXT
+
+
+def test_without_ocr_a_scanned_page_has_no_text(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(settings, "ocr", False)
+
+    parsed = parse(tmp_path, pdfs.scanned_pdf())
+
+    assert (parsed.pages_with_text, parsed.pages_ocr) == (0, 0)
+
+
+def test_a_page_of_text_with_a_picture_on_it_is_no_scan(tmp_path: Path):
+    document = pymupdf.open(stream=pdfs.pdf("A page of text, " * 10), filetype="pdf")
+    document[0].insert_image(document[0].rect, stream=pdfs.png())
+    parsed = parse(tmp_path, document.tobytes())
+
+    assert parsed.pages_ocr == 0
 
 
 def test_nul_characters_are_removed(tmp_path: Path):

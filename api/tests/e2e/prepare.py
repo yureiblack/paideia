@@ -23,7 +23,12 @@ from sqlalchemy import make_url
 from app.config import REPO_ROOT, Settings, settings
 from tests import pdfs
 from tests.conftest import _recreate_database, alembic_config
-from tests.e2e.model import EIGENVALUES_FORMULA, EIGENVALUES_PROSE
+from tests.e2e.model import (
+    CHART_CAPTION,
+    CHART_LABELS,
+    EIGENVALUES_FORMULA,
+    EIGENVALUES_PROSE,
+)
 
 WEEK_1 = pdfs.html_pdf(
     "<h2>Processes</h2><p>A process is a program in execution. The kernel gives "
@@ -63,10 +68,50 @@ def _week_3() -> bytes:
 
 WEEK_3 = _week_3()
 
+
+def _week_4() -> bytes:
+    """A lecture with a chart drawn under its prose, labelled and captioned,
+    whose figures the journey reads (decision record 29)."""
+    document = pymupdf.open(
+        stream=pdfs.html_pdf(
+            "<h2>Time slices</h2><p>Round robin gives each ready process the "
+            "processor for one time slice in turn, then moves it to the back of "
+            "the queue.</p>"
+        ),
+        filetype="pdf",
+    )
+    page = document[0]
+    for n, label in enumerate(CHART_LABELS):
+        bar = pymupdf.Rect(150 + n * 110, 330, 250 + n * 110, 420)
+        page.draw_rect(bar, fill=(0.8, 0.8, 0.8))
+        page.insert_text((bar.x0 + 40, bar.y0 + 50), label, fontsize=11)
+    page.draw_line((140, 430), (480, 430))
+    page.insert_text((150, 450), CHART_CAPTION, fontsize=9)
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def _board() -> bytes:
+    """A photograph of a note on a board: a picture, read by OCR (record 29)."""
+    source = pymupdf.open()
+    page = source.new_page(width=500, height=200)
+    page.insert_text((30, 110), BOARD_NOTE, fontsize=24)
+    data = page.get_pixmap(dpi=150).tobytes("png")
+    source.close()
+    return data
+
+
+WEEK_4 = _week_4()
+BOARD_NOTE = "Quantum too short: too many switches"
+BOARD = _board()
+
 FILES = {
     "Week 1 processes.pdf": WEEK_1,
     "Week 2 memory.pdf": WEEK_2,
     "Week 3 eigenvalues.pdf": WEEK_3,
+    "Week 4 scheduling.pdf": WEEK_4,
+    "Board note.png": BOARD,
 }
 
 

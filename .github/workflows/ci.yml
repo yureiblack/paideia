@@ -54,6 +54,9 @@ jobs:
           cache: pip
           cache-dependency-path: api/requirements.txt
       - run: pip install -r requirements.txt
+      # Tesseract reads scanned pages and pictures (decision record 29).
+      - name: Install Tesseract
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
       # The embedding and reranking models the real-model tests load, kept
       # between runs instead of downloaded every time. app/config.py names
       # the models, so any change there fetches them afresh.
@@ -160,6 +163,8 @@ jobs:
           cache: pip
           cache-dependency-path: api/requirements.txt
       - run: pip install -r api/requirements.txt
+      - name: Install Tesseract
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
       - name: Cache the models
         uses: actions/cache@v6
         with:

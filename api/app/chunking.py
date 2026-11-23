@@ -13,6 +13,8 @@ The rules (decision record 04):
   a chunk never exceeds MAX_CHARS.
 - Every heading starts a new chunk, and opens it. Consecutive headings stay
   together with the paragraph that follows them.
+- A figure the model read (decision record 29) is a chunk of its own, with
+  the headings just before it if any, and the chunk records which figure.
 - A paragraph longer than MAX_CHARS is split at sentence ends; a single
   sentence longer than that, at a space. Neither cut falls inside a formula
   (decision record 26), unless one formula alone is longer than MAX_CHARS.
@@ -58,6 +60,7 @@ class Chunk:
     heading: str | None  # the nearest heading above this chunk, if any
     content: str
     content_hash: str  # SHA-256 of the content with whitespace normalised
+    figure: uuid.UUID | None = None  # the figure reading it is, if one
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,7 @@ class _Piece:
     end: int
     text: str
     is_heading: bool
+    figure: str | None = None
 
 
 def chunk_document(document_id: uuid.UUID, parsed: ParsedDocument) -> list[Chunk]:
@@ -77,6 +81,7 @@ def chunk_document(document_id: uuid.UUID, parsed: ParsedDocument) -> list[Chunk
     occurrences: Counter[str] = Counter()
     for ordinal, (heading, pieces) in enumerate(_group(_pieces(parsed.pages))):
         first, last = pieces[0], pieces[-1]
+        figure = next((uuid.UUID(p.figure) for p in pieces if p.figure), None)
         content = passage(parsed.pages, first.page, first.start, last.page, last.end)
         content_hash = hashlib.sha256(" ".join(content.split()).encode()).hexdigest()
         occurrence = occurrences[content_hash]
@@ -94,6 +99,7 @@ def chunk_document(document_id: uuid.UUID, parsed: ParsedDocument) -> list[Chunk
                 heading=heading,
                 content=content,
                 content_hash=content_hash,
+                figure=figure,
             )
         )
     return chunks
@@ -123,18 +129,20 @@ def passage(
 
 def _pieces(pages: list[ParsedPage]) -> Iterator[_Piece]:
     for page in pages:
-        # Each block as (start, end, is_heading).
-        spans: tuple[tuple[int, int, bool], ...]
+        # Each block as (start, end, is_heading, figure).
+        spans: tuple[tuple[int, int, bool, str | None], ...]
         if not page.blocks and page.text.strip():
             # A parser that cannot tell paragraphs apart: the page is one.
             stripped = page.text.strip()
             start = page.text.index(stripped)
-            spans = ((start, start + len(stripped), False),)
+            spans = ((start, start + len(stripped), False, None),)
         else:
-            spans = tuple((b.start, b.end, b.is_heading) for b in page.blocks)
-        for start, end, is_heading in spans:
-            if is_heading or end - start <= MAX_CHARS:
-                yield _Piece(page.number, start, end, page.text[start:end], is_heading)
+            spans = tuple((b.start, b.end, b.is_heading, b.figure) for b in page.blocks)
+        for start, end, is_heading, figure in spans:
+            if is_heading or figure or end - start <= MAX_CHARS:
+                yield _Piece(
+                    page.number, start, end, page.text[start:end], is_heading, figure
+                )
                 continue
             for a, b in _split_long(page.text[start:end]):
                 yield _Piece(
@@ -204,6 +212,14 @@ def _group(pieces: Iterator[_Piece]) -> Iterator[tuple[str | None, list[_Piece]]
 
     for piece in pieces:
         has_body = any(not p.is_heading for p in current)
+        if piece.figure:
+            # A figure stands alone, with any headings just before it.
+            if has_body:
+                yield heading, current
+                current = []
+            yield heading, [*current, piece]
+            current, size = [], 0
+            continue
         if piece.is_heading:
             if has_body:
                 yield heading, current

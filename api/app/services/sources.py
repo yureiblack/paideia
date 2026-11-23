@@ -45,6 +45,7 @@ def cite(chunk: DocumentChunk, document: Document) -> Citation:
         page_end=chunk.page_end,
         heading=chunk.heading,
         excerpt=chunk.content,
+        figure_id=chunk.figure_id,
     )
 
 

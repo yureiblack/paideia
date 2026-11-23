@@ -8,6 +8,8 @@ a random file id into each PDF it saves. A test that needs "the same file
 twice" must build it once and send those bytes twice.
 """
 
+import io
+
 import pymupdf
 
 
@@ -33,10 +35,15 @@ def long_pdf(page_count: int) -> bytes:
     )
 
 
+SCANNED_TEXT = "This text is only an image."
+
+
 def scanned_pdf() -> bytes:
-    """One page holding only a picture of text: no text layer, like a scan."""
-    source = pymupdf.open(stream=pdf("This text is only an image."), filetype="pdf")
-    picture = source[0].get_pixmap(dpi=50)
+    """One page holding only a picture of text: no text layer, like a scan,
+    at a resolution a scanner uses, so OCR can read it (record 29)."""
+    source = pymupdf.open()
+    source.new_page().insert_text((72, 120), SCANNED_TEXT, fontsize=20)
+    picture = source[0].get_pixmap(dpi=150)
     source.close()
     document = pymupdf.open()
     page = document.new_page()
@@ -54,6 +61,11 @@ def encrypted_pdf() -> bytes:
     )
     document.close()
     return data
+
+
+def gif() -> bytes:
+    """A GIF: a picture of a kind uploads do not take."""
+    return b"GIF89a" + b"\x00" * 2000
 
 
 def png() -> bytes:
@@ -158,3 +170,112 @@ def figure_pdf(label: str, framed: str) -> bytes:
     data = document.tobytes()
     document.close()
     return data
+
+
+PROSE = (
+    "A data set can often be viewed as a collection of data objects, and data "
+    "objects are described by a number of attributes that capture the basic "
+    "characteristics of an object, such as the mass of a physical object or the "
+    "time at which an event occurred, which this paragraph goes on to discuss."
+)
+
+
+def figures_pdf() -> bytes:
+    """Pages laid out as a textbook sets its figures (decision record 29):
+
+    1. a paragraph, a drawn figure with labels and a caption below it, a
+       paragraph; then a paragraph beginning "Figure 3 shows", which talks
+       about a figure and is no caption;
+    2. two drawings side by side, each with a part title, and one caption
+       below both; then a ruled table with its caption above it;
+    3. a figure of thin lines, too small one by one to be found as drawings,
+       found by its caption; and a framed box of text, which is no figure.
+    """
+    document = pymupdf.open()
+
+    page = document.new_page()
+    page.insert_textbox(pymupdf.Rect(72, 60, 540, 140), PROSE, fontsize=10)
+    figure = pymupdf.Rect(150, 160, 450, 360)
+    page.draw_rect(figure)
+    page.draw_line(figure.tl, figure.br)
+    page.insert_text((160, 180), "p1", fontsize=9)
+    page.insert_text((400, 340), "p2", fontsize=9)
+    page.insert_text(
+        (150, 385), "Figure 1. A drawn figure with two labels.", fontsize=8
+    )
+    page.insert_textbox(pymupdf.Rect(72, 400, 540, 480), PROSE, fontsize=10)
+    page.insert_textbox(
+        pymupdf.Rect(72, 500, 540, 600),
+        "Figure 3 shows the next idea. " + PROSE,
+        fontsize=10,
+    )
+
+    page = document.new_page()
+    page.insert_textbox(pymupdf.Rect(72, 40, 540, 110), PROSE, fontsize=10)
+    for x0 in (80, 330):
+        part = pymupdf.Rect(x0, 130, x0 + 200, 280)
+        page.draw_rect(part)
+        page.draw_circle(part.tl + (100, 75), 40)
+    page.insert_text((140, 300), "(a) Before.", fontsize=8)
+    page.insert_text((390, 300), "(b) After.", fontsize=8)
+    page.insert_text((200, 325), "Figure 2. Two parts of one figure.", fontsize=8)
+    page.insert_textbox(pymupdf.Rect(72, 345, 540, 420), PROSE, fontsize=10)
+    page.insert_text((180, 445), "Table 1. Some values.", fontsize=8)
+    table = pymupdf.Rect(150, 455, 450, 545)
+    page.draw_rect(table)
+    for y in (485, 515):
+        page.draw_line((150, y), (450, y))
+    page.draw_line((300, 455), (300, 545))
+    for row, (a, b) in enumerate((("Name", "Value"), ("alpha", "12"), ("beta", "34"))):
+        page.insert_text((160, 475 + row * 30), a, fontsize=10)
+        page.insert_text((310, 475 + row * 30), b, fontsize=10)
+
+    page = document.new_page()
+    page.insert_textbox(pymupdf.Rect(72, 40, 540, 110), PROSE, fontsize=10)
+    for n in range(4):
+        y = 140 + n * 30
+        page.draw_line((200, y), (200 + 20 * (n + 1), y))
+        page.insert_text((180, y + 3), str(n + 1), fontsize=8)
+    page.insert_text((150, 280), "Figure 4. Lines of four lengths.", fontsize=8)
+    frame = pymupdf.Rect(72, 330, 540, 400)
+    page.draw_rect(frame)
+    page.insert_textbox(frame + (10, 10, -10, -10), PROSE, fontsize=10)
+
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def picture_pdf(pages: int = 1) -> bytes:
+    """Pages that are each one picture filling the page, as a scan or an
+    uploaded photograph is."""
+    source = pymupdf.open(stream=pdf("A picture."), filetype="pdf")
+    picture = source[0].get_pixmap(dpi=40).tobytes("png")
+    source.close()
+    document = pymupdf.open()
+    for _ in range(pages):
+        page = document.new_page()
+        page.insert_image(page.rect, stream=picture)
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def photo(text: str, orientation: int = 1) -> bytes:
+    """A JPEG of a line of text, as a phone saves it: with orientation 6 the
+    pixels lie on their side and the EXIF tag says to turn them upright."""
+    from PIL import Image
+
+    source = pymupdf.open()
+    page = source.new_page(width=500, height=150)
+    page.insert_text((20, 90), text, fontsize=28)
+    upright = Image.frombytes("RGB", (1000, 300), source[0].get_pixmap(dpi=144).samples)
+    source.close()
+    # Tag 6: the stored pixels lie a quarter turn counter-clockwise, and
+    # are viewed after a quarter turn clockwise.
+    stored = upright.rotate(90, expand=True) if orientation == 6 else upright
+    exif = Image.Exif()
+    exif[0x0112] = orientation
+    buffer = io.BytesIO()
+    stored.save(buffer, "JPEG", exif=exif.tobytes(), quality=90)
+    return buffer.getvalue()

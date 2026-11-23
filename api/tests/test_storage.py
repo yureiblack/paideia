@@ -11,6 +11,7 @@ import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import pymupdf
 import pytest
 
 from app import storage
@@ -87,7 +88,12 @@ def test_a_non_pdf_is_refused_after_the_first_kilobyte(data_dir: Path):
     [
         pytest.param(b"", "empty", id="empty"),
         pytest.param(b"%PD", "not a PDF", id="shorter than the signature"),
-        pytest.param(pdfs.png(), "not a PDF", id="png"),
+        pytest.param(pdfs.gif(), "not a PDF or a picture", id="gif"),
+        pytest.param(
+            b"\x89PNG\r\n\x1a\n" + b"x" * 100,
+            "picture could not be read",
+            id="broken png",
+        ),
     ],
 )
 def test_small_bad_uploads_are_refused(data_dir: Path, data: bytes, message: str):
@@ -125,3 +131,34 @@ def test_delete_helpers_remove_only_their_target(data_dir: Path):
 def test_deleting_what_is_not_there_is_harmless(data_dir: Path):
     storage.delete_document_file(uuid.uuid4(), uuid.uuid4())
     storage.delete_environment_files(uuid.uuid4())
+
+
+# --- pictures (decision record 29) -----------------------------------------------
+
+
+def test_a_picture_is_staged_as_a_one_page_pdf(data_dir: Path):
+    staged, _ = stage(pdfs.png())
+
+    data = staged.path.read_bytes()
+    assert data.startswith(b"%PDF-")
+    assert staged.sha256 == hashlib.sha256(data).hexdigest()
+    assert staged.size_bytes == len(data)
+    with pymupdf.open("pdf", data) as document:
+        assert document.page_count == 1
+        assert document[0].rect.width == storage.PICTURE_PAGE_WIDTH
+    assert [p.name for p in leftovers(data_dir)] == [staged.path.name]
+
+
+def test_the_same_picture_gives_the_same_pdf(data_dir: Path):
+    # So a picture uploaded twice is a duplicate, as a PDF uploaded twice is.
+    picture = pdfs.png()
+    assert storage.picture_pdf(picture) == storage.picture_pdf(picture)
+
+
+def test_a_photo_is_turned_upright_as_the_camera_recorded():
+    sideways = storage.picture_pdf(pdfs.photo("Upright", orientation=6))
+    upright = storage.picture_pdf(pdfs.photo("Upright", orientation=1))
+
+    with pymupdf.open("pdf", sideways) as a, pymupdf.open("pdf", upright) as b:
+        assert a[0].rect.height < a[0].rect.width  # wide, as the text runs
+        assert a[0].rect == b[0].rect

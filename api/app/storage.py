@@ -17,6 +17,11 @@ either fully in place or not there at all.
 settings.data_dir is read at call time rather than import time, so the tests
 can point every function here at a temporary folder.
 
+A picture, PNG or JPEG, a scan, a photograph of a board or a screenshot, is
+made into a one-page PDF as it arrives and stored as one (decision record
+29): everything after this module reads PDFs only. The same picture always
+gives the same PDF, so a picture uploaded twice is found to be a duplicate.
+
 sweep() removes what a crash can leave behind (decision record 21): a part
 of an upload that never finished arriving, a stored file whose row was never
 committed or whose deletion stopped halfway, and the folder of an
@@ -26,6 +31,7 @@ before its row is committed.
 """
 
 import hashlib
+import io
 import os
 import shutil
 import tempfile
@@ -35,9 +41,20 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pymupdf
+from PIL import Image, ImageOps
+
 from app.config import settings
 
 PDF_SIGNATURE = b"%PDF-"
+# Pictures, by the bytes they begin with.
+PICTURE_SIGNATURES = {b"\x89PNG\r\n\x1a\n": "png", b"\xff\xd8\xff": "jpeg"}
+# A picture is set on a page as wide as A4, so text in it is read at a
+# sensible size, and never taller than a PDF page may be.
+PICTURE_PAGE_WIDTH = 595.0
+PICTURE_PAGE_MAX_HEIGHT = 14_000.0
+EXIF_ORIENTATION = 0x0112
+NOT_ACCEPTED = "The file is not a PDF or a picture (PNG or JPEG)."
 # The PDF standard lets the signature appear anywhere in the first kilobyte,
 # and some real files carry a few stray bytes before it. Readers accept those,
 # so this does too.
@@ -53,7 +70,7 @@ class UploadTooLarge(UploadRejected):
 
 
 class NotAPdf(UploadRejected):
-    pass
+    """Neither a PDF nor a picture this app reads."""
 
 
 @dataclass(frozen=True)
@@ -98,19 +115,82 @@ async def stage_upload(chunks: AsyncIterator[bytes], *, max_bytes: int) -> Stage
                     )
                 if len(head) < SIGNATURE_WINDOW:
                     head += chunk[: SIGNATURE_WINDOW - len(head)]
-                    if len(head) >= SIGNATURE_WINDOW and PDF_SIGNATURE not in head:
-                        raise NotAPdf("The file is not a PDF.")
+                    if len(head) >= SIGNATURE_WINDOW and _kind(head) is None:
+                        raise NotAPdf(NOT_ACCEPTED)
                 digest.update(chunk)
                 out.write(chunk)
         if size == 0:
             raise NotAPdf("The file is empty.")
-        if PDF_SIGNATURE not in head:
-            raise NotAPdf("The file is not a PDF.")
+        kind = _kind(head)
+        if kind is None:
+            raise NotAPdf(NOT_ACCEPTED)
+        if kind != "pdf":
+            return _as_pdf(path, kind)
     except BaseException:
         path.unlink(missing_ok=True)
         raise
 
     return StagedUpload(path=path, sha256=digest.hexdigest(), size_bytes=size)
+
+
+def _kind(head: bytes) -> str | None:
+    """pdf, png or jpeg, by the bytes the file begins with, or None."""
+    for signature, kind in PICTURE_SIGNATURES.items():
+        if head.startswith(signature):
+            return kind
+    return "pdf" if PDF_SIGNATURE in head else None
+
+
+def picture_pdf(data: bytes) -> bytes:
+    """A picture as a one-page PDF: turned upright as the camera recorded,
+    on a page as wide as A4. The same picture always gives the same bytes."""
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            opened.load()
+            size = opened.size
+            # A camera records how it was held in the EXIF orientation tag:
+            # 1 is upright, 2 to 8 a turn or a mirror to undo.
+            if opened.getexif().get(EXIF_ORIENTATION, 1) in range(2, 9):
+                upright = ImageOps.exif_transpose(opened)
+                size = upright.size
+                buffer = io.BytesIO()
+                upright.convert("RGB").save(buffer, "JPEG", quality=92)
+                data = buffer.getvalue()
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise NotAPdf("The picture could not be read.") from exc
+    width = PICTURE_PAGE_WIDTH
+    height = width * size[1] / size[0]
+    if height > PICTURE_PAGE_MAX_HEIGHT:
+        width, height = (
+            width * PICTURE_PAGE_MAX_HEIGHT / height,
+            PICTURE_PAGE_MAX_HEIGHT,
+        )
+    document = pymupdf.open()
+    page = document.new_page(width=width, height=height)
+    page.insert_image(page.rect, stream=data)
+    pdf = document.tobytes(no_new_id=True, garbage=3, deflate=True)
+    document.close()
+    return pdf
+
+
+def _as_pdf(path: Path, kind: str) -> StagedUpload:
+    """The staged picture replaced by its PDF, fingerprinted and counted
+    as the file that will be stored."""
+    try:
+        pdf = picture_pdf(path.read_bytes())
+    finally:
+        path.unlink(missing_ok=True)
+    handle, name = tempfile.mkstemp(dir=path.parent, suffix=".part")
+    target = Path(name)
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(pdf)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return StagedUpload(
+        path=target, sha256=hashlib.sha256(pdf).hexdigest(), size_bytes=len(pdf)
+    )
 
 
 def store(

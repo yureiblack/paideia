@@ -107,7 +107,9 @@ pathspec==1.1.1
 pgvector==0.5.1
     # via -r requirements.in
 pillow==13.0.0
-    # via fastembed
+    # via
+    #   -r requirements.in
+    #   fastembed
 pip-tools==7.6.2
     # via -r requirements.in
 pluggy==1.7.0

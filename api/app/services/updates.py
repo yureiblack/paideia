@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 LABELS = {
     "maths": "Reading the maths",
+    "figures": "Reading the figures",
     "read": "Reading the document",
     "document_summary": "Its summary",
     "environment_summary": "Environment summary",
@@ -63,6 +64,8 @@ DELETION_STEPS = ("environment_summary", "knowledge_graph", "roadmap")
 # Reading a document's maths: the pages first, then the document read again
 # with them, and everything after as for any change (decision record 26).
 MATHS_STEPS = ("maths", *DOCUMENT_STEPS)
+# Reading a document's figures, likewise (decision record 29).
+FIGURE_STEPS = ("figures", *DOCUMENT_STEPS)
 
 
 # --- snapshots ------------------------------------------------------------------
@@ -248,6 +251,20 @@ def _describe_maths(session, update, result, llm):
     return "done", detail
 
 
+def _describe_figures(session, update, result, llm):
+    if result is None:
+        return "skipped", "The document was deleted meanwhile."
+    read, kept = result["read"], len(result["kept"])
+    if not read and not kept:
+        return "done", "No figure was read."
+    detail = f"{len(read)} of {_count(len(read) + kept, 'figure')} read."
+    if kept == 1:
+        detail += " One keeps the PDF's own text."
+    elif kept:
+        detail += f" {kept} keep the PDF's own text."
+    return "done", detail
+
+
 def _describe_document_summary(session, update, result, llm):
     document = _document(session, update)
     if document is None or document.status != "ready":
@@ -370,6 +387,7 @@ def _describe_roadmap(session, update, result, llm):
 
 DESCRIBE = {
     "maths": _describe_maths,
+    "figures": _describe_figures,
     "read": _describe_read,
     "document_summary": _describe_document_summary,
     "environment_summary": _describe_environment_summary,
