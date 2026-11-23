@@ -274,3 +274,75 @@ def test_order_is_not_seen_a_known_limit():
         )
         is None
     )
+
+
+# --- found on a data mining textbook (decision record 29) -------------------------
+
+
+def test_a_markdown_table_is_a_paragraph_per_row_its_separator_no_text():
+    page_layer = layer(
+        "Attribute Type\nDissimilarity\nNominal\nd = 0 if x = y\n"
+        "Interval or Ratio\nd = |x − y|"
+    )
+    page = page_text(
+        "| Attribute Type | Dissimilarity |\n|---|:---:|\n"
+        "| Nominal | $d = 0$ if $x = y$ |\n| Interval or Ratio | $d = |x-y|$ |",
+        page_layer,
+    )
+
+    assert page.text == (
+        "Attribute Type | Dissimilarity\n\n"
+        "Nominal | \\(d = 0\\) if \\(x = y\\)\n\n"
+        "Interval or Ratio | \\(d = |x-y|\\)"
+    )
+    assert len(page.blocks) == 3
+    assert check(page, page_layer).reason is None
+
+
+def test_a_separator_row_would_otherwise_count_as_minus_signs():
+    assert maths.shown("|---|---|") == "−−−−−−"  # why it is dropped
+
+
+def test_subscripts_written_as_html_keep_their_letters():
+    page_layer = layer("the L1 and L∞ distances; the ijth entry")
+    page = page_text(
+        "the L<sub>1</sub> and L<sub>∞</sub> distances; the $ij$<sup>th</sup> entry",
+        page_layer,
+    )
+
+    assert "<" not in page.text
+    assert check(page, page_layer).reason is None
+
+
+def test_a_books_own_line_in_the_margin_band_may_be_written_or_not():
+    # A book without a running header has real text in the band: the page's
+    # last line here. The model writes it with LaTeX, so it does not match
+    # the layer's line exactly, and must still not count as added.
+    last = "(b) d(x, y) = 0 only if x = y."
+    page_layer = layer("(a) d(x, x) ≥ 0 for all x.", optional=last, margins=(last,))
+
+    written = "(a) $d(x, x) \\geq 0$ for all $x$.\n\n(b) $d(x, y) = 0$ only if $x = y$."
+    assert reason(written, page_layer) is None
+    assert reason("(a) $d(x, x) \\geq 0$ for all $x$.", page_layer) is None
+
+
+def test_an_equation_number_and_a_footnote_mark_may_be_left_out():
+    page_layer = layer(
+        "Bregman Divergence This section\nd(x, y) = (xk − yk)2,",
+        optional="∗\n(2.1)",
+    )
+
+    assert (
+        reason(
+            "Bregman Divergence This section\n\n$$d(x, y) = (x_k - y_k)^2,$$",
+            page_layer,
+        )
+        is None
+    )
+    assert (
+        reason(
+            "Bregman Divergence∗ This section\n\n$$d(x, y) = (x_k - y_k)^2, \\quad (2.1)$$",
+            page_layer,
+        )
+        is None
+    )

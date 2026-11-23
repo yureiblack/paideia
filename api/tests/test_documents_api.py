@@ -101,10 +101,23 @@ def test_text_containing_nul_characters_is_stored(client: TestClient, env: str):
     assert pages[0]["content"].strip() == "ab"
 
 
-def test_a_scanned_pdf_is_ready_with_no_text(client: TestClient, env: str):
+def test_a_scanned_pdf_is_ready_with_its_text_read_by_ocr(client: TestClient, env: str):
     document = current(client, uploaded(client, env, pdfs.scanned_pdf()))
 
-    assert (document["status"], document["pages_with_text"]) == ("ready", 0)
+    assert (document["status"], document["pages_with_text"]) == ("ready", 1)
+    assert document["pages_ocr"] == 1
+    pages = client.get(f"/api/documents/{document['id']}/pages").json()
+    assert pages[0]["content"].strip() == pdfs.SCANNED_TEXT
+
+
+def test_a_picture_is_stored_as_a_pdf_and_read(client: TestClient, env: str, data_dir):
+    document = current(client, uploaded(client, env, pdfs.photo("Round robin", 6)))
+
+    assert (document["status"], document["page_count"]) == ("ready", 1)
+    pages = client.get(f"/api/documents/{document['id']}/pages").json()
+    assert pages[0]["content"].strip() == "Round robin"
+    stored = list((data_dir / "uploads").rglob("*.pdf"))
+    assert len(stored) == 1 and stored[0].read_bytes().startswith(b"%PDF-")
 
 
 def test_a_repaired_pdf_is_ready_and_flagged(client: TestClient, env: str):
@@ -177,7 +190,7 @@ def test_an_undeclared_oversize_is_stopped_while_streaming(
     [
         pytest.param(b"", id="empty"),
         pytest.param(b"hello, not a pdf\n" * 200, id="text"),
-        pytest.param(pdfs.png(), id="png renamed .pdf"),
+        pytest.param(pdfs.gif(), id="gif"),
     ],
 )
 def test_a_non_pdf_is_refused_with_415(client: TestClient, env: str, data: bytes):

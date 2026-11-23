@@ -183,7 +183,7 @@ function GraphStatus({
                 href={`/environments/${encodeURIComponent(environmentId)}/materials`}
                 className={button.outline}
               >
-                Upload PDF <span aria-hidden>→</span>
+                Upload PDF or picture <span aria-hidden>→</span>
               </Link>
               <p className="text-[13px] leading-[1.4] text-ink-2">
                 Already uploaded? The rail shows how far the reading has got.

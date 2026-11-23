@@ -54,6 +54,10 @@ TRANSCRIPTION_TOKENS = 4096
 ONE_AT_A_TIME = threading.Lock()
 
 
+# How Ollama says it stopped a model that kept repeating itself.
+REPEATING = "repeat limit"
+
+
 class LLMError(Exception):
     """The language model could not produce an answer. The message says why,
     in words a user can act on."""
@@ -92,10 +96,13 @@ class LLMProvider(Protocol):
         LLMError."""
         ...
 
-    def transcribe(self, prompt: Prompt, image: bytes) -> Generated[str]:
+    def transcribe(
+        self, prompt: Prompt, image: bytes, again: bool = False
+    ) -> Generated[str]:
         """The model's plain-text answer to the prompt about the image, a PNG,
         or an LLMError. Never constrained to JSON: LaTeX inside JSON strings
-        came back damaged (decision record 24)."""
+        came back damaged (decision record 24). again asks a second time for
+        an answer that may differ, as a retry after a bad answer does."""
         ...
 
     def check(self) -> str | None:
@@ -171,8 +178,11 @@ class OllamaProvider:
             "The language model's answer did not have the expected form.",
         )
 
-    def transcribe(self, prompt: Prompt, image: bytes) -> Generated[str]:
+    def transcribe(
+        self, prompt: Prompt, image: bytes, again: bool = False
+    ) -> Generated[str]:
         def body(bad_answers: int) -> dict:
+            bad_answers += 1 if again else 0
             return {
                 "model": self._model,
                 "messages": [
@@ -239,6 +249,11 @@ class OllamaProvider:
                 problem = LLMError(
                     f"Ollama failed ({response.status_code}): {_error(response)}"
                 )
+                # Ollama stops a model that repeats itself. At temperature 0
+                # the same request repeats the same loop, so it is asked
+                # again as after an invalid answer (decision record 29).
+                if REPEATING in _error(response):
+                    bad_answers += 1
                 continue
             if response.status_code >= 400:
                 raise LLMError(f"Ollama refused the request: {_error(response)}")

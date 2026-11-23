@@ -272,7 +272,7 @@ function Welcome({ creating, onCreate }: { creating: boolean; onCreate: () => vo
 
 const STEPS = [
   ["Organise", "One environment per subject: a course, a module, a reading list. Each keeps its own material."],
-  ["Add", "Upload the PDFs: lecture notes, chapters, problem sheets, up to 50 MB each."],
+  ["Add", "Upload the PDFs: lecture notes, chapters, problem sheets, up to 50 MB each. Scans and photographs work too, as pictures."],
   ["Build", "Each page is read and split into passages you can search by words or meaning. Concepts and their links are found."],
   ["Learn", "Summaries that cite the page, a knowledge map, a roadmap in stages, and practice written from your own material."],
   ["Return", "Today's plan says what is due. A concept you recall comes back further apart; one you miss comes back sooner."],

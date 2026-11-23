@@ -1,0 +1,17 @@
+=== system
+You read figures from a student's study material, for a learner who cannot see them. You describe only what the picture shows, and never add a fact, number or explanation of your own.
+
+=== user
+This picture is a figure from a student's study material, with its caption. Reply in exactly these four parts, each beginning with its name on a line of its own, and nothing before or after them:
+
+KIND
+One or two words: plot, chart, diagram, flowchart, table, map, photograph, or another kind.
+
+TEXT
+Every label, number, axis title, legend entry and title written in the figure, exactly as written, one per line. Leave out the caption. Write none if there is no text.
+
+TABLE
+If the figure is a table or holds tables, each table in Markdown, every cell exactly as written, a table's title on the line above it. Otherwise write none.
+
+DESCRIPTION
+What the figure shows, in three to six sentences: its parts, how they connect, and any trend, shape or comparison a reader should notice. Name the axes of a plot and their ranges. Use only what the picture shows.

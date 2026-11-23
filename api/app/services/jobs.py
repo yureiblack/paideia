@@ -47,6 +47,7 @@ from app.schemas import JobRead
 from app.services import concepts as concept_service
 from app.services import documents as document_service
 from app.services import environment_summaries as environment_summary_service
+from app.services import figures as figure_service
 from app.services import graph as graph_service
 from app.services import maths_reading, updates
 from app.services import practice as practice_service
@@ -141,6 +142,17 @@ STEPS: dict[str, Callable[[Tools, dict], object]] = {
     "apply_maths": lambda t, a: maths_reading.apply(
         t.session_factory, _id(a["document_id"]), int(a["first"]), int(a["last"])
     ),
+    "read_figure": lambda t, a: figure_service.read_figure(
+        t.session_factory,
+        _id(a["document_id"]),
+        figure_service.decode(a["figure"]),
+        t.llm,
+        _id(a["update_id"]),
+        int(a["total"]),
+    ),
+    "apply_figures": lambda t, a: figure_service.apply(
+        t.session_factory, _id(a["document_id"]), int(a["first"]), int(a["last"])
+    ),
 }
 
 
@@ -214,6 +226,31 @@ def maths_steps(document_id, update_id, pages: list[int], first: int, last: int)
             "apply_maths",
             "Putting the pages read in place",
             "maths",
+            document_id=document_id,
+            first=first,
+            last=last,
+        )
+    ]
+
+
+def figure_steps(document_id, update_id, figures: list, first: int, last: int):
+    """Reading a document's figures (decision record 29): one step per
+    figure, then putting the figures read in place."""
+    return [
+        step(
+            "read_figure",
+            f"Reading {figure_service.name(figure)} on page {figure.page}",
+            document_id=document_id,
+            figure=figure_service.encode(figure),
+            update_id=update_id,
+            total=len(figures),
+        )
+        for figure in figures
+    ] + [
+        step(
+            "apply_figures",
+            "Putting the figures read in place",
+            "figures",
             document_id=document_id,
             first=first,
             last=last,

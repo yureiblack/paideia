@@ -36,6 +36,11 @@ alembic==1.20.0
 # engine brings eight more packages this phase does not use.
 pymupdf==1.28.2
 
+# Turns a photograph upright as the camera recorded it, before it is made a
+# one-page PDF (decision record 29). Already installed with the embedding
+# packages; named here because the app now imports it itself.
+pillow==13.0.0
+
 # Turns text into embeddings with a local open model (BAAI/bge-small-en-v1.5),
 # run through ONNX Runtime. Chosen over Sentence Transformers, which needs
 # PyTorch and, on Linux, about 1.5 GB of GPU libraries; see

@@ -191,3 +191,37 @@ def test_check_reports_whether_the_model_is_ready(reply, problem):
 
     assert llm.check() == problem
     assert sent[0].url.path == "/api/tags"
+
+
+def test_asking_again_for_a_transcription_gives_a_little_randomness():
+    # A figure read again after its reading disagreed with it (record 29):
+    # at temperature 0 the same image would give the same answer.
+    llm, sent, _ = provider(ok("first"), ok("second"))
+
+    assert llm.transcribe(PROMPT, b"png").value == "first"
+    assert llm.transcribe(PROMPT, b"png", again=True).value == "second"
+    options = [body(request)["options"] for request in sent]
+    assert [(o["temperature"], o["seed"]) for o in options] == [(0, 7), (0.3, 8)]
+    assert body(sent[1])["messages"][1]["images"] == ["cG5n"]  # b"png", base64
+
+
+def test_a_model_stopped_for_repeating_itself_is_asked_with_a_little_randomness():
+    # Ollama aborts a model caught in a loop; at temperature 0 the same
+    # request loops again (found in the live check of record 29).
+    stopped = httpx2.Response(
+        500, json={"error": "prediction aborted, token repeat limit reached"}
+    )
+    llm, sent, _ = provider(stopped, ok({"words": ["hi"]}))
+
+    assert llm.generate_structured(PROMPT, Answer).value.words == ["hi"]
+    options = [body(request)["options"] for request in sent]
+    assert [(o["temperature"], o["seed"]) for o in options] == [(0, 7), (0.3, 8)]
+
+
+def test_another_server_failure_is_retried_as_it_was():
+    llm, sent, _ = provider(
+        httpx2.Response(503, json={"error": "busy"}), ok({"words": ["hi"]})
+    )
+
+    llm.generate_structured(PROMPT, Answer)
+    assert [body(r)["options"]["temperature"] for r in sent] == [0, 0]

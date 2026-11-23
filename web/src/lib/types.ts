@@ -35,17 +35,47 @@ export type Document = {
   status: DocumentStatus;
   error: string | null;
   page_count: number | null;
-  // Pages with any text. 0 usually means a scanned PDF with no text layer.
+  // Pages with any text. 0 means none was found, not even by reading the
+  // pictures of its pages.
   pages_with_text: number | null;
+  // Of those, how many were read from a picture of the page by OCR
+  // (decision record 29): a scan, or an uploaded photograph or screenshot.
+  pages_ocr: number | null;
   // The file was damaged and had to be repaired to be read.
   repaired: boolean;
   created_at: string;
   updated_at: string;
 };
 
+// A table the model read in a figure, row by row, with its title if it has
+// one.
+export type FigureTable = {
+  title: string | null;
+  rows: string[][];
+};
+
+// A figure the model read (decision record 29), where it sits in its page:
+// content.slice(start, end) of the page is its passage. text and tables are
+// what is written in it, checked against the figure; description is the
+// model's own, which nothing can check. start and end count characters as
+// the API does, by code point.
+export type PageFigure = {
+  id: string;
+  start: number;
+  end: number;
+  caption: string | null;
+  kind: string;
+  text: string[];
+  tables: FigureTable[];
+  description: string;
+};
+
+// figures: the figures read in the page, in the order they appear. An older
+// API sends none.
 export type DocumentPage = {
   page_number: number;
   content: string;
+  figures?: PageFigure[];
 };
 
 // The backend's default MAX_UPLOAD_MB. Checked here only to spare a pointless
@@ -66,6 +96,9 @@ export type Citation = {
   page_end: number;
   heading: string | null;
   excerpt: string;
+  // Set when the passage is a figure the model read (decision record 29);
+  // its picture is at figureImageUrl(figure_id).
+  figure_id: string | null;
 };
 
 // One key point of a summary and the passages it rests on.
@@ -429,7 +462,7 @@ export type UpdateReport = {
 
 export type MaterialUpdate = {
   id: string;
-  kind: "added" | "new_version" | "reprocessed" | "maths" | "deleted";
+  kind: "added" | "new_version" | "reprocessed" | "maths" | "figures" | "deleted";
   document_id: string | null;
   filename: string;
   status: "running" | "done" | "failed" | "cancelled";
@@ -534,4 +567,24 @@ export type MathsOverview = {
   waiting: number[];
   kept_text: { page: number; reason: string }[];
   seconds_per_page: number;
+};
+
+// A document's figures (decision record 29): the drawings, pictures and
+// tables with a caption found in it, each by its key, page and caption; the
+// keys of those read and in use; those read by a reading cancelled before it
+// put them in place (waiting: no time to read again); those whose reading
+// disagreed with the figure, which keep the PDF's own text, and why; and how
+// many seconds a figure takes to read on this machine.
+export type FoundFigure = {
+  key: string;
+  page: number;
+  caption: string | null;
+};
+
+export type FiguresOverview = {
+  figures: FoundFigure[];
+  read: string[];
+  waiting: string[];
+  kept: (FoundFigure & { reason: string })[];
+  seconds_per_figure: number;
 };

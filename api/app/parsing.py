@@ -39,12 +39,13 @@ import math
 import re
 import threading
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 import pymupdf
 
+from app import ocr
 from app.config import settings
 
 # MuPDF prints its complaints about damaged files straight to the console.
@@ -99,6 +100,12 @@ class ParsedBlock:
     start: int
     end: int
     is_heading: bool
+    # Where the block lies on the page, in PDF points, when it came from the
+    # text layer: a figure read by the model takes the place of the blocks
+    # inside it (record 29). Not part of what makes two blocks equal.
+    box: tuple[float, float, float, float] | None = field(default=None, compare=False)
+    # The figure reading this block is, when it is one (record 29).
+    figure: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +116,8 @@ class ParsedPage:
     # paragraphs apart may leave it empty; the chunker then treats the whole
     # page text as one paragraph.
     blocks: tuple[ParsedBlock, ...] = ()
+    # Its text was read from a picture of the page by OCR (record 29).
+    ocr: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,6 +131,11 @@ class ParsedDocument:
     def pages_with_text(self) -> int:
         """Pages with any text at all. Zero usually means a scanned PDF."""
         return sum(1 for page in self.pages if page.text.strip())
+
+    @property
+    def pages_ocr(self) -> int:
+        """Pages whose text was read from a picture of the page."""
+        return sum(1 for page in self.pages if page.ocr)
 
 
 class Parser(Protocol):
@@ -139,6 +153,7 @@ class _RawBlock:
     bold: bool  # every visible span is bold
     in_margin: bool  # sits in the top or bottom margin band
     chars_by_size: tuple[tuple[float, int], ...]
+    bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
 
 class PyMuPDFParser:
@@ -167,18 +182,29 @@ class PyMuPDFParser:
                         f"The PDF has {document.page_count} pages; at most "
                         f"{settings.max_pages} are accepted."
                     )
-                raw_pages = [_raw_blocks(page) for page in document.pages()]
+                raw_pages, read = [], set()
+                for page in document.pages():
+                    blocks = _raw_blocks(page)
+                    chars = sum(len(line.strip()) for b in blocks for line in b.lines)
+                    # A scanned page: its text read from its picture (record 29).
+                    if ocr.available() and ocr.is_scanned(page, chars):
+                        blocks = _raw_blocks(page, ocr.text_page(page, _TEXT_FLAGS))
+                        read.add(page.number)
+                    raw_pages.append(blocks)
                 repaired = document.is_repaired
 
         # Everything below is plain Python on the extracted data, so it runs
         # outside the lock.
-        return ParsedDocument(pages=_build_pages(raw_pages), repaired=repaired)
+        return ParsedDocument(pages=_build_pages(raw_pages, read), repaired=repaired)
 
 
-def _raw_blocks(page: pymupdf.Page) -> list[_RawBlock]:
+def _raw_blocks(
+    page: pymupdf.Page, textpage: pymupdf.TextPage | None = None
+) -> list[_RawBlock]:
     height = page.rect.height
     blocks = []
-    for block in page.get_text("dict", flags=_TEXT_FLAGS)["blocks"]:
+    found = page.get_text("dict", flags=_TEXT_FLAGS, textpage=textpage)
+    for block in found["blocks"]:
         if block.get("type") != 0:
             continue
         spans = [span for line in block["lines"] for span in line["spans"]]
@@ -202,12 +228,16 @@ def _raw_blocks(page: pymupdf.Page) -> list[_RawBlock]:
                     or top >= height * (1 - BOILERPLATE_MARGIN)
                 ),
                 chars_by_size=tuple(sizes.items()),
+                bbox=tuple(block["bbox"]),
             )
         )
     return blocks
 
 
-def _build_pages(raw_pages: list[list[_RawBlock]]) -> list[ParsedPage]:
+def _build_pages(
+    raw_pages: list[list[_RawBlock]],
+    read: set[int] = frozenset(),  # type: ignore[assignment]
+) -> list[ParsedPage]:
     """Clean every block and assemble each page's text and block positions."""
     body_size = _body_font_size(raw_pages)
     boilerplate = _boilerplate_signatures(raw_pages)
@@ -235,10 +265,15 @@ def _build_pages(raw_pages: list[list[_RawBlock]]) -> list[ParsedPage]:
                     start=len(text),
                     end=len(text) + len(paragraph),
                     is_heading=_is_heading(raw, paragraph, body_size),
+                    box=raw.bbox,
                 )
             )
             text += paragraph
-        pages.append(ParsedPage(number=index + 1, text=text, blocks=tuple(blocks)))
+        pages.append(
+            ParsedPage(
+                number=index + 1, text=text, blocks=tuple(blocks), ocr=index in read
+            )
+        )
     return pages
 
 
@@ -358,8 +393,32 @@ class PageLayer:
 
     # Blocks are separated by a blank line, a block's lines by a line break.
     required: str  # what a faithful transcription contains
-    optional: str  # figure labels, which it may contain or leave out
-    margins: tuple[str, ...]  # lines of the running header and footer
+    # What it may contain or leave out: figure labels, equation numbers,
+    # footnote marks, and the lines in the margin band.
+    optional: str
+    # The lines in the top and bottom margin band, and each such block's
+    # lines joined: a running header or footer, to drop from the
+    # transcription, or a book's own first or last line (decision record 29).
+    margins: tuple[str, ...]
+
+
+# An equation's number at the end of its line, "(2.1)", and a footnote mark
+# after a word, "Divergence∗": a transcription may leave them out, since
+# neither changes the maths (decision record 29). A mark after one letter is
+# maths, as in x∗, and stays required.
+_EQUATION_NUMBER = re.compile(r"(?:^|(?<=\s))\(\d+(?:\.\d+){0,3}[a-z]?\)\s*$")
+_FOOTNOTE_MARK = re.compile(r"(?<=[A-Za-z]{2})[∗*†‡](?=\s|$)")
+
+
+def _optional_marks(line: str) -> tuple[str, list[str]]:
+    """The line without its equation number and footnote marks, and those."""
+    marks = _FOOTNOTE_MARK.findall(line)
+    line = _FOOTNOTE_MARK.sub("", line)
+    number = _EQUATION_NUMBER.search(line)
+    if number:
+        marks.append(number.group().strip())
+        line = line[: number.start()].rstrip()
+    return line, marks
 
 
 def _open(path: Path) -> pymupdf.Document:
@@ -444,6 +503,11 @@ def page_layer(path: Path, page_number: int) -> PageLayer:
             if rect.width >= width * FIGURE_MIN_WIDTH
             and rect.height >= height * FIGURE_MIN_HEIGHT
         ]
+        # A figure as found by its caption takes in labels set beside its
+        # drawing, such as a plot's tick labels (record 29).
+        figures += [
+            pymupdf.Rect(f.rect) for f in _page_figures(page, document.page_count == 1)
+        ]
         blocks = page.get_text("dict", flags=_TEXT_FLAGS)["blocks"]
     required, optional, margins = [], [], []
     for block in blocks:
@@ -462,7 +526,15 @@ def page_layer(path: Path, page_number: int) -> PageLayer:
         if bottom <= height * BOILERPLATE_MARGIN or top >= height * (
             1 - BOILERPLATE_MARGIN
         ):
+            # A running header, or the page's own first or last line where a
+            # book has no header: the transcription may have it or not.
             margins += [*lines, " ".join(lines)]
+            optional.append("\n".join(lines))
+            continue
+        marked = [_optional_marks(line) for line in lines]
+        optional += [mark for _, marks in marked for mark in marks]
+        lines = [line for line, _ in marked if line]
+        if not lines:
             continue
         text = "\n".join(lines)  # line ends kept: a hyphen there joins a word
         centre = pymupdf.Point((x0 + x1) / 2, (top + bottom) / 2)
@@ -472,3 +544,371 @@ def page_layer(path: Path, page_number: int) -> PageLayer:
         else:
             required.append(text)
     return PageLayer("\n\n".join(required), "\n\n".join(optional), tuple(margins))
+
+
+# --- figures (decision record 29) -----------------------------------------------
+
+# A caption: "Figure 2.1.", "Fig. 3:", "Table 4 -", at the start of a block,
+# the number followed by punctuation. "Figure 2.15 shows" begins a paragraph
+# that talks about a figure, and is not one's caption.
+CAPTION = re.compile(
+    r"^\s*(figure|fig\.|table|chart|diagram|plate|exhibit)\s+"
+    r"([A-Z]?\d+(?:[.\-–]\d+)*[a-z]?)\s*[.:—–\-](?:\s|$)",
+    re.IGNORECASE,
+)
+# A paragraph: a block of at least this many words, most of them words of
+# letters. A figure's labels, a table's cells and a sequence of letters are
+# not, however long. Paragraphs outside figures part one figure from the
+# next, and a drawing mostly filled by one is a framed box of text.
+PARAGRAPH_WORDS = 25
+PARAGRAPH_WORDY = 0.6
+FRAMED_TEXT = 0.5
+# A picture covering this much of its page is the page itself, scanned or
+# photographed: its text is read by OCR (record 29), and it is a figure only
+# in a document of one page, an uploaded picture.
+PAGE_PICTURE = 0.8
+# Parts of one figure lie this close, in points.
+FIGURE_GAP = 6
+# Labels set just above a drawing, such as a row of plot titles, within this.
+LABELS_ABOVE = 24
+# A caption with nothing drawn near it marks a figure of thin lines only when
+# the space above it is at least this share of the page high.
+LINE_FIGURE_MIN_HEIGHT = 0.08
+# The resolution of a figure's picture for the model and for the reader.
+FIGURE_DPI = 200
+
+
+@dataclass(frozen=True)
+class Figure:
+    """A figure or drawn table on a page: where it is, in PDF points, and its
+    caption, which lies outside rect, if it has one."""
+
+    page: int
+    rect: tuple[float, float, float, float]
+    caption: str | None = None
+    caption_rect: tuple[float, float, float, float] | None = None
+
+    @property
+    def key(self) -> str:
+        """The figure's identity within a version of the file."""
+        return f"{self.page}:" + ",".join(f"{v:.0f}" for v in self.rect)
+
+    @property
+    def crop(self) -> tuple[float, float, float, float]:
+        """The figure with its caption, as the model and the reader see it."""
+        rect = pymupdf.Rect(self.rect)
+        if self.caption_rect:
+            rect |= pymupdf.Rect(self.caption_rect)
+        return (rect.x0, rect.y0, rect.x1, rect.y1)
+
+
+@dataclass
+class _TextBlock:
+    rect: pymupdf.Rect
+    text: str
+    size: float = 0.0  # the font size of its first line
+    lines: int = 1
+
+    @property
+    def is_paragraph(self) -> bool:
+        words = self.text.split()
+        wordy = [w for w in words if sum(c.isalpha() for c in w) >= 2]
+        return (
+            len(words) >= PARAGRAPH_WORDS and len(wordy) >= len(words) * PARAGRAPH_WORDY
+        )
+
+
+def _line_size(line: dict) -> float:
+    spans = [s for s in line["spans"] if s["text"].strip()]
+    return round(max((s["size"] for s in spans), default=0.0), 1)
+
+
+def _text_blocks(page: pymupdf.Page) -> list[_TextBlock]:
+    """The page's blocks of text. A caption is a block of its own, its lines
+    those that share its first line's size: PyMuPDF can put a table's cells
+    in the same block as the caption above them."""
+    found = []
+    for block in page.get_text("dict", flags=_TEXT_FLAGS)["blocks"]:
+        if block.get("type") != 0:
+            continue
+        lines = [
+            (
+                pymupdf.Rect(line["bbox"]),
+                "".join(s["text"] for s in line["spans"]),
+                _line_size(line),
+            )
+            for line in block["lines"]
+        ]
+        lines = [line for line in lines if line[1].strip()]
+        groups = [lines]
+        if lines and CAPTION.match(lines[0][1]):
+            size = lines[0][2]
+            n = 1
+            while n < len(lines) and abs(lines[n][2] - size) <= 0.3:
+                n += 1
+            groups = [lines[:n], lines[n:]]
+        for group in groups:
+            if not group:
+                continue
+            rect = pymupdf.Rect(group[0][0])
+            for line in group[1:]:
+                rect |= line[0]
+            text = " ".join(" ".join(line[1] for line in group).split())
+            found.append(_TextBlock(rect, text, group[0][2], len(group)))
+    return found
+
+
+def _merged(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
+    """Rectangles that touch, or nearly, joined into one."""
+    rects = [pymupdf.Rect(r) for r in rects]
+    joined = True
+    while joined:
+        joined = False
+        for i, a in enumerate(rects):
+            for b in rects[i + 1 :]:
+                if (a + (-FIGURE_GAP, -FIGURE_GAP, FIGURE_GAP, FIGURE_GAP)).intersects(
+                    b
+                ):
+                    rects.remove(b)
+                    rects[i] = a | b
+                    joined = True
+                    break
+            if joined:
+                break
+    return sorted(rects, key=lambda r: (r.y0, r.x0))
+
+
+def _candidates(page: pymupdf.Page, one_page: bool) -> list[pymupdf.Rect]:
+    """What is drawn or pictured on the page, large enough to be a figure."""
+    width, height = page.rect.width, page.rect.height
+    area = width * height
+    found = []
+    for rect in [
+        *page.cluster_drawings(),
+        *(pymupdf.Rect(image["bbox"]) for image in page.get_image_info()),
+    ]:
+        rect &= page.rect
+        if (
+            rect.width < width * FIGURE_MIN_WIDTH
+            or rect.height < height * FIGURE_MIN_HEIGHT
+        ):
+            continue
+        if rect.width * rect.height >= area * PAGE_PICTURE and not one_page:
+            continue  # the page itself, scanned
+        found.append(rect)
+    return _merged(found)
+
+
+def _overlap(a: pymupdf.Rect, b: pymupdf.Rect) -> float:
+    """How far two rectangles overlap side to side."""
+    return max(0.0, min(a.x1, b.x1) - max(a.x0, b.x0))
+
+
+def _join_caption_lines(blocks: list[_TextBlock], captions: list[_TextBlock]) -> None:
+    """A caption's next line can be a block of its own, just below it: one
+    line, in the caption's size."""
+    for caption in captions:
+        for b in blocks:
+            if b in captions or b.lines != 1 or abs(b.size - caption.size) > 0.3:
+                continue
+            if (
+                0 <= b.rect.y0 - caption.rect.y1 < 7
+                and _overlap(b.rect, caption.rect) > 0
+            ):
+                caption.rect |= b.rect
+                caption.text = f"{caption.text} {b.text}"
+                blocks.remove(b)
+                break
+
+
+def _page_figures(page: pymupdf.Page, one_page: bool) -> list[Figure]:
+    width, height = page.rect.width, page.rect.height
+    blocks = _text_blocks(page)
+    captions = [b for b in blocks if CAPTION.match(b.text)]
+    _join_caption_lines(blocks, captions)
+    drawn = _candidates(page, one_page)
+
+    def framed(r: pymupdf.Rect) -> bool:
+        return any(
+            b.is_paragraph
+            and r.contains(b.rect)
+            and b.rect.width * b.rect.height >= r.width * r.height * FRAMED_TEXT
+            for b in blocks
+        )
+
+    parts = [r for r in drawn if not framed(r)]
+    # What parts one figure from the next: captions, and paragraphs that are
+    # not text drawn inside a figure.
+    stops = captions + [
+        b
+        for b in blocks
+        if b.is_paragraph
+        and b not in captions
+        and not any(r.contains(b.rect) for r in parts)
+    ]
+
+    def blocked(top: float, bottom: float, caption: _TextBlock) -> bool:
+        return any(
+            s is not caption and s.rect.y0 >= top - 2 and s.rect.y1 <= bottom + 2
+            for s in stops
+        )
+
+    def eligible(
+        caption: _TextBlock, r: pymupdf.Rect, below: bool, side: bool = True
+    ) -> bool:
+        if side and _overlap(caption.rect, r) <= 0:
+            return False
+        if below:
+            return r.y0 >= caption.rect.y1 - 4 and not blocked(
+                caption.rect.y1, r.y0, caption
+            )
+        return r.y1 <= caption.rect.y0 + 4 and not blocked(
+            r.y1, caption.rect.y0, caption
+        )
+
+    def is_table(caption: _TextBlock) -> bool:
+        return caption.text.lstrip().lower().startswith("table")
+
+    def thin_lines(caption: _TextBlock) -> pymupdf.Rect | None:
+        """What is drawn or written above a caption, up to the text above:
+        a figure of thin lines that no drawing cluster is large enough for."""
+        top = max(
+            (
+                s.rect.y1
+                for s in stops
+                if s is not caption and s.rect.y1 <= caption.rect.y0
+            ),
+            default=0.0,
+        )
+        space = pymupdf.Rect(0, top, width, caption.rect.y0)
+        there = [
+            pymupdf.Rect(d["rect"])
+            for d in page.get_drawings()
+            if pymupdf.Rect(d["rect"]) in space
+        ] + [b.rect for b in blocks if b.rect in space and b not in captions]
+        if not there:
+            return None
+        tight = pymupdf.Rect(there[0])
+        for r in there[1:]:
+            tight |= r
+        return tight if tight.height >= height * LINE_FIGURE_MIN_HEIGHT else None
+
+    owned: dict[int, list[pymupdf.Rect]] = {id(c): [] for c in captions}
+    free = list(parts)
+
+    def assign(conventional: bool, wanting: list[_TextBlock]) -> None:
+        """Each free drawing to the caption it lies under or over by the
+        given convention and overlaps most; then the drawings beside one
+        already given, in the same row, to the same caption."""
+        for r in list(free):
+            options = [
+                c for c in wanting if eligible(c, r, below=is_table(c) == conventional)
+            ]
+            if options:
+                best = max(
+                    options,
+                    key=lambda c: (
+                        _overlap(c.rect, r),
+                        -min(abs(c.rect.y0 - r.y1), abs(r.y0 - c.rect.y1)),
+                    ),
+                )
+                owned[id(best)].append(r)
+                free.remove(r)
+        for r in list(free):
+            for c in wanting:
+                row = any(
+                    min(o.y1, r.y1) - max(o.y0, r.y0) > 0.5 * min(o.height, r.height)
+                    for o in owned[id(c)]
+                )
+                if row and eligible(
+                    c, r, below=is_table(c) == conventional, side=False
+                ):
+                    owned[id(c)].append(r)
+                    free.remove(r)
+                    break
+
+    # By convention a figure's caption is below it and a table's above it.
+    assign(True, captions)
+    # A figure caption with nothing drawn large enough above it may caption
+    # thin lines there; failing that, any caption takes what is on its other
+    # side.
+    lines: dict[int, pymupdf.Rect] = {}
+    for caption in captions:
+        if not owned[id(caption)] and not is_table(caption):
+            found_lines = thin_lines(caption)
+            if found_lines is not None:
+                lines[id(caption)] = found_lines
+    assign(False, [c for c in captions if not owned[id(c)] and id(c) not in lines])
+
+    found: list[tuple[pymupdf.Rect, _TextBlock | None]] = []
+    for caption in captions:
+        mine = owned[id(caption)]
+        if mine:
+            rect = pymupdf.Rect(mine[0])
+            for r in mine[1:]:
+                rect |= r
+            found.append((rect, caption))
+        elif id(caption) in lines:
+            found.append((lines[id(caption)], caption))
+        # A table caption with nothing drawn: an undrawn table is text, and
+        # the text layer has it.
+    found += [(r, None) for r in free]
+
+    figures = []
+    for rect, cap in found:
+        # Labels and part titles: short blocks within the figure's band,
+        # inside or alongside its drawings, or just above them.
+        if cap is not None and cap.rect.y0 >= rect.y1 - 4:
+            band = (rect.y0 - LABELS_ABOVE, cap.rect.y0)
+        elif cap is not None:
+            band = (cap.rect.y1, rect.y1)
+        else:
+            band = (rect.y0 - LABELS_ABOVE, rect.y1)
+        reach = rect | cap.rect if cap is not None else rect
+        for b in blocks:
+            if b.is_paragraph or b in captions or _overlap(b.rect, reach) <= 0:
+                continue
+            in_band = b.rect.y0 >= band[0] - 2 and b.rect.y1 <= band[1] + 2
+            near = cap is not None or b.rect.intersects(rect + (0, -LABELS_ABOVE, 0, 0))
+            if in_band and near:
+                rect |= b.rect
+        rect &= page.rect
+        if rect.is_empty:
+            continue
+        figures.append(
+            Figure(
+                page=page.number + 1,
+                rect=(rect.x0, rect.y0, rect.x1, rect.y1),
+                caption=cap.text if cap else None,
+                caption_rect=(
+                    (cap.rect.x0, cap.rect.y0, cap.rect.x1, cap.rect.y1)
+                    if cap
+                    else None
+                ),
+            )
+        )
+    return sorted(figures, key=lambda f: (f.rect[1], f.rect[0]))
+
+
+def figures(path: Path) -> list[Figure]:
+    """The figures and drawn tables of a document, in reading order: what is
+    drawn or pictured large enough, with its caption when it has one, and
+    figures of thin lines found by their caption alone."""
+    with _PYMUPDF_LOCK, _open(path) as document:
+        one_page = document.page_count == 1
+        return [f for page in document.pages() for f in _page_figures(page, one_page)]
+
+
+def figure_image(path: Path, figure: Figure) -> bytes:
+    """The figure with its caption as a PNG."""
+    with _PYMUPDF_LOCK, _open(path) as document:
+        page = document[figure.page - 1]
+        clip = pymupdf.Rect(figure.crop) + (-6, -6, 6, 6)
+        return page.get_pixmap(dpi=FIGURE_DPI, clip=clip & page.rect).tobytes("png")
+
+
+def figure_text(path: Path, figure: Figure) -> str:
+    """The text the PDF sets inside the figure: its labels and cells."""
+    with _PYMUPDF_LOCK, _open(path) as document:
+        page = document[figure.page - 1]
+        return page.get_text("text", clip=pymupdf.Rect(figure.rect), flags=_TEXT_FLAGS)

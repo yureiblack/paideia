@@ -11,6 +11,7 @@ import type {
   EnvironmentInput,
   EnvironmentPatch,
   EnvironmentSummaryState,
+  FiguresOverview,
   GraphState,
   Job,
   MaterialUpdate,
@@ -100,6 +101,18 @@ const environmentPath = (id: string) =>
   `/api/environments/${encodeURIComponent(id)}`;
 const documentPath = (id: string) =>
   `/api/documents/${encodeURIComponent(id)}`;
+
+// An upload's content type: the file's own, a PDF or a PNG or JPEG picture,
+// which the API turns into a one-page PDF. A file the browser cannot type
+// (some systems leave .pdf untyped) goes as a PDF; the API checks the bytes
+// either way.
+const uploadType = (file: File) => ({ "Content-Type": file.type || "application/pdf" });
+
+// A figure's picture, with its caption, as the API draws it from the
+// document's file. An address for an <img>, not a request: the browser
+// fetches it, only once the picture is near the screen.
+export const figureImageUrl = (figureId: string) =>
+  `${API_BASE_URL}/api/figures/${encodeURIComponent(figureId)}/image`;
 
 export const api = {
   listEnvironments: () => request<Environment[]>("/api/environments"),
@@ -199,12 +212,12 @@ export const api = {
   listUpdates: (environmentId: string) =>
     request<MaterialUpdate[]>(`${environmentPath(environmentId)}/updates`),
 
-  // A new version of a document, as the raw PDF body, like an upload.
+  // A new version of a document, as the raw file body, like an upload.
   uploadNewVersion: (documentId: string, file: File) =>
     request<Document>(`${documentPath(documentId)}/versions`, {
       method: "POST",
       body: file,
-      headers: { "Content-Type": "application/pdf" },
+      headers: uploadType(file),
     }),
 
   // Background work: queued and running first, then the latest finished.
@@ -220,16 +233,17 @@ export const api = {
   listDocuments: (environmentId: string) =>
     request<Document[]>(`${environmentPath(environmentId)}/documents`),
 
-  // The PDF travels as the raw request body, not inside a form, so the
-  // backend can stop an oversized upload part-way. The browser announces the
-  // file's size up front, which lets it refuse one before any byte is sent.
+  // The PDF or picture travels as the raw request body, not inside a form,
+  // so the backend can stop an oversized upload part-way. The browser
+  // announces the file's size up front, which lets it refuse one before any
+  // byte is sent.
   uploadDocument: (environmentId: string, file: File) =>
     request<Document>(
       `${environmentPath(environmentId)}/documents?filename=${encodeURIComponent(file.name)}`,
       {
         method: "POST",
         body: file,
-        headers: { "Content-Type": "application/pdf" },
+        headers: uploadType(file),
       },
     ),
 
@@ -270,6 +284,18 @@ export const api = {
   readMaths: (documentId: string, firstPage: number, lastPage: number) =>
     request<Job>(
       `${documentPath(documentId)}/maths`,
+      withJson("POST", { first_page: firstPage, last_page: lastPage }),
+    ),
+
+  // The document's figures and how far reading them has got.
+  getFigures: (documentId: string) =>
+    request<FiguresOverview>(`${documentPath(documentId)}/figures`),
+
+  // Read the figures on these pages with the local vision model, then read
+  // the document again with them. Returns the reading's job.
+  readFigures: (documentId: string, firstPage: number, lastPage: number) =>
+    request<Job>(
+      `${documentPath(documentId)}/figures`,
       withJson("POST", { first_page: firstPage, last_page: lastPage }),
     ),
 

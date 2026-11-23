@@ -3,15 +3,17 @@
 // A document's own page, made for reading (decision record 28). A bar on
 // top leads back to the environment and to Materials, brings back the
 // contents rail that a desktop hides while reading, and holds the
-// document's ••• menu. Under the document's name, three tabs: its text, page
-// by page, its summary, and its maths. The tab is part of the address
-// (?tab=summary), so the Materials menu can open one directly.
+// document's ••• menu. Under the document's name, four tabs: its text, page
+// by page, its summary, its maths and its figures. The tab is part of the
+// address (?tab=summary), so the Materials menu can open one directly.
 //
 // The text sits in one column of at most 640 pixels, each page with its
 // folio. A desktop lists the pages beside it, marking the one in view; a
 // phone turns the pages from a bar at the bottom. The page in view is
 // remembered for Home's Keep reading, and an address ending in #page-3
-// opens at that page.
+// opens at that page. A figure the model has read (decision record 29) is
+// drawn in its place in the page: its picture, its caption, what is written
+// in it, and the model's description, marked as the model's.
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,12 +22,14 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { DocumentSummaryPanel } from "@/components/document-summary";
 import { useReading } from "@/components/environment-shell";
 import { sectionNumber } from "@/components/environment-tabs";
+import { FiguresPanel } from "@/components/figure-reading";
 import {
   documentDetails,
   DocumentActionsOutcome,
   DocumentMenu,
   DocumentNotes,
   JobStatus,
+  readFromPictures,
   readingStep,
   StepLine,
   useDocumentActions,
@@ -38,19 +42,24 @@ import { button } from "@/components/ui";
 import { useDocuments, usePages, useRequestSummary, useSummary } from "@/hooks/use-documents";
 import { useEnvironment } from "@/hooks/use-environments";
 import { useJobs } from "@/hooks/use-jobs";
+import { figureImageUrl } from "@/lib/api";
 import { rememberReading } from "@/lib/local";
 import { split } from "@/lib/maths";
-import type { Document, DocumentPage } from "@/lib/types";
+import type { Document, DocumentPage, FigureTable, PageFigure } from "@/lib/types";
 
 const TABS = [
   { id: "text", label: "Text" },
   { id: "summary", label: "Summary" },
   { id: "maths", label: "Maths" },
+  { id: "figures", label: "Figures" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
+// The tabs that read the document's pages again, offered once it is read.
+const ONCE_READ: readonly TabId[] = ["maths", "figures"];
+
 const tabFrom = (value: string | null | undefined): TabId =>
-  value === "summary" || value === "maths" ? value : "text";
+  TABS.find((t) => t.id === value)?.id ?? "text";
 
 export function DocumentReader({
   environmentId,
@@ -204,7 +213,7 @@ function DocumentPage({
   const [chosen, setChosen] = useState<{ tab: TabId; from: TabId } | null>(null);
   const wanted = chosen && chosen.from === asked ? chosen.tab : asked;
   const ready = document.status === "ready";
-  const tabs = TABS.filter((t) => t.id !== "maths" || ready);
+  const tabs = TABS.filter((t) => ready || !ONCE_READ.includes(t.id));
   const tab = tabs.some((t) => t.id === wanted) ? wanted : "text";
   const step = readingStep(document, job);
 
@@ -293,6 +302,11 @@ function DocumentPage({
             <MathsPanel document={document} environmentId={environmentId} />
           </Panel>
         )}
+        {tab === "figures" && (
+          <Panel tab="figures">
+            <FiguresPanel document={document} environmentId={environmentId} />
+          </Panel>
+        )}
 
         {reading && !contentsShown && (
           <div className="hidden flex-col gap-2 min-[1280px]:flex desk:col-start-3 desk:row-start-3">
@@ -309,7 +323,8 @@ function DocumentPage({
   );
 }
 
-// "4 pages · 478 KB · added 10 Nov 2026 · read in full"
+// "4 pages · 478 KB · added 10 Nov 2026 · read in full", and for a scan
+// "· 4 pages read from pictures".
 function documentMeta(document: Document): string {
   const parts: string[] = [];
   const pages = document.page_count;
@@ -331,6 +346,8 @@ function documentMeta(document: Document): string {
       else if (withText !== null && pages !== null && withText < pages) {
         parts.push(`text on ${withText} of ${pages} pages`);
       } else parts.push("read in full");
+      const pictures = readFromPictures(document);
+      if (pictures) parts.push(pictures);
     }
   }
   return parts.join(" · ");
@@ -362,8 +379,8 @@ function TextTab({ environmentId, document }: { environmentId: string; document:
       </Panel>
     );
   }
-  // Read again (a new version, or its maths), the document changes: its
-  // pages are asked for afresh.
+  // Read again (a new version, its maths or its figures), the document
+  // changes: its pages are asked for afresh.
   return <Pages key={document.updated_at} environmentId={environmentId} document={document} />;
 }
 
@@ -493,7 +510,7 @@ function Pages({ environmentId, document }: { environmentId: string; document: D
                       here ? "font-medium text-ink" : "text-ink-2 group-hover:text-ink"
                     }`}
                   >
-                    {firstWords(page.content) || "No text"}
+                    {firstWords(indexText(page)) || "No text"}
                   </span>
                 </a>
               </li>
@@ -531,13 +548,155 @@ function PageText({ page, total }: { page: DocumentPage; total: number }) {
         <span aria-hidden className="h-px flex-1 bg-rule" />
       </div>
       {page.content.trim() ? (
-        <div className="text-[18px] leading-[1.7] break-words whitespace-pre-wrap">
-          <MathsText text={page.content} />
-        </div>
+        piecesOf(page).map((piece) =>
+          piece.kind === "text" ? (
+            <div
+              key={piece.at}
+              className="text-[18px] leading-[1.7] break-words whitespace-pre-wrap"
+            >
+              <MathsText text={piece.text} />
+            </div>
+          ) : (
+            <FigureInPage key={piece.figure.id} figure={piece.figure} page={n} />
+          ),
+        )
       ) : (
         <p className="text-base text-ink-3">No text on this page.</p>
       )}
     </section>
+  );
+}
+
+// A page's content in the order it is read: ordinary text, and each figure
+// read in it in place of its passage. A page without figures is one piece,
+// its content as it is.
+type Piece =
+  | { kind: "text"; text: string; at: number }
+  | { kind: "figure"; figure: PageFigure };
+
+function piecesOf(page: DocumentPage): Piece[] {
+  const { content } = page;
+  const figures = [...(page.figures ?? [])].sort((a, b) => a.start - b.start);
+  if (!figures.length) return [{ kind: "text", text: content, at: 0 }];
+  const pieces: Piece[] = [];
+  // The paragraph breaks around a figure's passage give way to the gap
+  // around the figure.
+  const text = (from: number, to: number) => {
+    const body = content.slice(from, to).replace(/^\n+|\n+$/g, "");
+    if (body.trim()) pieces.push({ kind: "text", text: body, at: from });
+  };
+  let at = 0;
+  for (const figure of figures) {
+    const start = Math.max(at, unitIndex(content, figure.start));
+    const end = Math.max(start, unitIndex(content, figure.end));
+    text(at, start);
+    pieces.push({ kind: "figure", figure });
+    at = end;
+  }
+  text(at, content.length);
+  return pieces;
+}
+
+// The API counts a figure's place in its page by code point, as Python
+// does, while a JavaScript string counts UTF-16 units: a character beyond
+// the first 65,536, such as the mathematical italic 𝑥 that a PDF's maths
+// fonts often give, is two of them. So a place is converted before slicing.
+function unitIndex(text: string, points: number): number {
+  let units = 0;
+  for (let seen = 0; seen < points && units < text.length; seen += 1) {
+    units += (text.codePointAt(units) ?? 0) > 0xffff ? 2 : 1;
+  }
+  return units;
+}
+
+// A page as the list of pages sums it up: each figure by its caption, not
+// the passage the model wrote for it.
+function indexText(page: DocumentPage): string {
+  return piecesOf(page)
+    .map((piece) => (piece.kind === "text" ? piece.text : (piece.figure.caption ?? "")))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+// A figure read by the model, in its place in the page. Everything read in
+// it is its legend, so all of it is the figcaption, which HTML allows only
+// as a figure's first or last element: the caption, what is written in it,
+// its tables, and the model's description, marked as the model's, since
+// nothing can check it against the picture but the reader.
+function FigureInPage({ figure, page }: { figure: PageFigure; page: number }) {
+  return (
+    <figure aria-label={figure.caption ?? "A figure"} className="my-2 flex flex-col gap-4">
+      {/* The picture is drawn by the API from the document's file, on another
+          origin; Next's image optimiser would only fetch it again. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={figureImageUrl(figure.id)}
+        alt={figure.caption ?? `A figure on page ${page}`}
+        loading="lazy"
+        className="block h-auto max-w-full self-start"
+      />
+      <figcaption className="flex flex-col gap-4 border-t border-rule pt-3">
+        {figure.caption && <p className="text-[15px] leading-[1.55]">{figure.caption}</p>}
+        {figure.text.length > 0 && (
+          <p className="text-[13px] leading-[1.4] text-ink-2">
+            <MathsText text={figure.text.join(" · ")} />
+          </p>
+        )}
+        {figure.tables.map((table, index) => (
+          <ReadTable key={index} table={table} />
+        ))}
+        <div className="flex flex-col gap-1.5">
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span className="label text-ink-2">Described by the model</span>
+            <span className="text-[13px] leading-[1.4] text-ink-2">
+              Check it against the picture.
+            </span>
+          </p>
+          <p className="text-[18px] leading-[1.7] break-words">
+            <MathsText text={figure.description} />
+          </p>
+        </div>
+      </figcaption>
+    </figure>
+  );
+}
+
+// A table read in a figure, its first row as the header. A wide one
+// scrolls on its own on a phone instead of widening the page.
+function ReadTable({ table }: { table: FigureTable }) {
+  if (!table.rows.length) return null;
+  const [header, ...rows] = table.rows;
+  const cell = "px-2 py-1.5 align-top first:pl-0 last:pr-0";
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-left text-[13px] leading-[1.4] tabular-nums">
+        {table.title && (
+          <caption className="pb-1.5 text-left text-ink-2">
+            <MathsText text={table.title} />
+          </caption>
+        )}
+        <thead className="border-b border-ink">
+          <tr>
+            {header.map((value, index) => (
+              <th key={index} scope="col" className={`font-medium ${cell}`}>
+                <MathsText text={value} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r} className="border-b border-rule">
+              {row.map((value, index) => (
+                <td key={index} className={cell}>
+                  <MathsText text={value} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

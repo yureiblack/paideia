@@ -22,8 +22,12 @@ letters and operators, counted, and compared:
   changes the maths.
 - Letters may differ by 1%, at least 3: the model drops a word now and then,
   or corrects a typo of the book's, and that changes no maths.
-- Figure labels may be left out, and the running header and footer are
-  left out of both.
+- Figure labels, equation numbers, footnote marks and the lines in the top
+  and bottom margin band may be left out or written (decision record 29:
+  a book without a running header has real text there).
+- A table the model writes in Markdown becomes one paragraph per row; its
+  separator row is not text, and would count as minus signs. Subscripts
+  written as HTML, L<sub>1</sub>, keep their letters and lose the tags.
 
 Counting cannot see order: a matrix whose columns the model put back in
 order has the same characters. That is a known limit of the check.
@@ -73,6 +77,15 @@ _EMPHASIS = re.compile(
 )
 _ESCAPED = re.compile(r"\\([*_#`>\[\]()!.+\-|{}])")
 _COMMAND = re.compile(r"\\[A-Za-z]+")
+# Formatting written as HTML, "L<sub>1</sub>", "i<sup>th</sup>": the text
+# layer has the letters without the marks, and the angle brackets are not
+# text (decision record 29). A line break tag is a space.
+_HTML_MARK = re.compile(r"</?(?:sub|sup|b|i|em|strong|u|small)\s*>", re.IGNORECASE)
+_HTML_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
+# A Markdown table: rows between pipes, and the separator row under the
+# header, "| --- | :---: |", which holds no text.
+_TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 
 
 def _signature(text: str) -> str:
@@ -98,6 +111,23 @@ def _without_margins(
             surplus[s] -= 1
             continue
         kept.append(line)
+    return kept
+
+
+def _table_rows(lines: list[str]) -> list[str]:
+    """A Markdown table as one paragraph per row, its cells joined by " | ",
+    its separator row left out. A bar inside a formula, as in |x - y|, does
+    not divide cells."""
+    kept: list[str] = []
+    for line in lines:
+        if not _TABLE_ROW.match(line):
+            kept.append(line)
+            continue
+        if _TABLE_SEPARATOR.match(line):
+            continue
+        row, restore = maths.prose(maths.from_model(line.strip()))
+        cells = [restore(cell).strip() for cell in row.strip().strip("|").split("|")]
+        kept += ["", " | ".join(cell for cell in cells if cell), ""]
     return kept
 
 
@@ -130,6 +160,7 @@ def _paragraphs(lines: list[str]) -> list[str]:
 def _prose(text: str) -> str:
     """Markdown's marks taken out of prose, the formulas left alone."""
     prose, restore = maths.prose(text)
+    prose = _HTML_BREAK.sub(" ", _HTML_MARK.sub("", prose))
     prose = _QUOTE.sub("", prose)
     prose = _BULLET.sub("• ", prose)
     previous = None
@@ -156,6 +187,7 @@ def without_chatter(markdown: str) -> str:
 def page_text(markdown: str, layer: PageLayer) -> PageText:
     """The transcription as page text, or Unusable."""
     lines = without_chatter(markdown).split("\n")
+    lines = _table_rows(lines)
     lines = [line for line in lines if not _RULE.match(line)]
     lines = _without_margins(lines, layer.margins, layer.required)
 

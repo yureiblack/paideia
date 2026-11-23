@@ -138,6 +138,9 @@ class Document(Base):
     page_count: Mapped[int | None]
     # Pages with any extractable text. 0 of 12 usually means a scanned PDF.
     pages_with_text: Mapped[int | None]
+    # Of those, the pages whose text Tesseract read from a picture of the
+    # page, a scan or a photograph (decision record 29).
+    pages_ocr: Mapped[int | None]
     # True when the file was damaged and PyMuPDF had to repair it to read it.
     repaired: Mapped[bool] = mapped_column(server_default=false())
     created_at: Mapped[datetime] = mapped_column(
@@ -174,6 +177,9 @@ class DocumentPage(Base):
     # Named content rather than text, which would shadow SQLAlchemy's text()
     # in this module and is also the name of a Postgres type.
     content: Mapped[str] = mapped_column(Text)
+    # Where the page's figures read by the model are in content, each as
+    # {"id": figure reading id, "start": offset, "end": offset} (record 29).
+    figures: Mapped[list | None] = mapped_column(JSONB)
 
 
 class PageTranscription(Base):
@@ -219,6 +225,58 @@ class PageTranscription(Base):
     prompt_version: Mapped[str] = mapped_column(Text)
     # The model's time for this page, both attempts: the time estimate for
     # reading other pages is drawn from it.
+    seconds: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class FigureReading(Base):
+    """A figure of a document as the vision model read it (decision record
+    29), for one version of the document's file.
+
+    The figure is where app/parsing.figures found it: figure_key is its page
+    and place, rect its place in PDF points, caption its caption, if any,
+    and caption_rect where that is. accepted: what the model says is written
+    in it (text, tables) agreed with the figure's own text and every number
+    it gave is the figure's; kind, text, tables and description are kept and
+    the figure becomes a passage of its page. rejected: reason says why, and
+    the page keeps its text layer. attempts is 1, or 2 when it was read again.
+    """
+
+    __tablename__ = "figure_readings"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id", "sha256", "figure_key", "model", "prompt_version"
+        ),
+        CheckConstraint("status IN ('accepted', 'rejected')", name="status"),
+        CheckConstraint("page_number >= 1", name="page_number_positive"),
+        CheckConstraint("attempts IN (1, 2)", name="attempts"),
+    )
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    sha256: Mapped[str] = mapped_column(String(64))
+    page_number: Mapped[int]
+    figure_key: Mapped[str] = mapped_column(Text)
+    rect: Mapped[list] = mapped_column(JSONB)
+    caption: Mapped[str | None] = mapped_column(Text)
+    caption_rect: Mapped[list | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str | None] = mapped_column(Text)
+    text: Mapped[list | None] = mapped_column(JSONB)  # labels as written
+    tables: Mapped[list | None] = mapped_column(JSONB)  # [{title, rows}]
+    description: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer)
+    model: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    # The model's time for this figure, both attempts, for the estimate.
     seconds: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -292,6 +350,12 @@ class DocumentChunk(Base):
         Vector(settings.embedding_dimensions), deferred=True
     )
     embedding_model: Mapped[str | None] = mapped_column(Text)
+    # Set when the passage is a figure the model read (decision record 29):
+    # search finds it; summaries and concepts are written from passages
+    # without it, so nothing rests on the model's description.
+    figure_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("figure_readings.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -687,7 +751,8 @@ class MaterialUpdate(Base):
     page can show its progress, and what it changed (decision record 17).
 
     kind is added, new_version, reprocessed, maths (its maths read by the
-    vision model, record 26) or deleted; filename is kept so
+    vision model, record 26), figures (its figures read, record 29) or
+    deleted; filename is kept so
     an update about a deleted document still reads well. steps lists each
     step's name, label, state (waiting, running, done, failed or skipped)
     and a detail; report is what changed, written when the update finishes;
@@ -697,7 +762,8 @@ class MaterialUpdate(Base):
     __tablename__ = "material_updates"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('added', 'new_version', 'reprocessed', 'maths', 'deleted')",
+            "kind IN ('added', 'new_version', 'reprocessed', 'maths', 'figures', "
+            "'deleted')",
             name="kind",
         ),
         CheckConstraint(

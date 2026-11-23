@@ -32,6 +32,7 @@ from app.db import SessionFactory
 from app.embedding import Embedder, EmbeddingError
 from app.models import Document, DocumentChunk, DocumentPage, Environment
 from app.parsing import ParsedDocument, ParseError, Parser
+from app.services import figures as figure_service
 from app.services import maths_reading
 
 logger = logging.getLogger(__name__)
@@ -195,8 +196,10 @@ def process_document(
                     "Upload it again."
                 )
             parsed = parser.parse(path)
-            # Pages whose maths was read replace their text layer (record 26).
+            # Pages whose maths was read replace their text layer (record 26),
+            # and figures read take the place of the text inside them (29).
             parsed = maths_reading.with_transcriptions(session, document, parsed)
+            parsed = figure_service.with_figures(session, document, parsed)
             chunks = chunk_document(document_id, parsed)
         except ParseError as exc:
             parsed, error = None, str(exc)
@@ -330,11 +333,20 @@ def _store_result(
         document.error = error
         document.page_count = None
         document.pages_with_text = None
+        document.pages_ocr = None
         document.repaired = False
     else:
         session.add_all(
             DocumentPage(
-                document_id=document_id, page_number=page.number, content=page.text
+                document_id=document_id,
+                page_number=page.number,
+                content=page.text,
+                figures=[
+                    {"id": b.figure, "start": b.start, "end": b.end}
+                    for b in page.blocks
+                    if b.figure
+                ]
+                or None,
             )
             for page in parsed.pages
         )
@@ -342,6 +354,7 @@ def _store_result(
         document.error = None
         document.page_count = len(parsed.pages)
         document.pages_with_text = parsed.pages_with_text
+        document.pages_ocr = parsed.pages_ocr
         document.repaired = parsed.repaired
     session.commit()
     return changes
@@ -389,6 +402,7 @@ def _sync_chunks(
                 document_id=document_id,
                 content=chunk.content,
                 content_hash=chunk.content_hash,
+                figure_id=chunk.figure,
                 **{field: getattr(chunk, field) for field in _CHUNK_POSITION},
             )
             session.add(row)
@@ -396,6 +410,9 @@ def _sync_chunks(
             for field in _CHUNK_POSITION:
                 if getattr(row, field) != getattr(chunk, field):
                     setattr(row, field, getattr(chunk, field))
+            # The same text may be another reading of the same figure.
+            if row.figure_id != chunk.figure:
+                row.figure_id = chunk.figure
         if chunk.id in embeddings:
             row.embedding = embeddings[chunk.id]
             row.embedding_model = model_name

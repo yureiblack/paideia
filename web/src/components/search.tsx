@@ -9,7 +9,9 @@
 // search and in semantic search, their fused score, and the reranker's
 // verdict, plus every candidate. With nothing found, the page says so
 // plainly and suggests what to try: other words, a concept's name from the
-// knowledge map, or later, while documents are still being read.
+// knowledge map, or later, while documents are still being read. A passage
+// that is a figure the model read (decision record 29) shows the figure's
+// picture, and says its words are the model's.
 
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
@@ -22,6 +24,7 @@ import { button, OpenSign } from "@/components/ui";
 import { useDocuments } from "@/hooks/use-documents";
 import { useGraph } from "@/hooks/use-graph";
 import { useSearch } from "@/hooks/use-search";
+import { figureImageUrl } from "@/lib/api";
 import {
   SEARCH_QUERY_MAX_LENGTH,
   type Document,
@@ -263,6 +266,11 @@ function ResultCard({
             {pagesLabel(citation.page_start, citation.page_end)}
             {citation.heading && ` · ${citation.heading}`}
           </p>
+          {citation.figure_id && (
+            <p className="label text-ink-3">
+              <span aria-hidden>· </span>Figure · described by the model
+            </p>
+          )}
         </div>
         <span
           className="label flex shrink-0 items-baseline gap-2.5"
@@ -276,6 +284,17 @@ function ResultCard({
         </span>
       </div>
       <div className={`flex flex-col gap-2.5 tab:pl-9 ${READING_WIDTH} tab:max-w-[696px]`}>
+        {citation.figure_id && (
+          // The picture comes from the API, on another origin; Next's image
+          // optimiser would only fetch it again.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={figureImageUrl(citation.figure_id)}
+            alt={citation.heading ?? "A figure"}
+            loading="lazy"
+            className="block h-auto max-h-[180px] w-auto max-w-full self-start object-contain"
+          />
+        )}
         <p className="text-[17px] leading-[1.6] whitespace-pre-wrap">
           <MathsText text={citation.excerpt} />
         </p>

@@ -87,6 +87,29 @@ export function useReadMaths(environmentId: string, documentId: string) {
   });
 }
 
+// The document's figures and how far reading them has got (record 29).
+const figuresKey = (documentId: string) =>
+  ["documents", documentId, "figures"] as const;
+
+export function useFigures(documentId: string) {
+  return useQuery({
+    queryKey: figuresKey(documentId),
+    queryFn: () => api.getFigures(documentId),
+  });
+}
+
+export function useReadFigures(environmentId: string, documentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ first, last }: { first: number; last: number }) =>
+      api.readFigures(documentId, first, last),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: figuresKey(documentId) });
+      return queryClient.invalidateQueries({ queryKey: environmentKey(environmentId) });
+    },
+  });
+}
+
 export function useDeleteDocument(environmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({

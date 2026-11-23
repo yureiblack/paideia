@@ -16,12 +16,16 @@ Everything about one document lives at its own id:
     POST   /api/documents/{document_id}/versions   a new version, raw PDF body
     GET    /api/documents/{document_id}/maths      its maths pages, how far read
     POST   /api/documents/{document_id}/maths      read the maths of some pages
+    GET    /api/documents/{document_id}/figures    its figures, how far read
+    POST   /api/documents/{document_id}/figures    read the figures of some pages
     DELETE /api/documents/{document_id}
+    GET    /api/figures/{figure_id}/image          a figure read, as a PNG
 
-Each upload, new version, reprocess, maths reading and deletion records an
-update (record 17) whose steps follow the background work.
+Each upload, new version, reprocess, maths or figure reading and deletion
+records an update (record 17) whose steps follow the background work.
 
-The upload is the raw PDF as the request body, not a multipart form. FastAPI
+The upload is the raw file as the request body, a PDF or a picture (PNG or
+JPEG, stored as a one-page PDF, record 29), not a multipart form. FastAPI
 writes a form-uploaded file to disk in full before any of this code runs, so a
 size limit could only be checked afterwards. Reading the raw body in chunks
 lets the limit stop the transfer.
@@ -37,6 +41,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     status,
 )
 
@@ -51,7 +56,11 @@ from app.routers.search import EmbedderDep
 from app.schemas import (
     ChunkRead,
     DocumentRead,
+    FiguresRead,
+    FiguresRequest,
+    FoundFigure,
     JobRead,
+    KeptFigure,
     KeptPage,
     MathsRead,
     MathsRequest,
@@ -59,6 +68,7 @@ from app.schemas import (
 )
 from app.services import concepts as concept_service
 from app.services import documents as service
+from app.services import figures as figure_service
 from app.services import jobs, maths_reading, updates
 
 router = APIRouter(tags=["documents"])
@@ -109,7 +119,8 @@ UPLOAD_BODY = {
     "requestBody": {
         "required": True,
         "content": {
-            "application/pdf": {"schema": {"type": "string", "format": "binary"}}
+            kind: {"schema": {"type": "string", "format": "binary"}}
+            for kind in ("application/pdf", "image/png", "image/jpeg")
         },
     }
 }
@@ -197,8 +208,17 @@ def read_document(document: DocumentDep) -> Document:
 
 
 @router.get("/documents/{document_id}/pages", response_model=list[PageRead])
-def read_pages(document: DocumentDep, session: SessionDep) -> list:
-    return service.get_pages(session, document.id)
+def read_pages(document: DocumentDep, session: SessionDep) -> list[PageRead]:
+    pages = service.get_pages(session, document.id)
+    figures = figure_service.page_figures(session, pages)
+    return [
+        PageRead(
+            page_number=page.page_number,
+            content=page.content,
+            figures=figures.get(page.page_number, []),
+        )
+        for page in pages
+    ]
 
 
 @router.get("/documents/{document_id}/chunks", response_model=list[ChunkRead])
@@ -348,6 +368,142 @@ def read_maths_pages(
         **common,
     )
     return jobs.to_read(reading_maths)
+
+
+@router.get("/documents/{document_id}/figures", response_model=FiguresRead)
+def read_figures(document: DocumentDep, session: SessionDep) -> FiguresRead:
+    """The document's figures, which of them have been read and which keep
+    the PDF's own text, and how long a figure takes (decision record 29)."""
+    if document.status != "ready":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="The document has to be read before its figures can be.",
+        )
+    try:
+        found = figure_service.overview(session, document)
+    except ParseError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    by_key = {f.key: f for f in found.figures}
+    return FiguresRead(
+        figures=[
+            FoundFigure(key=f.key, page=f.page, caption=f.caption)
+            for f in found.figures
+        ],
+        read=found.read,
+        waiting=found.waiting,
+        kept=[
+            KeptFigure(
+                key=key,
+                page=by_key[key].page if key in by_key else int(key.split(":")[0]),
+                caption=by_key[key].caption if key in by_key else None,
+                reason=reason,
+            )
+            for key, reason in sorted(found.kept.items())
+        ],
+        seconds_per_figure=round(found.seconds_per_figure, 1),
+    )
+
+
+@router.post(
+    "/documents/{document_id}/figures",
+    response_model=JobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def read_figures_of_pages(
+    body: FiguresRequest,
+    document: DocumentDep,
+    session: SessionDep,
+    session_factory: SessionFactoryDep,
+    parser: ParserDep,
+    embedder: EmbedderDep,
+    llm: LLMDep,
+    dispatcher: DispatcherDep,
+    background: BackgroundTasks,
+) -> JobRead:
+    """Read the figures on the pages from first_page to last_page with the
+    vision model (decision record 29), then read the document again with
+    them. Never done unasked: it takes about a quarter of a minute a figure."""
+    if document.status != "ready":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="The document has to be read before its figures can be.",
+        )
+    pages = document.page_count or 0
+    if not 1 <= body.first_page <= body.last_page <= pages:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Choose pages from 1 to {pages}, the first no later than the last.",
+        )
+    _not_queued_already(session, document)
+    try:
+        to_read = figure_service.to_read(
+            session, document, llm, body.first_page, body.last_page
+        )
+    except (figure_service.NothingToRead, ParseError) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    update = updates.begin(
+        session, document.environment_id, "figures", document, llm, updates.FIGURE_STEPS
+    )
+    common: dict[str, Any] = {
+        "environment_id": document.environment_id,
+        "tools": jobs.Tools(session_factory, llm, embedder, parser),
+        "dispatcher": dispatcher,
+        "background": background,
+        "update_id": update.id,
+    }
+    reading_figures = jobs.start(
+        session,
+        kind="figures",
+        title=f"Reading the figures of {document.filename}",
+        lane="model",
+        steps=jobs.figure_steps(
+            document.id, update.id, to_read, body.first_page, body.last_page
+        ),
+        **common,
+    )
+    read, derive = jobs.document_steps(document.id, document.environment_id, update.id)
+    reading = jobs.start(
+        session,
+        kind="read",
+        title=f"Reading {document.filename}",
+        lane="read",
+        steps=read,
+        after=reading_figures,
+        **common,
+    )
+    jobs.start(
+        session,
+        kind="derive",
+        title=f"Updating from {document.filename}",
+        lane="model",
+        steps=derive,
+        after=reading,
+        **common,
+    )
+    return jobs.to_read(reading_figures)
+
+
+@router.get(
+    "/figures/{figure_id}/image",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+def figure_image(figure_id: uuid.UUID, session: SessionDep) -> Response:
+    """A figure the model read, with its caption, drawn from the document's
+    file (decision record 29). The same figure of the same file is always
+    the same picture, so browsers may keep it."""
+    try:
+        image = figure_service.image(session, figure_id)
+    except ParseError:
+        image = None
+    if image is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No such figure.")
+    return Response(
+        image,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
+    )
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,6 +1,8 @@
 // A document's own page (decision record 28): a breadcrumb back to the
 // environment and Materials, the text page by page in regions with their
-// maths typeset, and the summary and maths as tabs named in the address.
+// maths typeset, and the summary, maths and figures as tabs named in the
+// address. A figure the model read (decision record 29) is drawn in place of
+// its passage, its description marked as the model's.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
@@ -8,7 +10,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentReader, firstWords } from "@/components/document-reader";
-import type { CurrentSummary, Document, DocumentPage, MathsOverview } from "@/lib/types";
+import type {
+  CurrentSummary,
+  Document,
+  DocumentPage,
+  FiguresOverview,
+  MathsOverview,
+} from "@/lib/types";
 import { fakeApi } from "@/test/network";
 
 // The address as the page reads it: its search parameters, and where it
@@ -31,6 +39,7 @@ const document: Document = {
   error: null,
   page_count: 3,
   pages_with_text: 2,
+  pages_ocr: 0,
   repaired: false,
   created_at: "2026-11-10T09:00:00Z",
   updated_at: "2026-11-10T09:01:00Z",
@@ -71,10 +80,19 @@ const maths: MathsOverview = {
   seconds_per_page: 60,
 };
 
+const figures: FiguresOverview = {
+  figures: [{ key: "2:a", page: 2, caption: "Figure 1 Eigenvectors" }],
+  read: [],
+  waiting: [],
+  kept: [],
+  seconds_per_figure: 20,
+};
+
 function open({
   documents = [document],
   search = "",
   documentSummary = summary as CurrentSummary | null,
+  documentPages = pages,
 } = {}) {
   address.search = search;
   const sent = fakeApi([
@@ -94,7 +112,7 @@ function open({
     { method: "GET", path: "/api/environments/e1/documents", answer: { body: documents } },
     { method: "GET", path: "/api/environments/e1/jobs", answer: { body: [] } },
     { method: "GET", path: "/api/environments/e1/updates", answer: { body: [] } },
-    { method: "GET", path: "/api/documents/d1/pages", answer: { body: pages } },
+    { method: "GET", path: "/api/documents/d1/pages", answer: { body: documentPages } },
     {
       method: "GET",
       path: "/api/documents/d1/summary",
@@ -108,6 +126,7 @@ function open({
       answer: { status: 202, body: { ...summary, status: "pending", overview: null } },
     },
     { method: "GET", path: "/api/documents/d1/maths", answer: { body: maths } },
+    { method: "GET", path: "/api/documents/d1/figures", answer: { body: figures } },
   ]);
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -197,6 +216,81 @@ describe("DocumentReader", () => {
     expect(window.location.search).toBe("?tab=maths");
     const offer = await screen.findByRole("region", { name: "Maths of Week 3 eigenvalues.pdf" });
     expect(await within(offer).findByRole("button", { name: "Read the maths" })).toBeEnabled();
+  });
+
+  it("offers to read the figures on their own tab", async () => {
+    open({ search: "?tab=figures" });
+
+    expect(await screen.findByRole("tab", { name: "Figures" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    const offer = await screen.findByRole("region", { name: "Figures of Week 3 eigenvalues.pdf" });
+    expect(await within(offer).findByRole("button", { name: "Read the figures" })).toBeEnabled();
+    expect(within(offer).getByRole("status")).toHaveTextContent("1 figure to read · under a minute");
+  });
+
+  it("draws a figure the model read in place of its passage", async () => {
+    // A character beyond the first 65,536, as maths fonts give, counts once
+    // in the API's places and twice in a JavaScript string.
+    const before = "Data 𝑥 arrives.\n\n";
+    const passage =
+      "Figure 1 Eigenvectors Diagram: v; Av. Sales: Year | Sales / 2020 | 5. " +
+      "Described by the model: Two arrows from the origin, one twice the other.";
+    const after = "\n\nThe arrows share a line.";
+    const start = [...before].length;
+    const end = start + [...passage].length;
+    open({
+      documents: [{ ...document, pages_ocr: 1 }],
+      documentPages: [
+        {
+          page_number: 1,
+          content: before + passage + after,
+          figures: [
+            {
+              id: "f1",
+              start,
+              end,
+              caption: "Figure 1 Eigenvectors",
+              kind: "diagram",
+              text: ["v", "Av"],
+              tables: [{ title: "Sales", rows: [["Year", "Sales"], ["2020", "5"]] }],
+              description: "Two arrows from the origin, one twice the other.",
+            },
+          ],
+        },
+        { page_number: 2, content: "Diagonalisation\n\nMore text.", figures: [] },
+      ],
+    });
+
+    const page = await screen.findByRole("region", { name: "Page 1" });
+    expect(screen.getByText(/· text on 2 of 3 pages · 1 page read from pictures$/)).toBeInTheDocument();
+
+    const figure = within(page).getByRole("figure", { name: "Figure 1 Eigenvectors" });
+    const picture = within(figure).getByRole("img", { name: "Figure 1 Eigenvectors" });
+    expect(picture.getAttribute("src")).toMatch(/\/api\/figures\/f1\/image$/);
+    expect(picture).toHaveAttribute("loading", "lazy");
+    expect(within(figure).getByText("v · Av")).toBeInTheDocument();
+    const table = within(figure).getByRole("table", { name: "Sales" });
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual([
+      "Year",
+      "Sales",
+    ]);
+    expect(within(table).getAllByRole("cell").map((c) => c.textContent)).toEqual(["2020", "5"]);
+    expect(within(figure).getByText("Described by the model")).toBeInTheDocument();
+    expect(within(figure).getByText("Check it against the picture.")).toBeInTheDocument();
+    expect(
+      within(figure).getByText("Two arrows from the origin, one twice the other."),
+    ).toBeInTheDocument();
+
+    // The text around it is as it was; the passage itself is not shown.
+    expect(within(page).getByText("Data 𝑥 arrives.")).toBeInTheDocument();
+    expect(within(page).getByText("The arrows share a line.")).toBeInTheDocument();
+    expect(page).not.toHaveTextContent("Described by the model: Two arrows");
+
+    // The list of pages sums the page up by its text, not the model's words.
+    const list = screen.getByRole("navigation", { name: "Pages" });
+    expect(within(list).getByRole("link", { name: "Page 1 Data 𝑥 arrives." })).toBeInTheDocument();
   });
 
   it("asks for a summary where there is none", async () => {

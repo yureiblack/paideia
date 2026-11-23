@@ -19,6 +19,10 @@ Nothing is sent to a hosted service.
 - Node 22 and pnpm 10
 - Ollama, for everything the language model writes (on a Mac:
   `brew install ollama`)
+- Tesseract, to read scanned pages and pictures (on a Mac:
+  `brew install tesseract`; on Debian or Ubuntu:
+  `sudo apt-get install tesseract-ocr`). Without it, a scan or a photograph
+  is stored with no text, and everything else works.
 
 The language model needs about 6 GB of disk and about 7.5 GB of memory while it
 works. Everything else in the app runs without it.
@@ -145,7 +149,8 @@ default and what it does. The ones you are most likely to change:
 | `LOG_FORMAT` | `json` | `text` makes the API's and worker's logs readable while working locally |
 | `LLM_MODEL` | `ministral-3:8b` | The Ollama model that writes summaries, concepts, relationships, stage titles and practice |
 | `DATA_DIR` | `data` | Where uploaded PDFs are kept, one folder per environment |
-| `MAX_UPLOAD_MB`, `MAX_PAGES` | 50, 1000 | The largest PDF accepted, in megabytes and in pages |
+| `MAX_UPLOAD_MB`, `MAX_PAGES` | 50, 1000 | The largest file accepted, a PDF or a picture, in megabytes; the most pages a PDF may have |
+| `OCR`, `OCR_LANGUAGE` | `true`, `eng` | Whether Tesseract reads scanned pages and pictures, and in which languages (`eng+deu`) |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Where the browser finds the API; read when the frontend is built or `pnpm dev` starts |
 
 The frontend reads the same root `.env` as the backend.

@@ -112,18 +112,45 @@ class DocumentRead(BaseModel):
     error: str | None
     page_count: int | None
     pages_with_text: int | None
+    # Of those, how many were read from a picture of the page (record 29).
+    pages_ocr: int | None = None
     repaired: bool
     created_at: datetime
     updated_at: datetime
 
 
+class FigureTable(BaseModel):
+    """A table the model read in a figure, its title if it has one."""
+
+    title: str | None
+    rows: list[list[str]]
+
+
+class PageFigure(BaseModel):
+    """A figure the model read (decision record 29), where it is in the
+    page's content (content[start:end] is its passage), and what it read:
+    the text and tables written in it, checked against the figure, and its
+    description, which is the model's and is shown as such."""
+
+    id: uuid.UUID
+    start: int
+    end: int
+    caption: str | None
+    kind: str
+    text: list[str]
+    tables: list[FigureTable]
+    description: str
+
+
 class PageRead(BaseModel):
-    """The extracted text of one page, numbered from 1."""
+    """The extracted text of one page, numbered from 1, and the figures read
+    in it."""
 
     model_config = ConfigDict(from_attributes=True)
 
     page_number: int
     content: str
+    figures: list[PageFigure] = []
 
 
 class KeptPage(BaseModel):
@@ -154,6 +181,37 @@ class MathsRequest(BaseModel):
     last_page: int = Field(ge=1)
 
 
+class FoundFigure(BaseModel):
+    """A figure found in a document: its key, page and caption."""
+
+    key: str
+    page: int
+    caption: str | None
+
+
+class KeptFigure(FoundFigure):
+    """A figure whose reading disagreed with it: it keeps the PDF's text."""
+
+    reason: str
+
+
+class FiguresRead(BaseModel):
+    """A document's figures (decision record 29): those found, the keys of
+    those read and in use, those read by a reading cancelled before it put
+    them in place (waiting), those that keep the PDF's text and why, and how
+    many seconds a figure takes to read on this machine."""
+
+    figures: list[FoundFigure]
+    read: list[str]
+    waiting: list[str]
+    kept: list[KeptFigure]
+    seconds_per_figure: float
+
+
+class FiguresRequest(MathsRequest):
+    """Read the figures on the pages from first_page to last_page."""
+
+
 class ChunkRead(BaseModel):
     """One passage of a document, with where its text sits in the pages."""
 
@@ -168,6 +226,8 @@ class ChunkRead(BaseModel):
     heading: str | None
     content: str
     content_hash: str
+    # Set when the passage is a figure the model read (record 29).
+    figure_id: uuid.UUID | None = None
 
 
 class SearchRequest(BaseModel):
@@ -206,6 +266,9 @@ class Citation(BaseModel):
     page_end: int
     heading: str | None
     excerpt: str
+    # Set when the passage is a figure the model read (record 29): its
+    # picture is at /api/figures/{figure_id}/image.
+    figure_id: uuid.UUID | None = None
 
 
 class SourcePage(BaseModel):
@@ -720,7 +783,7 @@ class MaterialUpdateRead(BaseModel):
     run, and when it is done, its report."""
 
     id: uuid.UUID
-    kind: Literal["added", "new_version", "reprocessed", "maths", "deleted"]
+    kind: Literal["added", "new_version", "reprocessed", "maths", "figures", "deleted"]
     document_id: uuid.UUID | None
     filename: str
     status: Literal["running", "done", "failed", "cancelled"]

@@ -81,6 +81,14 @@ class Settings(BaseSettings):
     # a huge page count cannot occupy the worker for hours (record 21).
     max_pages: int = Field(default=1000, gt=0)
 
+    # Reading the text of a page that is a picture, a scan or a photograph,
+    # with Tesseract (decision record 29). Used when Tesseract is installed
+    # and ocr is on; ocr_language names Tesseract's languages, joined by +
+    # ("eng+deu"), and ocr_dpi the resolution the page is read at.
+    ocr: bool = True
+    ocr_language: str = "eng"
+    ocr_dpi: int = Field(default=300, gt=0)
+
     # The local embedding model and the size of the vectors it produces. The
     # database column is vector(384), so a model of another size needs a
     # migration as well as these two settings.

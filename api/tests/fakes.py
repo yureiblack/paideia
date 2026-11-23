@@ -200,6 +200,7 @@ class MockProvider:
         # What transcribe() answers: a text, or transcription(prompt, image).
         self.transcription = transcription
         self.images = []  # every image transcribe() was given
+        self.agains = []  # whether each was a second asking
 
     def generate_structured(self, prompt, schema):
         from app.llm import Generated
@@ -212,10 +213,11 @@ class MockProvider:
             seconds=1.5,
         )
 
-    def transcribe(self, prompt, image):
+    def transcribe(self, prompt, image, again=False):
         from app.llm import Generated, LLMError
 
         self.images.append(image)
+        self.agains.append(again)
         text = (
             self.transcription(prompt, image)
             if callable(self.transcription)
@@ -240,7 +242,7 @@ class FailingProvider(MockProvider):
         self.calls.append((prompt, schema))
         raise LLMError("Could not reach Ollama. Is it running?")
 
-    def transcribe(self, prompt, image):
+    def transcribe(self, prompt, image, again=False):
         from app.llm import LLMError
 
         self.images.append(image)

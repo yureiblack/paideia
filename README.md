@@ -3,7 +3,8 @@
 [![CI](https://github.com/yureiblack/paideia/actions/workflows/ci.yml/badge.svg)](https://github.com/yureiblack/paideia/actions/workflows/ci.yml)
 
 A local-first adaptive learning workspace. You create one environment per
-subject and upload your lecture PDFs into it. From them, Paideia builds a
+subject and upload your lecture PDFs into it, or pictures: a scan, a photo of
+the board, a screenshot. From them, Paideia builds a
 summary, a knowledge map of the concepts and how they connect, a learning
 roadmap, practice questions and a review schedule. Everything it derives
 from the material cites the passages it rests on, and it keeps all of it up
@@ -77,7 +78,7 @@ and Learn:
 | Section | What it shows |
 |---|---|
 | **Overview** | Today's study plan, worked out from your answers: concepts to strengthen, reviews due, the next stage to learn, new material to skim. Each part has its reason and an estimate of the time it takes. Under it, every other section in one line of what it holds. |
-| **Materials** | Every PDF, read page by page, with the steps of its reading shown as they happen. Each document has its own page for reading: its text page by page, its summary, and its maths, as three tabs. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. A document's maths can be read by the local vision model, for a range of pages, when you ask: each page is checked against the PDF's own text. |
+| **Materials** | Every PDF or picture, read page by page, with the steps of its reading shown as they happen. A scan, a photograph of a board or a screenshot is read by OCR. Each document has its own page for reading: its text page by page, its summary, its maths and its figures, as four tabs. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. When you ask, for a range of pages, the local vision model reads a document's maths, each page checked against the PDF's own text, and its figures and tables: what is written in a figure is checked against it, and its description is shown as the model's, never used as a source. |
 | **Summary** | A summary of all the material, built from each document's summary. Every key point cites its passages. |
 | **Knowledge map** | The concepts, with definitions and the passages that explain them. For each concept: what it builds on, what builds on it, its parts, and what it is related to. Every relationship cites the passages it was found in. |
 | **Search** | Keyword search and search by meaning, fused and then reranked. Every result is a citation. "Show in page" opens the passage, highlighted in its page, and "Show scoring" shows how each result was ranked. |
@@ -268,14 +269,14 @@ the migrations agree.
 flowchart LR
     subgraph change["A change"]
         direction TB
-        upload["A PDF is uploaded,<br/>or a new version of one"]
+        upload["A PDF or a picture is<br/>uploaded, or a new<br/>version of one"]
         record["The file is stored<br/>under its SHA-256;<br/>an update and its<br/>jobs are recorded"]
         upload --> record
     end
 
     subgraph readlane["Read lane"]
         direction TB
-        read["Read<br/>PyMuPDF: pages,<br/>paragraphs, headings"]
+        read["Read<br/>PyMuPDF: pages,<br/>paragraphs, headings;<br/>Tesseract: scanned pages"]
         chunk["Chunk<br/>along paragraphs and headings;<br/>the same PDF always<br/>gives the same chunks"]
         embed["Embed<br/>only passages never seen,<br/>looked up by their text's hash"]
         read --> chunk --> embed
@@ -495,13 +496,13 @@ neighbouring one, not the one that says it.
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 810 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 869 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 91%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 93 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 104 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.
@@ -509,8 +510,9 @@ neighbouring one, not the one that says it.
 - **End to end:** one Playwright journey through the running app.
   - It goes from the first visit's welcome and creating an environment to a
     second PDF updating it, then reads a third PDF's maths on the
-    document's own page and practises a computed exercise, in fourteen
-    steps.
+    document's own page, practises a computed exercise, reads a fourth
+    PDF's figure, and uploads a photograph of a board note whose words are
+    read, in fifteen steps.
   - Everything in it is real except the language model, which is a
     stand-in.
 - **CI:** GitHub Actions runs three jobs on every pull request and every
@@ -711,7 +713,7 @@ Known limits, each stated in its decision record:
   ([26](docs/architecture/26-reading-maths.md)). Linear algebra exercises
   are written, solved and marked by the backend
   ([27](docs/architecture/27-computed-exercises.md)), from a catalogue of
-  nine small types. A maths benchmark is planned as phase 29.
+  nine small types. A maths benchmark is planned as phase 30.
 - **Reading maths checks which characters a page shows, not their order.**
   A matrix with two columns swapped would pass. A textbook takes hours to
   read, and a PDF whose maths is drawn as pictures has none to offer
@@ -722,9 +724,13 @@ Known limits, each stated in its decision record:
   and settling what a stopped job left unfinished assumes one worker
   ([18](docs/architecture/18-background-jobs.md),
   [21](docs/architecture/21-reliability.md)).
-- **PDFs with a text layer only.** A scanned PDF is read with no text; OCR
-  was out of scope ([03](docs/architecture/03-pdf-ingestion.md)). Keyword
-  search uses an English dictionary.
+- **A scan is a program's reading.** Tesseract reads prose almost without
+  fault, but loses a formula's subscripts and some table cells. Figures are
+  found by their captions and drawings, not on scanned pages, and a figure's
+  description cannot be checked: it is shown as the model's and nothing is
+  written from it, so a table read from a figure does not yet feed practice
+  ([29](docs/architecture/29-figures-and-scans.md)). Keyword search uses an
+  English dictionary.
 - **The chunker splits a paragraph that crosses a page break** into two
   passages. The benchmark found one citation harmed by it. The fix is to be
   judged by the benchmark, before and after

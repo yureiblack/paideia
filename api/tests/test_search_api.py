@@ -82,6 +82,7 @@ def test_each_result_cites_exactly_where_it_came_from(client: TestClient):
         "page_end": 2,
         "heading": "Deadlock",
         "excerpt": chunk["content"],
+        "figure_id": None,  # a passage of text, not a figure (record 29)
     }
 
 

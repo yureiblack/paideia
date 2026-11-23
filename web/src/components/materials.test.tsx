@@ -1,12 +1,13 @@
 // The Materials tab (decision record 28): each document opens on its own
-// page, its menu leads to its summary and maths there, a document being read
-// shows the step it is at, and PDFs are added from one button, or from the
-// band an empty environment shows, several at a time.
+// page, its menu leads to its summary, maths and figures there, a document
+// being read shows the step it is at, and PDFs and pictures (decision record
+// 29) are added from one button, or from the band an empty environment
+// shows, several at a time.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Materials } from "@/components/materials";
 import type { Document, Job, MaterialUpdate } from "@/lib/types";
@@ -22,6 +23,7 @@ const ready: Document = {
   error: null,
   page_count: 4,
   pages_with_text: 4,
+  pages_ocr: 0,
   repaired: false,
   created_at: "2026-11-10T09:00:00Z",
   updated_at: "2026-11-10T09:01:00Z",
@@ -88,11 +90,11 @@ function open(documents: Document[], jobs: Job[] = [], updates: MaterialUpdate[]
 afterEach(() => window.localStorage.clear());
 
 describe("Materials", () => {
-  it("opens a document on its own page, and its summary and maths there", async () => {
-    open([ready]);
+  it("opens a document on its own page, and its summary, maths and figures there", async () => {
+    open([{ ...ready, pages_ocr: 2 }]);
 
     const row = await screen.findByRole("listitem");
-    expect(within(row).getByText(/^478 KB · added /)).toBeInTheDocument();
+    expect(within(row).getByText(/^478 KB · added .* · 2 pages read from pictures$/)).toBeInTheDocument();
     expect(within(row).getByRole("link", { name: "Read Memory.pdf" })).toHaveAttribute(
       "href",
       "/environments/e1/materials/d1",
@@ -107,6 +109,10 @@ describe("Materials", () => {
     expect(within(row).getByRole("link", { name: "Read the maths" })).toHaveAttribute(
       "href",
       "/environments/e1/materials/d1?tab=maths",
+    );
+    expect(within(row).getByRole("link", { name: "Read the figures" })).toHaveAttribute(
+      "href",
+      "/environments/e1/materials/d1?tab=figures",
     );
     expect(within(row).getByRole("button", { name: "Upload a new version" })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "Delete" })).toBeInTheDocument();
@@ -136,15 +142,17 @@ describe("Materials", () => {
     const sent = open([]);
 
     expect(await screen.findByText("No documents yet.")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Choose a PDF to upload")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Choose a PDF or picture to upload")).toHaveLength(1);
 
-    const band = screen.getByText("Drop PDFs here").closest("div")!.parentElement!;
+    const band = screen.getByText("Drop PDFs or pictures here").closest("div")!.parentElement!;
     const pdf = (name: string) => new File(["%PDF-1.7"], name, { type: "application/pdf" });
     fireEvent.drop(band, {
       dataTransfer: { files: [pdf("Week 1.pdf"), new File(["hi"], "notes.txt"), pdf("Week 2.pdf")] },
     });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("“notes.txt” is not a PDF.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "“notes.txt” is not a PDF or a picture (PNG or JPEG).",
+    );
     const uploads = () =>
       sent.filter((r) => r.method === "POST" && r.path === "/api/environments/e1/documents");
     await expect.poll(() => uploads().map((r) => r.search)).toEqual([
@@ -157,7 +165,7 @@ describe("Materials", () => {
     const sent = open([ready]);
     await screen.findByRole("listitem");
 
-    await userEvent.upload(screen.getByLabelText("Choose a PDF to upload"), [
+    await userEvent.upload(screen.getByLabelText("Choose a PDF or picture to upload"), [
       new File(["%PDF-1.7"], "Week 1.pdf", { type: "application/pdf" }),
       new File(["%PDF-1.7"], "Week 2.pdf", { type: "application/pdf" }),
     ]);
@@ -165,5 +173,35 @@ describe("Materials", () => {
     await expect
       .poll(() => sent.filter((r) => r.method === "POST").length)
       .toBe(2);
+  });
+
+  it("uploads a picture as a picture, and refuses a file that is neither", async () => {
+    const sent = open([ready]);
+    await screen.findByRole("listitem");
+    const input = screen.getByLabelText("Choose a PDF or picture to upload");
+    expect(input).toHaveAttribute(
+      "accept",
+      "application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg",
+    );
+
+    await userEvent.upload(input, new File(["\x89PNG"], "Board.png", { type: "image/png" }));
+
+    await expect
+      .poll(() => sent.filter((r) => r.method === "POST").map((r) => r.search))
+      .toEqual(["?filename=Board.png"]);
+    const upload = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.find(([, init]) => init?.method === "POST");
+    expect(upload?.[1]?.headers).toEqual({ "Content-Type": "image/png" });
+
+    // A picker that offers every file, as dropping one would.
+    await userEvent
+      .setup({ applyAccept: false })
+      .upload(input, new File(["GIF89a"], "Board.gif", { type: "image/gif" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "“Board.gif” is not a PDF or a picture (PNG or JPEG).",
+    );
+    expect(sent.filter((r) => r.method === "POST")).toHaveLength(1);
   });
 });

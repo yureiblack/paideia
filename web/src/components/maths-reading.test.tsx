@@ -22,6 +22,7 @@ const document: Document = {
   error: null,
   page_count: 10,
   pages_with_text: 10,
+  pages_ocr: 0,
   repaired: false,
   created_at: "2026-11-21T09:00:00Z",
   updated_at: "2026-11-21T09:00:00Z",

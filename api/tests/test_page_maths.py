@@ -119,3 +119,47 @@ def test_symbols_whose_text_layer_is_a_letter_are_left_out():
     assert parsing._span_text("−A", "CMSY10") == "−A"  # capitals: calligraphic
     assert parsing._span_text("X", "MathDesign-CH-Regular-Ex") == ""
     assert parsing._span_text("det p", "CharterBT-Roman") == "det p"
+
+
+def test_lines_in_the_margin_band_are_optional_as_well(tmp_path):
+    # A running header, or a book's own first line where it has none: the
+    # transcription may have it or not (decision record 29).
+    path = saved(
+        tmp_path,
+        pdfs.maths_pdf(("Some prose.", "l2 - 6l + 1 = 0"), header="5.2. EIGENVALUES"),
+    )
+
+    layer = parsing.page_layer(path, 1)
+
+    assert "5.2. EIGENVALUES" in layer.optional
+
+
+def test_equation_numbers_and_footnote_marks_are_optional(tmp_path):
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 120), "Bregman Divergence* This section is optional.")
+    page.insert_text((72, 160), "d(x, y) = x - y,")
+    page.insert_text((400, 160), "(2.1)")
+    page.insert_text((72, 200), "The value x* is the optimum, see (2.1) above.")
+    path = saved(tmp_path, document.tobytes())
+
+    layer = parsing.page_layer(path, 1)
+
+    assert "Bregman Divergence This section is optional." in layer.required
+    assert "(2.1)" in layer.optional.split("\n")
+    assert "*" in layer.optional.split("\n")
+    # A star after one letter is maths, and a number mid-sentence is text.
+    assert "The value x* is the optimum, see (2.1) above." in layer.required
+
+
+def test_a_figures_labels_beside_its_drawing_are_optional_too(tmp_path):
+    # A plot's tick labels sit beside its axes, outside the drawing: the
+    # figure as found by its caption takes them in (record 29).
+    path = saved(tmp_path, pdfs.figures_pdf())
+
+    layer = parsing.page_layer(path, 3)
+
+    assert ["1", "2", "3", "4"] == [
+        n for n in layer.optional.split("\n\n") if n.isdigit()
+    ]
+    assert "1" not in layer.required.split("\n\n")

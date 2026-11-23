@@ -107,6 +107,7 @@ describe("PracticeSession", () => {
             page_end: 3,
             heading: "Threads",
             excerpt: "Threads of a process share its address space.",
+            figure_id: null,
           },
         ],
       }),
