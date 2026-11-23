@@ -3,15 +3,17 @@
 One record per phase of the project. Each one says what was decided, what
 was tried or rejected and why, how it was tested, and what it costs. Records
 are not rewritten when a later one changes a decision; the later record says
-what it replaces. All 27 are accepted.
+what it replaces. All 28 are accepted.
 
 Records 01 to 22 follow the original roadmap; its phase 23, the
 documentation, has no record of its own. From record 24 on, the project
 extends to mathematics, starting with linear algebra: maths notation (24),
 reading maths from PDFs (26), computed exercises (27), and a maths
-evaluation (29). Record 24 sets out that plan and the decisions that hold
+evaluation (30). Record 24 sets out that plan and the decisions that hold
 across it. Between them, records 25 and 28 design the interface and then
-refine it for reading and for finding one's way.
+refine it for reading and for finding one's way. Record 29 reads what a PDF
+shows as pictures: figures and tables by the vision model, scans and
+photographs by OCR.
 
 | # | Record | What was decided | Date |
 |---|---|---|---|
@@ -42,6 +44,7 @@ refine it for reading and for finding one's way.
 | 26 | [Reading maths from PDFs](26-reading-maths.md) | The vision model reads a page's maths when asked, for a range of pages; a page is used only if the digits, operators and letters it shows agree with the PDF's own text, else read again in halves, else kept as it was; readings kept per file version and put in place by reading the document again; the model may quote maths, never work it out. | 2026-11-21 |
 | 27 | [Computed exercises](27-computed-exercises.md) | Nine linear algebra types the backend writes from a seed, solves in exact fractions and marks; the model only picks which fit a concept, kept if the concept's passages use the type's words; new numbers every review; answers typed in cells, read exactly, never evaluated; many-form answers checked by what they must satisfy. | 2026-11-22 |
 | 28 | [A refined interface](28-refined-interface.md) | The serif names, the sans carries every sentence, the monospace only labels, at 11 px or more; contents grouped as Overview, Library and Learn; Home opens on where you left off; a first-visit welcome, a guide and one note per place; each page shows one thing first; a document gets its own page for reading. | 2026-11-22 |
+| 29 | [Reading figures, tables and scans](29-figures-and-scans.md) | Scans and pictures read by Tesseract as they arrive, pictures stored as one-page PDFs; figures found by their captions and read by the vision model when asked, what is written in them checked against them and every number theirs; the description shown as the model's and never a source; four faults of record 26's check fixed. | 2026-11-23 |
 
 How to run the project is in [../setup.md](../setup.md); the benchmark's
 results are in [../evaluation/retrieval-benchmark.md](../evaluation/retrieval-benchmark.md).
