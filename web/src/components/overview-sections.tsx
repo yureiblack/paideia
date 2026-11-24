@@ -90,7 +90,7 @@ export function EnvironmentIndex({ environmentId }: { environmentId: string }) {
       <SectionHead id="index-heading">
         <span aria-hidden>03 / </span>In this environment
       </SectionHead>
-      <div className="grid gap-x-10 tab:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-10 tab:grid-cols-2">
         <div role="group" aria-label="Library" className="flex flex-col">
           <p aria-hidden className="label pt-1 pb-1.5 text-ink-3">
             Library

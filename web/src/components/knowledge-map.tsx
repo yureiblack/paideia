@@ -75,7 +75,7 @@ export function KnowledgeMap({
               passage that connects two concepts. The small numbers point to those pages.
             </Note>
           )}
-          <div className="grid border-t border-ink tab:grid-cols-[240px_minmax(0,1fr)] desk:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="grid grid-cols-[minmax(0,1fr)] border-t border-ink tab:grid-cols-[240px_minmax(0,1fr)] desk:grid-cols-[260px_minmax(0,1fr)]">
             <div className={`pt-4 tab:border-r tab:border-rule tab:pr-7 ${conceptId ? "max-tab:hidden" : ""}`}>
               <ConceptInventory
                 environmentId={environmentId}

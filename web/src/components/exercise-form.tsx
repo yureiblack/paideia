@@ -56,7 +56,7 @@ function Cell({
       aria-label={label}
       aria-invalid={right === false || undefined}
       maxLength={24}
-      className={`w-16 border-b bg-transparent pb-1 text-center text-base tabular-nums focus:border-b-2 focus:border-accent focus:pb-[3px] focus:outline-none disabled:opacity-100 ${
+      className={`w-12 tab:w-16 border-b bg-transparent pb-1 text-center text-base tabular-nums focus:border-b-2 focus:border-accent focus:pb-[3px] focus:outline-none disabled:opacity-100 ${
         right === false ? "border-accent text-ink line-through decoration-accent decoration-2" : "border-ink"
       }`}
     />

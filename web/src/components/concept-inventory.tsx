@@ -149,7 +149,7 @@ function ConceptRow({
       className={`flex min-h-11 items-center gap-2.5 tab:min-h-7 ${selected ? "-mx-2 bg-ink px-2 text-paper" : ""}`}
     >
       <ConceptMark concept={state} />
-      <h3 className="min-w-0 flex-1 truncate text-[15px]">
+      <h3 className="min-w-0 flex-1 text-[15px] break-words tab:truncate">
         {href ? (
           <Link href={href} className="hover:underline hover:decoration-accent hover:underline-offset-4">
             {concept.name}

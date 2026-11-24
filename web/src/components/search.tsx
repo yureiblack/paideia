@@ -276,7 +276,7 @@ function ResultCard({
           className="label flex shrink-0 items-baseline gap-2.5"
           title="How well this passage answers your query, from 0 to 1"
         >
-          <span aria-hidden className="tracking-[0.15em]">
+          <span aria-hidden className="hidden tracking-[0.15em] tab:inline">
             {"■".repeat(blocks)}
             {"□".repeat(5 - blocks)}
           </span>

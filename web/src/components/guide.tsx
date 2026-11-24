@@ -5,7 +5,9 @@
 // an excerpt of the interface drawn with the same type and rules. The
 // excerpts are pictures, not controls: they are hidden from assistive
 // technology, which hears the step's words instead, and nothing in them
-// can be pressed. The notes that explain each place the first time it is
+// can be pressed. A step sits beside its excerpt only when the article has
+// room for both, and each excerpt is laid out by its own width, stacking
+// when narrow as the screen it copies does on a phone. The notes that explain each place the first time it is
 // opened say the same things; the guide can show them again. It can be
 // opened from anywhere, so its link at the top goes back to where it was
 // opened from.
@@ -26,13 +28,13 @@ const STEPS: Step[] = [
     text: "An environment holds one subject: its PDFs, the summaries written from them, the concepts found in them, its roadmap and your practice. Nothing is shared between environments, so search and practice stay on the subject.",
     where: "Home → New environment",
     excerpt: (
-      <div className="flex items-start gap-6">
+      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-start @sm:gap-6">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="display text-[30px] leading-none tracking-[-0.02em]">Linear Algebra</p>
           <p className="text-[14px] leading-[1.45] text-ink-2">Lecture notes and problem sheets for MATH 201.</p>
         </div>
         <p className="text-[14px] leading-[1.4]">Nothing planned today</p>
-        <span className="label border-b border-ink pb-0.5">Open →</span>
+        <span className="label hidden border-b border-ink pb-0.5 @sm:block">Open →</span>
       </div>
     ),
   },
@@ -43,7 +45,7 @@ const STEPS: Step[] = [
     where: "Materials → Upload PDF or picture",
     excerpt: (
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-rule pb-3.5">
+        <div className="flex flex-col items-start gap-2 border-b border-rule pb-3.5 @sm:flex-row @sm:items-center @sm:gap-6">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <p className="display text-[26px] leading-none tracking-[-0.015em]">Synchronization.pdf</p>
             <p className="text-[13px] leading-[1.4] text-ink-2">478 KB · added 10 Nov</p>
@@ -66,8 +68,8 @@ const STEPS: Step[] = [
           Round robin scheduling assigns each ready task a fixed time quantum. When the quantum
           expires, the running task is preempted and moved to the back of the ready queue.
         </p>
-        <p className="flex items-baseline gap-6 pt-2">
-          <span className="label w-28 shrink-0 text-ink-2">← Builds on</span>
+        <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 pt-2">
+          <span className="label shrink-0 text-ink-2 @sm:w-28">← Builds on</span>
           <span className="display text-[22px] leading-none">Exponential Average</span>
         </p>
       </div>
@@ -102,8 +104,8 @@ const STEPS: Step[] = [
     text: "Home opens on where you left off: the next thing to practise, and the document you were reading. Each environment's overview has today's plan: what is due for review, what you missed, and the next stage. A concept you recall comes back further apart.",
     where: "Home · Overview",
     excerpt: (
-      <div className="flex items-start gap-4">
-        <p className="label flex w-28 shrink-0 items-center gap-1.5 pt-1.5">
+      <div className="flex flex-col gap-3 @sm:flex-row @sm:items-start @sm:gap-4">
+        <p className="label flex items-center gap-1.5 @sm:w-28 @sm:shrink-0 @sm:pt-1.5">
           <Mark />
           Strengthen
         </p>
@@ -111,7 +113,7 @@ const STEPS: Step[] = [
           <p className="display text-[22px] leading-[1.05]">Round Robin Scheduling, Dispatcher and Time Quantum</p>
           <p className="text-[14px] leading-[1.4] text-ink-2">Missed on the last answer.</p>
         </div>
-        <span className={button.primary}>Start →</span>
+        <span className={`${button.primary} w-fit`}>Start →</span>
       </div>
     ),
   },
@@ -149,7 +151,7 @@ export function Guide() {
         </nav>
         <NotesAgain />
       </aside>
-      <article aria-labelledby="guide-heading" className="flex min-w-0 flex-1 flex-col px-5 pt-6 pb-16 tab:px-8 tab:pt-8 desk:px-12 desk:pt-9">
+      <article aria-labelledby="guide-heading" className="@container flex min-w-0 flex-1 flex-col px-5 pt-6 pb-16 tab:px-8 tab:pt-8 desk:px-12 desk:pt-9">
         <div className="flex flex-col gap-4 pb-10">
           <p className="label">Guide / How Paideia works</p>
           <h1 id="guide-heading" className="display text-[48px] leading-[0.92] tracking-[-0.03em] tab:text-[64px] desk:text-[76px]">
@@ -166,9 +168,9 @@ export function Guide() {
             key={s.id}
             id={`step-${s.id}`}
             aria-labelledby={`step-${s.id}-heading`}
-            className="flex scroll-mt-6 flex-col gap-6 border-t border-ink pt-4 pb-11 desk:flex-row desk:gap-12"
+            className="flex scroll-mt-6 flex-col gap-6 border-t border-ink pt-4 pb-11 @min-[56rem]:flex-row @min-[56rem]:gap-12"
           >
-            <div className="flex flex-col gap-3.5 desk:w-[420px] desk:shrink-0">
+            <div className="flex flex-col gap-3.5 @min-[56rem]:w-[420px] @min-[56rem]:shrink-0">
               <p className="label">Step {String(s.id).padStart(2, "0")} / 05</p>
               <h2 id={`step-${s.id}-heading`} className="display text-[34px] leading-none tracking-[-0.02em] tab:text-[40px]">
                 {s.title}
@@ -183,7 +185,7 @@ export function Guide() {
               <p aria-hidden className="label text-ink-3">
                 In the app
               </p>
-              <div aria-hidden inert className="pointer-events-none border border-rule px-5 py-4.5 select-none">
+              <div aria-hidden inert className="@container pointer-events-none border border-rule px-5 py-4.5 select-none">
                 {s.excerpt}
               </div>
             </div>

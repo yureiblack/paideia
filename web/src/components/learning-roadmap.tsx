@@ -296,12 +296,19 @@ function StageCard({
   const total = progress?.total ?? stage.concepts.length;
   const practised = progress?.practised ?? 0;
   const done = total > 0 && practised === total;
+  const count = (
+    <>
+      {done && <span aria-hidden>✓ </span>}
+      {practised}/{total}
+      <span className="sr-only"> practised</span>
+    </>
+  );
   return (
     <article
       aria-labelledby={`stage-title-${stage.number}`}
       className={`flex flex-col ${isCurrent ? "border-b border-ink bg-paper-2 px-4 tab:px-6" : "border-b border-rule"}`}
     >
-      <header className={`flex items-center gap-4 tab:gap-6 ${isCurrent ? "py-5" : "py-3.5"}`}>
+      <header className={`flex items-center gap-3 tab:gap-6 ${isCurrent ? "py-5" : "py-3.5"}`}>
         <span
           aria-hidden
           className={`display w-11 shrink-0 tab:w-16 ${isCurrent ? "text-[40px] tab:text-[52px]" : "text-[26px] tab:text-[30px]"} ${
@@ -328,16 +335,14 @@ function StageCard({
           >
             {stage.title}
           </h3>
+          {/* On a phone the count sits here, leaving the title the width. */}
+          <p className="label text-ink-2 tab:hidden">{count}</p>
         </div>
         <span aria-hidden className="label hidden tracking-[0.15em] tab:block">
           {"■".repeat(practised)}
           {"□".repeat(Math.max(total - practised, 0))}
         </span>
-        <span className="label w-14 shrink-0 text-right">
-          {done && <span aria-hidden>✓ </span>}
-          {practised}/{total}
-          <span className="sr-only"> practised</span>
-        </span>
+        <span className="label hidden w-14 shrink-0 text-right tab:block">{count}</span>
         <button
           type="button"
           onClick={onToggle}
