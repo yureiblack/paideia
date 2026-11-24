@@ -382,5 +382,17 @@ test("a learner's journey through one subject", async ({ page }) => {
     await expect(page.getByRole("region", { name: "Page 1" })).toContainText(BOARD_NOTE);
   });
 
+  await test.step("16. Open the guide, and go back to where it was opened", async () => {
+    const reading = page.url();
+    await page.getByRole("banner").getByRole("link", { name: "Guide" }).click();
+    await expect(page.getByRole("heading", { name: "Organise, explore, learn." })).toBeVisible();
+    // Moving between its steps is not where its link goes back to.
+    await page.getByRole("navigation", { name: "Steps" }).getByRole("link").nth(2).click();
+    await expect(page).toHaveURL(/\/guide#step-3$/);
+    await page.getByRole("link", { name: "Back", exact: true }).click();
+    await expect(page).toHaveURL(reading);
+    await expect(page.getByRole("region", { name: "Page 1" })).toContainText(BOARD_NOTE);
+  });
+
   expect(problems).toEqual([]);
 });
