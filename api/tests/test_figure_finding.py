@@ -85,6 +85,34 @@ def test_a_paragraph_about_a_figure_and_a_framed_box_are_no_figures(tmp_path):
     assert all(f.page != 3 or f.caption for f in found)  # the framed box
 
 
+def test_a_table_whose_rules_run_past_the_page_edge_is_found_whole(tmp_path):
+    # A textbook's wide table, set with its rules a few points past both
+    # edges of the page (Data.pdf, Table 2.2). Clustering left out every
+    # drawing not wholly on the page, and without its rules the table was
+    # no cluster at all.
+    document = pymupdf.open()
+    page = document.new_page()
+    width = page.rect.width
+    page.insert_textbox(pymupdf.Rect(72, 40, 540, 110), pdfs.PROSE, fontsize=10)
+    page.insert_text((180, 135), "Table 2. A wide table.", fontsize=8)
+    for y in (145, 175, 205, 235):
+        page.draw_line((-7, y), (width + 7, y))
+    for x in (150, 300, 450):
+        page.draw_line((x, 145), (x, 235))
+    rows = [("Kind", "Meaning", "Example"), ("ratio", "a * x", "mass")]
+    for n, row in enumerate(rows):
+        for x, cell in zip((40, 170, 320), row):
+            page.insert_text((x, 165 + n * 30), cell, fontsize=10)
+    path = saved(tmp_path, document.tobytes())
+
+    found = parsing.figures(path)
+
+    assert [f.caption for f in found] == ["Table 2. A wide table."]
+    rect = pymupdf.Rect(found[0].rect)
+    assert rect.x0 <= 1 and rect.x1 >= width - 1  # all of it, cut at the page
+    assert "Kind" in parsing.figure_text(path, found[0])
+
+
 def test_a_page_that_is_one_picture_is_a_scan_unless_it_is_the_document(tmp_path):
     assert parsing.figures(saved(tmp_path, pdfs.picture_pdf(pages=2))) == []
     single = parsing.figures(saved(tmp_path, pdfs.picture_pdf(pages=1)))
