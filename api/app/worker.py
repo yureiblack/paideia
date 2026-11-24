@@ -97,9 +97,12 @@ class Worker:
     def sweep(self) -> storage.Swept:
         """Remove files no document accounts for, and say what went."""
         with self.tools.session_factory() as session:
-            documents = set(
-                session.execute(select(Document.environment_id, Document.id)).tuples()
-            )
+            documents = {
+                (environment_id, document_id)
+                for environment_id, document_id in session.execute(
+                    select(Document.environment_id, Document.id)
+                )
+            }
         swept = storage.sweep(documents)
         if swept:
             logger.info(

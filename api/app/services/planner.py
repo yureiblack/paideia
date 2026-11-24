@@ -53,6 +53,8 @@ def _timed(session: Session, environment_id: uuid.UUID) -> dict[str, list[float]
             Attempt.seconds.is_not(None),
         )
     ):
+        # Never None: the query keeps only timed attempts.
+        assert seconds is not None
         timed[kind].append(seconds)
     return timed
 

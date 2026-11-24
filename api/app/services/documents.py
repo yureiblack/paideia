@@ -23,6 +23,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -290,8 +291,10 @@ def _embed_where_needed(
                 DocumentChunk.embedding_model == embedder.model_name,
                 DocumentChunk.embedding.is_not(None),
             )
-            .distinct(DocumentChunk.content_hash)
+            .ext(distinct_on(DocumentChunk.content_hash))
         ):
+            # Never None: the query keeps only embedded chunks.
+            assert vector is not None
             known[content_hash] = [float(x) for x in vector]
     vectors = {
         chunk.id: known[chunk.content_hash]
