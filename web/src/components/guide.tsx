@@ -6,11 +6,14 @@
 // excerpts are pictures, not controls: they are hidden from assistive
 // technology, which hears the step's words instead, and nothing in them
 // can be pressed. The notes that explain each place the first time it is
-// opened say the same things; the guide can show them again.
+// opened say the same things; the guide can show them again. It can be
+// opened from anywhere, so its link at the top goes back to where it was
+// opened from.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { BackLink } from "@/components/back-link";
 import { button, Mark } from "@/components/ui";
 import { NOTES, showNotesAgain, useNotesPutAway } from "@/lib/local";
 
@@ -118,9 +121,11 @@ export function Guide() {
   return (
     <div className="flex flex-1 flex-col desk:flex-row">
       <aside className="flex flex-col gap-7 border-b border-ink px-5 pt-5 pb-6 tab:px-8 desk:sticky desk:top-0 desk:h-dvh desk:w-66 desk:shrink-0 desk:border-r desk:border-b-0 desk:border-r-rule desk:px-6 desk:py-7">
-        <Link href="/" className="label w-fit text-ink-2 hover:text-ink">
-          <span aria-hidden>← </span>Your environments
-        </Link>
+        <BackLink
+          fallback="/"
+          fallbackLabel="Your environments"
+          className="label w-fit text-ink-2 hover:text-ink"
+        />
         <div className="flex flex-col gap-2">
           <p className="label text-ink-3">Guide</p>
           <p className="display text-[30px] leading-none tracking-[-0.015em]">How Paideia works</p>
