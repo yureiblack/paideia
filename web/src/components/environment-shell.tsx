@@ -28,7 +28,7 @@ import { BackgroundWork } from "@/components/background-work";
 import { EnvironmentForm } from "@/components/environment-form";
 import { EnvironmentTabs, tabLabel, tabNumber } from "@/components/environment-tabs";
 import { Loading, Reference } from "@/components/query-states";
-import { button, Mark, useDismiss } from "@/components/ui";
+import { button, Mark, POPOVER_WIDTH, useDismiss, useInsideWindow } from "@/components/ui";
 import { useDocuments } from "@/hooks/use-documents";
 import {
   useDeleteEnvironment,
@@ -335,7 +335,9 @@ function EnvironmentMenu({
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const items = useRef<HTMLDivElement>(null);
   useDismiss(menu, open, () => setOpen(false), trigger);
+  useInsideWindow(items, open);
   const item =
     "label flex min-h-11 w-full items-center gap-2 px-3.5 text-left hover:bg-ink hover:text-paper";
   return (
@@ -354,7 +356,11 @@ function EnvironmentMenu({
         •••
       </button>
       {open && (
-        <div role="menu" className="absolute top-full right-0 z-30 mt-1 flex w-60 flex-col border border-ink bg-paper">
+        <div
+          ref={items}
+          role="menu"
+          className={`absolute top-full right-0 z-30 mt-1 flex w-60 ${POPOVER_WIDTH} flex-col border border-ink bg-paper`}
+        >
           <button
             type="button"
             role="menuitem"

@@ -5,7 +5,7 @@
 // Structure comes from type and hairline rules, not boxes; hover is an
 // instant swap with no easing.
 
-import { useEffect, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, type ReactNode, type RefObject } from "react";
 
 // Button styles. Primary is an ink block that turns orange under the
 // pointer; outline is the secondary action; link is an underlined label;
@@ -117,6 +117,34 @@ export function useDismiss(
       document.removeEventListener("pointerdown", onPointer);
     };
   }, [ref, open, close, trigger]);
+}
+
+// A popover is aligned to its button, so on a narrow screen one whose
+// button sits near the left edge would open off it. Once open it is moved
+// sideways just enough to stay inside the page's 20px gutters; its class
+// keeps it no wider than the window allows (POPOVER_WIDTH).
+const GUTTER = 20;
+export const POPOVER_WIDTH = "max-w-[calc(100vw-2.5rem)]";
+
+export function useInsideWindow(ref: RefObject<HTMLElement | null>, open: boolean) {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!open || !element) return;
+    function place() {
+      if (!element) return;
+      element.style.translate = "";
+      const box = element.getBoundingClientRect();
+      // Not laid out (as in tests): nothing to measure.
+      if (box.width === 0) return;
+      const width = document.documentElement.clientWidth;
+      const shift =
+        box.left < GUTTER ? GUTTER - box.left : box.right > width - GUTTER ? width - GUTTER - box.right : 0;
+      if (shift) element.style.translate = `${Math.round(shift)}px 0`;
+    }
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [ref, open]);
 }
 
 // "[+]" and "[–]": the typographic sign that something opens in place.

@@ -34,6 +34,19 @@ function documentCard(page: Page, filename: string) {
     .filter({ has: page.getByRole("heading", { name: filename, exact: true }) });
 }
 
+// The page as it is now fits a 320px phone: nothing scrolls sideways.
+// The window is narrowed and then given back its size.
+async function fitsPhone(page: Page) {
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+    )
+    .toBe(0);
+  if (size) await page.setViewportSize(size);
+}
+
 function update(page: Page, filename: string) {
   return page
     .getByRole("region", { name: "Updates" })
@@ -281,6 +294,7 @@ test("a learner's journey through one subject", async ({ page }) => {
     await card.getByRole("link", { name: `Read ${WEEK_3}` }).click();
     await expect(page.getByRole("tab", { name: "Text", selected: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Page 1" }).locator(".katex")).toBeVisible();
+    await fitsPhone(page);
   });
 
   await test.step("14. Practise a computed exercise", async () => {
@@ -318,6 +332,7 @@ test("a learner's journey through one subject", async ({ page }) => {
     // new on every review, so the right answer is not known in advance.
     const exercise = session.getByRole("article");
     await expect(exercise).toContainText("Exercise · Eigenvalues");
+    await fitsPhone(page);
     for (const cell of await exercise.getByRole("textbox").all()) await cell.fill("1");
     await exercise.getByRole("button", { name: "Check" }).click();
 
@@ -325,6 +340,7 @@ test("a learner's journey through one subject", async ({ page }) => {
     const worked = exercise.getByRole("region", { name: "Worked solution" });
     await expect(worked).toContainText("So the eigenvalues are");
     await expect(worked.locator(".katex").first()).toBeVisible();
+    await fitsPhone(page);
   });
 
   await test.step("15. Read a document's figures, and a picture's text", async () => {
@@ -392,6 +408,26 @@ test("a learner's journey through one subject", async ({ page }) => {
     await page.getByRole("link", { name: "Back", exact: true }).click();
     await expect(page).toHaveURL(reading);
     await expect(page.getByRole("region", { name: "Page 1" })).toContainText(BOARD_NOTE);
+  });
+
+  await test.step("17. Every section fits a phone", async () => {
+    const base = new URL(page.url()).pathname.split("/").slice(0, 3).join("/");
+    for (const section of ["", "/materials", "/summary", "/knowledge-map", "/search", "/roadmap", "/practice"]) {
+      await page.goto(base + section);
+      await page.waitForLoadState("networkidle");
+      await fitsPhone(page);
+    }
+
+    // A document's menu opens inside the window, though its button sits
+    // near the left edge on a phone.
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto(`${base}/materials`);
+    const card = documentCard(page, WEEK_3);
+    await card.getByRole("button", { name: `More for ${WEEK_3}` }).click();
+    const item = await card.getByRole("link", { name: "Read the maths" }).boundingBox();
+    expect(item?.x).toBeGreaterThanOrEqual(0);
+    expect((item?.x ?? 0) + (item?.width ?? 0)).toBeLessThanOrEqual(320);
+    await page.setViewportSize({ width: 1280, height: 720 });
   });
 
   expect(problems).toEqual([]);

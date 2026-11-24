@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { API_BASE_URL } from "@/lib/config";
 
-import { Mark, useDismiss } from "./ui";
+import { Mark, POPOVER_WIDTH, useDismiss, useInsideWindow } from "./ui";
 
 type Status = "checking" | "ok" | "down";
 type Probe = { status: Status; reason?: string };
@@ -34,8 +34,10 @@ export function ApiStatus() {
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDListElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(panel, open, close, trigger);
+  useInsideWindow(list, open);
 
   useEffect(() => {
     probe("/health").then(setApi);
@@ -74,7 +76,7 @@ export function ApiStatus() {
         <span className="hidden tab:inline">{summary}</span>
       </button>
       {open && (
-        <dl className="absolute right-0 top-full z-30 mt-3 w-72 border border-ink bg-paper">
+        <dl ref={list} className={`absolute right-0 top-full z-30 mt-3 w-72 ${POPOVER_WIDTH} border border-ink bg-paper`}>
           {rows.map(([label, { status, reason }]) => (
             <div
               key={label}

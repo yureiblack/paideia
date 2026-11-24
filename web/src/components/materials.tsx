@@ -20,7 +20,7 @@ import { MathsText } from "@/components/maths-text";
 import { Note } from "@/components/note";
 import { Empty, Loading, LoadError } from "@/components/query-states";
 import { ACCEPTED_FILES, UploadZone } from "@/components/upload-zone";
-import { button, Mark, Opening, useDismiss } from "@/components/ui";
+import { button, Mark, Opening, POPOVER_WIDTH, useDismiss, useInsideWindow } from "@/components/ui";
 import {
   useDeleteDocument,
   useDocuments,
@@ -490,7 +490,9 @@ export function DocumentMenu({
     [onOpenChange],
   );
   const close = useCallback(() => setOpen(false), [setOpen]);
+  const items = useRef<HTMLDivElement>(null);
   useDismiss(menu, open, close, trigger);
+  useInsideWindow(items, open);
 
   return (
     <div ref={menu} className="relative">
@@ -507,7 +509,10 @@ export function DocumentMenu({
         •••
       </button>
       {open && (
-        <div className="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col border border-ink bg-paper">
+        <div
+          ref={items}
+          className={`absolute top-full right-0 z-20 mt-1 flex w-64 ${POPOVER_WIDTH} flex-col border border-ink bg-paper`}
+        >
           {links.map((link) => (
             <Link key={link.href} href={link.href} onClick={close} className={menuItem}>
               <span className="flex-1">{link.label}</span>
