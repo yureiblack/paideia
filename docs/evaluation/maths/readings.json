@@ -1,0 +1,602 @@
+[
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "377c7cd24ce216c80e8da89e666a7f54358906f8a8105fb7fdc6d92a260fe502",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 51.9,
+  "answer": "# Linear Systems and Row Reduction\n\n## Systems of linear equations\n\nA linear equation in the variables $x_1, x_2, \\ldots, x_n$ has the form $a_1x_1 + a_2x_2 + \\cdots + a_nx_n = b$, where the coefficients $a_i$ and the constant $b$ are real numbers. A system of linear equations is a finite collection of such equations in the same variables, and a solution is a list $(s_1, s_2, \\ldots, s_n)$ of numbers that makes every equation true at once. The set of all solutions is the solution set of the system.\n\nA system has either no solution, exactly one solution, or infinitely many solutions. Two lines in the plane show why: they cross once, they are parallel and never meet, or they are the same line. A system with at least one solution is called consistent; a system with none is inconsistent.\n\nConsider the system\n\n$$\n\\begin{align*}\nx_1 - 2x_2 + x_3 &= 0 \\\\\n2x_2 - 8x_3 &= 8 \\\\\n5x_1 - 5x_3 &= 10\n\\end{align*}\n$$\n\nIts coefficients and constants can be written in an augmented matrix, with a bar separating the coefficients from the right-hand side:\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n5 & 0 & -5 & | & 10\n\\end{pmatrix}\n$$\n\n## Row operations\n\nThree operations on the rows of an augmented matrix never change the solution set:\n\n- replacement: add a multiple of one row to another row, written $R_i \\rightarrow R_i + cR_j$;\n- interchange: swap two rows, written $R_i \\leftrightarrow R_j$;\n- scaling: multiply every entry of a row by a nonzero constant $c$, written $R_i \\rightarrow cR_i$.\n\nEach operation can be undone by another of the same kind, which is why the solution set stays the same. Two matrices are row equivalent when one can be turned into the other by a sequence of row operations, and row equivalent augmented matrices describe systems with the same solutions.\n\n**Example.** For the system above, subtract five times the first row from the third, then work down the matrix:\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n5 & 0 & -5 & | & 10\n\\end{pmatrix}\n\\rightarrow\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n0 & 10 & -10 & | & 10\n\\end{pmatrix}\n$$\n\nScaling the second row by $\\frac{1}{2}$ and then using $R_3 \\rightarrow R_3 - 10R_2$ gives\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 1 & -4 & | & 4 \\\\\n0 & 0 & 30 & | & -30\n\\end{pmatrix}\n$$\n\nso $30x_3 = -30$ and $x_3 = -1$. Substituting back, $x_2 = 4 + 4x_3 = 0$ and $x_1 = 2x_2 - x_3 = 1$. The only solution is $(x_1, x_2, x_3) = (1, 0, -1)$."
+ },
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "e02a4d6666795239923f6669f4691222b056758c6a8c062ced80e734eda4f57c",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 21.8,
+  "answer": "# Linear Systems and Row Reduction\n\n## Systems of linear equations\n\nA linear equation in the variables $x_1, x_2, \\ldots, x_n$ has the form\n$a_1x_1 + a_2x_2 + \\cdots + a_nx_n = b$,\nwhere the coefficients $a_i$ and the constant $b$ are real numbers. A system of linear equations is a finite collection of such equations in the same variables, and a solution is a list $(s_1, s_2, \\ldots, s_n)$ of numbers that makes every equation true at once. The set of all solutions is the solution set of the system.\n\nA system has either no solution, exactly one solution, or infinitely many solutions. Two lines in the plane show why: they cross once, they are parallel and never meet, or they are the same line. A system with at least one solution is called consistent; a system with none is inconsistent.\n\nConsider the system\n$$\n\\begin{align*}\nx_1 - 2x_2 + x_3 &= 0 \\\\\n2x_2 - 8x_3 &= 8 \\\\\n5x_1 - 5x_3 &= 10\n\\end{align*}\n$$\n\nIts coefficients and constants can be written in an augmented matrix, with a bar separating the coefficients from the right-hand side:\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n5 & 0 & -5 & | & 10\n\\end{pmatrix}\n$$\n\n## Row operations\n\nThree operations on the rows of an augmented matrix never change the solution set:"
+ },
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "823389e9c903eb53a7d9cb05f67bcef2ff958fdb7005daef194f8ce642373347",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 26.6,
+  "answer": "- replacement: add a multiple of one row to another row, written \\( R_i \\rightarrow R_i + cR_j \\);\n- interchange: swap two rows, written \\( R_i \\leftrightarrow R_j \\);\n- scaling: multiply every entry of a row by a nonzero constant \\( c \\), written \\( R_i \\rightarrow cR_i \\).\n\nEach operation can be undone by another of the same kind, which is why the solution set stays the same. Two matrices are row equivalent when one can be turned into the other by a sequence of row operations, and row equivalent augmented matrices describe systems with the same solutions.\n\n**Example.** For the system above, subtract five times the first row from the third, then work down the matrix:\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n5 & 0 & -5 & | & 10\n\\end{pmatrix}\n\\rightarrow_{R_3 \\rightarrow R_3 - 5R_1}\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 2 & -8 & | & 8 \\\\\n0 & 10 & -10 & | & 10\n\\end{pmatrix}\n$$\n\nScaling the second row by \\(\\frac{1}{2}\\) and then using \\( R_3 \\rightarrow R_3 - 10R_2 \\) gives\n\n$$\n\\begin{pmatrix}\n1 & -2 & 1 & | & 0 \\\\\n0 & 1 & -4 & | & 4 \\\\\n0 & 0 & 30 & | & -30\n\\end{pmatrix}\n$$\n\nso \\( 30x_3 = -30 \\) and \\( x_3 = -1 \\). Substituting back, \\( x_2 = 4 + 4x_3 = 0 \\) and \\( x_1 = 2x_2 - x_3 = 1 \\). The only solution is \\((x_1, x_2, x_3) = (1, 0, -1)\\)."
+ },
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "8f5d292fbc7490aeadd997b2ba5160166c784895a0fbfef6d94c6c4abc539deb",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 51.2,
+  "answer": "# Linear Systems and Row Reduction\n\n## Echelon forms\n\nA matrix is in row echelon form when every nonzero row lies above every row of zeros, and the leading entry of each nonzero row lies in a column to the right of the leading entry of the row above it. It is in reduced row echelon form when, in addition, every leading entry is 1 and is the only nonzero entry in its column. Each matrix is row equivalent to exactly one matrix in reduced row echelon form.\n\nThe leading entries mark the pivot positions, and a column that contains one is a pivot column. In the reduced form below, columns 1, 3 and 5 are pivot columns:\n\n$$\n\\begin{pmatrix}\n1 & 6 & 0 & 3 & 0 \\\\\n0 & 0 & 1 & -8 & 0 \\\\\n0 & 0 & 0 & 0 & 1\n\\end{pmatrix}\n$$\n\nThe variables that belong to pivot columns are basic variables; the others are free variables, and they may take any value.\n\n## Describing the solution set\n\nSuppose the reduced augmented matrix of a system is\n\n$$\n\\begin{pmatrix}\n1 & 0 & -5 & 1 \\\\\n0 & 1 & 1 & 4 \\\\\n0 & 0 & 0 & 0\n\\end{pmatrix}\n$$\n\nThen $x_1 = 1 + 5x_3$ and $x_2 = 4 - x_3$, while $x_3$ is free. Writing $x_3 = t$, every solution is a point on a line in $\\mathbb{R}^3$:\n\n$$\n\\mathbf{x} = \\begin{pmatrix} 1 \\\\ 4 \\\\ 0 \\end{pmatrix} + t \\begin{pmatrix} 5 \\\\ -1 \\\\ 1 \\end{pmatrix}, \\quad t \\in \\mathbb{R}\n$$\n\nThe same solution set can be written with set-builder notation as $\\{(1 + 5t, 4 - t, t) : t \\in \\mathbb{R}\\}$. This is the parametric vector form of the solution.\n\nA system can also turn out to have no solution at all. Row reducing the system $x_1 + x_2 = 2$, $2x_1 + 2x_2 = 7$ gives\n\n$$\n\\begin{pmatrix}\n1 & 1 & 2 \\\\\n2 & 2 & 7\n\\end{pmatrix}\n\\rightarrow\n\\begin{pmatrix}\n1 & 1 & 2 \\\\\n0 & 0 & 3\n\\end{pmatrix}\n$$\n\nand the last row says $0 = 3$, which no choice of $x_1$ and $x_2$ can satisfy.\n\n**Theorem.** A linear system is consistent if and only if the rightmost column of its augmented matrix is not a pivot column, that is, if and only if an echelon form has no row of the form $[0 \\cdots 0 | b]$ with $b \\neq 0$. A consistent system has a unique solution when it has no free variables, and infinitely many when it has at least one.\n\n## Homogeneous systems and rank\n\nA system is homogeneous when it can be written $A\\mathbf{x} = \\mathbf{0}$. It always has the trivial solution $\\mathbf{x} = \\mathbf{0}$, and it has a nontrivial solution exactly when it has a free variable. If $A$ is an $m \\times n$ matrix with $m < n$, there are more variables than equations, so at least $n - m$ variables are free and nontrivial solutions must exist.\n\nThe rank of $A$ is its number of pivot columns. With $n$ columns, the number of free variables is $n - \\text{rank } A$, so $\\text{rank } A \\leq \\min(m, n)$ and the solution set of $A\\mathbf{x} = \\mathbf{0}$ has $n - \\text{rank } A$ parameters.\n\nElimination on an $n \\times n$ system takes about $\\frac{2}{3}n^3$ arithmetic operations. For $n = 1000$ that is roughly $6.7 \\times 10^8$ operations, a fraction of a second on a laptop, which is why row reduction, and not a formula for each unknown, is how linear systems are solved in practice."
+ },
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "c47cf79c4c8694a668a098225bb681eddfcc3ec7e6563ea67a523afd965bbf0b",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 24.1,
+  "answer": "# Linear Systems and Row Reduction\n\n## Echelon forms\n\nA matrix is in row echelon form when every nonzero row lies above every row of zeros, and the leading entry of each nonzero row lies in a column to the right of the leading entry of the row above it. It is in reduced row echelon form when, in addition, every leading entry is 1 and is the only nonzero entry in its column. Each matrix is row equivalent to exactly one matrix in reduced row echelon form.\n\nThe leading entries mark the pivot positions, and a column that contains one is a pivot column. In the reduced form below, columns 1, 3 and 5 are pivot columns:\n\n$$\n\\begin{pmatrix}\n1 & 6 & 0 & 3 & 0 \\\\\n0 & 0 & 1 & -8 & 0 \\\\\n0 & 0 & 0 & 0 & 1\n\\end{pmatrix}\n$$\n\nThe variables that belong to pivot columns are basic variables; the others are free variables, and they may take any value.\n\n## Describing the solution set\n\nSuppose the reduced augmented matrix of a system is\n\n$$\n\\begin{pmatrix}\n1 & 0 & -5 & | & 1 \\\\\n0 & 1 & 1 & | & 4 \\\\\n0 & 0 & 0 & | & 0\n\\end{pmatrix}\n$$\n\nThen $x_1 = 1 + 5x_3$ and $x_2 = 4 - x_3$, while $x_3$ is free. Writing $x_3 = t$, every solution is a point on a line in $\\mathbb{R}^3$:\n\n$$\n\\mathbf{x} = \\begin{pmatrix} 1 \\\\ 4 \\\\ 0 \\end{pmatrix} + t \\begin{pmatrix} 5 \\\\ -1 \\\\ 1 \\end{pmatrix}, \\quad t \\in \\mathbb{R}\n$$"
+ },
+ {
+  "lecture": "01-linear-systems.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "0e9bd387ab983dabf7c3526813878c6dd502f213d65113adc936638f0b50cb86",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 33.9,
+  "answer": "The same solution set can be written with set-builder notation as $\\{(1 + 5t, 4 - t, t) : t \\in \\mathbb{R}\\}$. This is the parametric vector form of the solution.\n\nA system can also turn out to have no solution at all. Row reducing the system\n$x_1 + x_2 = 2$,\n$2x_1 + 2x_2 = 7$ gives\n\n$$\n\\begin{pmatrix}\n1 & 1 & | & 2 \\\\\n2 & 2 & | & 7\n\\end{pmatrix}\n\\xrightarrow{R_2 \\rightarrow R_2 - 2R_1}\n\\begin{pmatrix}\n1 & 1 & | & 2 \\\\\n0 & 0 & | & 3\n\\end{pmatrix}\n$$\n\nand the last row says $0 = 3$, which no choice of $x_1$ and $x_2$ can satisfy.\n\n**Theorem.** A linear system is consistent if and only if the rightmost column of its augmented matrix is not a pivot column, that is, if and only if an echelon form has no row of the form $[0 \\, 0 \\, \\cdots \\, 0 \\, | \\, b]$ with $b \\neq 0$. A consistent system has a unique solution when it has no free variables, and infinitely many when it has at least one.\n\n**Homogeneous systems and rank**\n\nA system is homogeneous when it can be written $A\\mathbf{x} = \\mathbf{0}$. It always has the trivial solution $\\mathbf{x} = \\mathbf{0}$, and it has a nontrivial solution exactly when it has a free variable. If $A$ is an $m \\times n$ matrix with $m < n$, there are more variables than equations, so at least $n - m$ variables are free and nontrivial solutions must exist.\n\nThe rank of $A$ is its number of pivot columns. With $n$ columns, the number of free variables is $n - \\text{rank } A$, so $\\text{rank } A \\leq \\min(m, n)$ and the solution set of $A\\mathbf{x} = \\mathbf{0}$ has $n - \\text{rank } A$ parameters.\n\nElimination on an $n \\times n$ system takes about $\\frac{2}{3}n^3$ arithmetic operations. For $n = 1000$ that is roughly $6.7 \\times 10^8$ operations, a fraction of a second on a laptop, which is why row reduction, and not a formula for each unknown, is how linear systems are solved in practice."
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "513dd8959468a1bbb8e4a9413dfda3208174987b3708822a124c9882457387a7",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 67.5,
+  "answer": "# Matrices, Inverses and Determinants\n\n## Matrix notation\n\nAn $m \\times n$ matrix has $m$ rows and $n$ columns, and its entry in row $i$ and column $j$ is written $a_{ij}$. In general,\n\n$$\nA = \\begin{pmatrix}\na_{11} & a_{12} & \\cdots & a_{1n} \\\\\na_{21} & a_{22} & \\cdots & a_{2n} \\\\\n\\vdots & \\vdots & \\ddots & \\vdots \\\\\na_{m1} & a_{m2} & \\cdots & a_{mn}\n\\end{pmatrix}\n$$\n\nThe entries $a_{11}, a_{22}, a_{33}, \\ldots$ form the main diagonal. A diagonal matrix has zeros everywhere off the main diagonal, and the identity matrix $I_n$ is the $n \\times n$ diagonal matrix with every diagonal entry equal to 1. The trace of a square matrix is the sum of its diagonal entries, $\\text{tr} A = \\sum_{i=1}^n a_{ii}$.\n\n## Products and transposes\n\nIf $A$ is $m \\times n$ and $B$ is $n \\times p$, the product $AB$ is the $m \\times p$ matrix whose entries are\n\n$$(AB)_{ij} = \\sum_{k=1}^n a_{ik}b_{kj} = a_{i1}b_{1j} + a_{i2}b_{2j} + \\cdots + a_{in}b_{nj}$$\n\nso each entry is a row of $A$ times a column of $B$. For example,\n\n$$\n\\begin{pmatrix}\n2 & 3 \\\\\n1 & -5\n\\end{pmatrix}\n\\begin{pmatrix}\n4 & 3 & 6 \\\\\n1 & -2 & 3\n\\end{pmatrix}\n=\n\\begin{pmatrix}\n11 & 0 & 21 \\\\\n-1 & 13 & -9\n\\end{pmatrix}\n$$\n\nMatrix multiplication is associative, $(AB)C = A(BC)$, and distributes over addition, but it is not commutative: in general $AB \\neq BA$, and $AB = 0$ does not force $A = 0$ or $B = 0$.\n\nThe transpose $A^T$ of an $m \\times n$ matrix is the $n \\times m$ matrix with $(A^T)_{ij} = a_{ji}$; its rows are the columns of $A$. Transposes reverse the order of a product, $(AB)^T = B^T A^T$, and a matrix with $A^T = A$ is called symmetric.\n\n## The inverse of a matrix\n\nAn $n \\times n$ matrix $A$ is invertible when there is a matrix $A^{-1}$ with $AA^{-1} = A^{-1}A = I_n$. For a $2 \\times 2$ matrix there is a formula:\n\n$$\n\\begin{pmatrix}\na & b \\\\\nc & d\n\\end{pmatrix}^{-1} = \\frac{1}{ad - bc}\n\\begin{pmatrix}\nd & -b \\\\\n-c & a\n\\end{pmatrix}, \\quad ad - bc \\neq 0\n$$\n\nFor larger matrices, row reduce the augmented matrix $[A | I]$. If $A$ is row equivalent to $I$, the same row operations turn $I$ into $A^{-1}$, so $[A | I]$ becomes $[I | A^{-1}]$; otherwise $A$ has no inverse. For a $2 \\times 2$ matrix the steps are $R_2 \\rightarrow R_2 - 3R_1$ and then $R_1 \\rightarrow R_1 - 2R_2$:\n\n$$\n\\begin{bmatrix}\n1 & 2 & | & 1 & 0 \\\\\n3 & 7 & | & 0 & 1\n\\end{bmatrix}\n\\rightarrow\n\\begin{bmatrix}\n1 & 2 & | & 1 & 0 \\\\\n0 & 1 & | & -3 & 1\n\\end{bmatrix}\n\\rightarrow\n\\begin{bmatrix}\n1 & 0 & | & 7 & -2 \\\\\n0 & 1 & | & -3 & 1\n\\end{bmatrix}\n$$\n\nWhen $A$ is invertible, the system $Ax = b$ has the unique solution $x = A^{-1}b$ for every $b \\in \\mathbb{R}^n$. Products and transposes of invertible matrices are invertible:\n\n$$(AB)^{-1} = B^{-1}A^{-1}, \\quad (A^T)^{-1} = (A^{-1})^T$$\n\n**Example.** With $A = \\begin{pmatrix} 3 & 4 \\\\ 5 & 6 \\end{pmatrix}$ we have $\\begin{vmatrix} 3 & 4 \\\\ 5 & 6 \\end{vmatrix} = 18 - 20 = -2$, so\n\n$$\nA^{-1} = -\\frac{1}{2}\n\\begin{pmatrix}\n6 & -4 \\\\\n-5 & 3\n\\end{pmatrix}\n=\n\\begin{pmatrix}\n-3 & 2 \\\\\n\\frac{5}{2} & -\\frac{3}{2}\n\\end{pmatrix}\n$$"
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "3a9fc8f1603d2b4d6771f5163e03a8cafe3d100b8b2b068293d55ee9342977ee",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 26.7,
+  "answer": "# Matrices, Inverses and Determinants\n\n## Matrix notation\n\nAn $m \\times n$ matrix has $m$ rows and $n$ columns, and its entry in row $i$ and column $j$ is written $a_{ij}$. In general,\n\n$$\nA = \\begin{pmatrix}\na_{11} & a_{12} & \\cdots & a_{1n} \\\\\na_{21} & a_{22} & \\cdots & a_{2n} \\\\\n\\vdots & \\vdots & \\ddots & \\vdots \\\\\na_{m1} & a_{m2} & \\cdots & a_{mn}\n\\end{pmatrix}\n$$\n\nThe entries $a_{11}, a_{22}, a_{33}, \\ldots$ form the main diagonal. A diagonal matrix has zeros everywhere off the main diagonal, and the identity matrix $I_n$ is the $n \\times n$ diagonal matrix with every diagonal entry equal to 1. The trace of a square matrix is the sum of its diagonal entries, $\\text{tr}(A) = \\sum_{i=1}^n a_{ii}$.\n\n## Products and transposes\n\nIf $A$ is $m \\times n$ and $B$ is $n \\times p$, the product $AB$ is the $m \\times p$ matrix whose entries are\n\n$$(AB)_{ij} = \\sum_{k=1}^n a_{ik}b_{kj} = a_{i1}b_{1j} + a_{i2}b_{2j} + \\cdots + a_{in}b_{nj}$$\n\nso each entry is a row of $A$ times a column of $B$. For example,\n\n$$\n\\begin{pmatrix}\n2 & 3 \\\\\n1 & -5\n\\end{pmatrix}\n\\begin{pmatrix}\n4 & 3 & 6 \\\\\n1 & -2 & 3\n\\end{pmatrix}\n=\n\\begin{pmatrix}\n11 & 0 & 21 \\\\\n-1 & 13 & -9\n\\end{pmatrix}\n$$"
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "3d20a696f87f5d4dbde0b2acd57582305a1bc5a5250ddc0d8466bd22a22235b9",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 39.4,
+  "answer": "Matrix multiplication is associative, $(AB)C = A(BC)$, and distributes over addition, but it is not commutative: in general $AB \\neq BA$, and $AB = 0$ does not force $A = 0$ or $B = 0$.\n\nThe transpose $A^T$ of an $m \\times n$ matrix is the $n \\times m$ matrix with $(A^T)_{ij} = a_{ji}$; its rows are the columns of $A$. Transposes reverse the order of a product, $(AB)^T = B^T A^T$, and a matrix with $A^T = A$ is called symmetric.\n\n### The inverse of a matrix\n\nAn $n \\times n$ matrix $A$ is invertible when there is a matrix $A^{-1}$ with $AA^{-1} = A^{-1}A = I_n$. For a $2 \\times 2$ matrix there is a formula:\n\n$$\n\\begin{pmatrix}\na & b \\\\\nc & d\n\\end{pmatrix}^{-1} = \\frac{1}{ad - bc} \\begin{pmatrix}\nd & -b \\\\\n-c & a\n\\end{pmatrix}, \\quad ad - bc \\neq 0\n$$\n\nFor larger matrices, row reduce the augmented matrix $[A | I]$. If $A$ is row equivalent to $I$, the same row operations turn $I$ into $A^{-1}$, so $[A | I]$ becomes $[I | A^{-1}]$; otherwise $A$ has no inverse. For a $2 \\times 2$ matrix the steps are $R_2 \\rightarrow R_2 - 3R_1$ and then $R_1 \\rightarrow R_1 - 2R_2$:\n\n$$\n\\begin{bmatrix}\n1 & 2 & 1 & 0 \\\\\n3 & 7 & 0 & 1\n\\end{bmatrix} \\rightarrow\n\\begin{bmatrix}\n1 & 2 & 1 & 0 \\\\\n0 & 1 & -3 & 1\n\\end{bmatrix} \\rightarrow\n\\begin{bmatrix}\n1 & 0 & 7 & -2 \\\\\n0 & 1 & -3 & 1\n\\end{bmatrix}\n$$\n\nWhen $A$ is invertible, the system $Ax = b$ has the unique solution $x = A^{-1}b$ for every $b$ in $\\mathbb{R}^n$. Products and transposes of invertible matrices are invertible:\n\n$$(AB)^{-1} = B^{-1}A^{-1}, \\quad (A^T)^{-1} = (A^{-1})^T$$\n\n**Example.** With $A = \\begin{pmatrix} 3 & 4 \\\\ 5 & 6 \\end{pmatrix}$ we have $\\begin{vmatrix} 3 & 4 \\\\ 5 & 6 \\end{vmatrix} = 18 - 20 = -2$, so\n\n$$\nA^{-1} = -\\frac{1}{2} \\begin{pmatrix} 6 & -4 \\\\ -5 & 3 \\end{pmatrix} = \\begin{pmatrix} -3 & 2 \\\\ \\frac{5}{2} & -\\frac{3}{2} \\end{pmatrix}\n$$"
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "8fc181d86a1a2b4368d79818e517f1501527161ad2856f83de54409491dd506f",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 41.7,
+  "answer": "# Matrices, Inverses and Determinants\n\n## Determinants\n\nThe determinant of a square matrix is a single number that says whether the matrix is invertible. It is written det $A$, or with vertical bars around the entries. For $2 \\times 2$ and $3 \\times 3$ matrices,\n\n$$\n\\begin{vmatrix}\na & b \\\\\nc & d\n\\end{vmatrix}\n= ad - bc,\n\\begin{vmatrix}\n1 & 5 & 0 \\\\\n2 & 4 & -1 \\\\\n0 & -2 & 0\n\\end{vmatrix}\n= -2\n$$\n\nIn general, let $A_{ij}$ be the matrix left when row $i$ and column $j$ are deleted. The $(i,j)$ cofactor is $C_{ij} = (-1)^{i+j} \\det A_{ij}$, and the determinant can be expanded along any row $i$:\n\n$$\n\\det A = \\sum_{j=1}^n a_{ij}C_{ij} = \\sum_{j=1}^n (-1)^{i+j}a_{ij} \\det A_{ij}\n$$\n\nThe signs $(-1)^{i+j}$ form a checkerboard, starting with $+$ in the top left corner. A row or column with many zeros makes the expansion short: for the $3 \\times 3$ matrix above, expanding along the third row leaves the single term $(-1)^{3+2}(-2) \\det \\begin{pmatrix} 1 & 5 \\\\ 2 & 4 \\end{pmatrix} = 2 \\cdot (-1) = -2$.\n\n## Properties of the determinant\n\nFor $n \\times n$ matrices $A$ and $B$:\n\n- $\\det A \\neq 0$ if and only if $A$ is invertible;\n- $\\det(AB) = \\det A \\cdot \\det B$ and $\\det(A^T) = \\det A$;\n- if $A$ is triangular, $\\det A = a_{11}a_{22} \\cdots a_{nn} = \\prod_{i=1}^n a_{ii}$;\n- $\\det(A^{-1}) = \\frac{1}{\\det A}$ and $\\det(cA) = c^n \\det A$.\n\nA row replacement leaves the determinant unchanged, a row interchange changes its sign, and scaling a row by $k$ scales the determinant by $k$. So if row reduction brings $A$ to an echelon form $U$ with $r$ interchanges and no scaling, then $\\det A = (-1)^r u_{11}u_{22} \\cdots u_{nn}$. This takes about $\\frac{2}{3}n^3$ operations, whereas cofactor expansion of an $n \\times n$ matrix needs more than $n!$ multiplications, already 3 628 800 for $n = 10$.\n\nGeometrically, $|\\det A|$ is the area of the parallelogram, or the volume of the parallelepiped, spanned by the columns of $A$, and a linear map $T(\\mathbf{x}) = A\\mathbf{x}$ multiplies every area or volume by $|\\det A|$."
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "7dcfced1836990589e72de2f206a8217e7e45fc1a853806e578959da7f9a1687",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 25.4,
+  "answer": "# Matrices, Inverses and Determinants\n\n## Determinants\n\nThe determinant of a square matrix is a single number that says whether the matrix is invertible. It is written $\\det A$, or with vertical bars around the entries. For $2 \\times 2$ and $3 \\times 3$ matrices,\n\n$$\n\\begin{vmatrix}\na & b \\\\\nc & d\n\\end{vmatrix} = ad - bc, \\quad\n\\begin{vmatrix}\n1 & 5 & 0 \\\\\n2 & 4 & -1 \\\\\n0 & -2 & 0\n\\end{vmatrix} = -2\n$$\n\nIn general, let $A_{ij}$ be the matrix left when row $i$ and column $j$ are deleted. The $(i,j)$ cofactor is $C_{ij} = (-1)^{i+j} \\det A_{ij}$, and the determinant can be expanded along any row $i$:\n\n$$\n\\det A = \\sum_{j=1}^{n} a_{ij}C_{ij} = \\sum_{j=1}^{n} (-1)^{i+j}a_{ij} \\det A_{ij}\n$$\n\nThe signs $(-1)^{i+j}$ form a checkerboard, starting with + in the top left corner. A row or column with many zeros makes the expansion short: for the $3 \\times 3$ matrix above, expanding along the third row leaves the single term $(-1)^{3+2}(-2) \\det \\begin{pmatrix} 1 & 0 \\\\ 2 & -1 \\end{pmatrix} = 2 \\cdot (-1) = -2$.\n\n## Properties of the determinant\n\nFor $n \\times n$ matrices $A$ and $B$:\n\n- $\\det A \\neq 0$ if and only if $A$ is invertible;\n\n- $\\det(AB) = \\det A \\cdot \\det B$ and $\\det(A^T) = \\det A$;"
+ },
+ {
+  "lecture": "02-matrices-and-determinants.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "5425548f066110e5400c92992501567f2751394d79403de98597497952cc8b9b",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 19.2,
+  "answer": "- if \\( A \\) is triangular, \\(\\det A = a_{11}a_{22} \\cdots a_{nn} = \\prod_{i=1}^{n} a_{ii}\\);\n\n- \\(\\det(A^{-1}) = \\frac{1}{\\det A}\\) and \\(\\det(cA) = c^n \\det A\\).\n\nA row replacement leaves the determinant unchanged, a row interchange changes its sign, and scaling a row by \\( k \\) scales the determinant by \\( k \\). So if row reduction brings \\( A \\) to an echelon form \\( U \\) with \\( r \\) interchanges and no scaling, then \\(\\det A = (-1)^r u_{11}u_{22} \\cdots u_{nn}\\). This takes about \\(\\frac{2}{3}n^3\\) operations, whereas cofactor expansion of an \\( n \\times n \\) matrix needs more than \\( n! \\) multiplications, already 3 628 800 for \\( n = 10 \\).\n\nGeometrically, \\( |\\det A| \\) is the area of the parallelogram, or the volume of the parallelepiped, spanned by the columns of \\( A \\), and a linear map \\( T(\\mathbf{x}) = A\\mathbf{x} \\) multiplies every area or volume by \\( |\\det A| \\)."
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "a4e1805016ff655a41bc7bfa8ca8f8da33b30cc74dbcaac974c90b37c10f734d",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 54.9,
+  "answer": "# Vector Spaces, Eigenvalues and Orthogonality\n\n## Subspaces, span and independence\n\nA subspace of $\\mathbb{R}^n$ is a set $H \\subseteq \\mathbb{R}^n$ that contains the zero vector and is closed under addition and scalar multiplication: if $\\mathbf{u}, \\mathbf{v} \\in H$ and $c \\in \\mathbb{R}$, then $\\mathbf{u} + \\mathbf{v} \\in H$ and $c\\mathbf{u} \\in H$. The span of vectors $\\mathbf{v}_1, \\ldots, \\mathbf{v}_p$ is the set of all their linear combinations,\n\n$$\n\\text{Span}\\{\\mathbf{v}_1, \\ldots, \\mathbf{v}_p\\} = \\{c_1\\mathbf{v}_1 + \\cdots + c_p\\mathbf{v}_p : c_1, \\ldots, c_p \\in \\mathbb{R}\\}\n$$\n\nand it is always a subspace, as is the intersection of any number of subspaces, $\\bigcap_{i=1}^k H_i$. The vectors are linearly independent when the only solution of $c_1\\mathbf{v}_1 + \\cdots + c_p\\mathbf{v}_p = \\mathbf{0}$ is $c_1 = c_2 = \\cdots = c_p = 0$. A basis of a subspace $H$ is a linearly independent set that spans $H$; every basis of $H$ has the same number of vectors, the dimension $\\dim H$.\n\nTwo subspaces come with every $m \\times n$ matrix $A$. The null space $\\text{Nul } A = \\{\\mathbf{x} \\in \\mathbb{R}^n : A\\mathbf{x} = \\mathbf{0}\\}$, and the column space $\\text{Col } A$ is the span of the columns of $A$, a subspace of $\\mathbb{R}^m$. The pivot columns of $A$ form a basis of $\\text{Col } A$, and the rank-nullity theorem links the two dimensions:\n\n$$\n\\text{rank } A + \\dim \\text{Nul } A = n\n$$\n\n## Eigenvalues and eigenvectors\n\nAn eigenvector of an $n \\times n$ matrix $A$ is a nonzero vector $\\mathbf{x}$ with $A\\mathbf{x} = \\lambda \\mathbf{x}$ for some scalar $\\lambda$, called an eigenvalue. Rewriting this as $(A - \\lambda I)\\mathbf{x} = \\mathbf{0}$ shows that $\\lambda$ is an eigenvalue exactly when $A - \\lambda I$ is not invertible, that is, when $\\lambda$ solves the characteristic equation\n\n$$\n\\det(A - \\lambda I) = 0\n$$\n\n**Example.** For $A = \\begin{pmatrix} 2 & 3 \\\\ 3 & -6 \\end{pmatrix}$,\n\n$$\n\\det(A - \\lambda I) = \\begin{vmatrix} 2 - \\lambda & 3 \\\\ 3 & -6 - \\lambda \\end{vmatrix} = \\lambda^2 + 4\\lambda - 21 = (\\lambda - 3)(\\lambda + 7)\n$$\n\nso the eigenvalues are $\\lambda_1 = 3$ and $\\lambda_2 = -7$. Solving $(A - 3I)\\mathbf{x} = \\mathbf{0}$ gives the eigenvector $\\mathbf{v}_1 = (3, 1)$, and $(A + 7I)\\mathbf{x} = \\mathbf{0}$ gives $\\mathbf{v}_2 = (-1, 3)$. The sum of the eigenvalues equals the trace, $3 + (-7) = -4 = 2 + (-6)$, and their product equals the determinant, $-21$.\n\n## Diagonalization\n\nA matrix is diagonalizable when $A = PDP^{-1}$ with $D$ diagonal. This happens exactly when $A$ has $n$ linearly independent eigenvectors: they form the columns of $P$, and the matching eigenvalues form the diagonal of $D$. For the example above,\n\n$$\nP = \\begin{pmatrix} 3 & -1 \\\\ 1 & 3 \\end{pmatrix}, \\quad D = \\begin{pmatrix} 3 & 0 \\\\ 0 & -7 \\end{pmatrix}\n$$\n\nPowers then cost almost nothing: $A^k = PD^kP^{-1}$, and $D^k$ has entries $3^k$ and $(-7)^k$. A matrix with $n$ distinct eigenvalues is always diagonalizable, and a symmetric matrix can always be diagonalized by an orthogonal $P$, one with $P^{-1} = P^T$."
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "571bf08f3c1b60d93f3c291e147e5e05744af647f8dbf0b81e6f4d5c0c37ddb1",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 34.2,
+  "answer": "# Vector Spaces, Eigenvalues and Orthogonality\n\n## Subspaces, span and independence\n\nA subspace of $\\mathbb{R}^n$ is a set $H \\subseteq \\mathbb{R}^n$ that contains the zero vector and is closed under addition and scalar multiplication: if $\\mathbf{u}, \\mathbf{v} \\in H$ and $c \\in \\mathbb{R}$, then $\\mathbf{u} + \\mathbf{v} \\in H$ and $c\\mathbf{u} \\in H$. The span of vectors $\\mathbf{v}_1, \\ldots, \\mathbf{v}_p$ is the set of all their linear combinations,\n\n$$\n\\text{Span}\\{\\mathbf{v}_1, \\ldots, \\mathbf{v}_p\\} = \\{c_1\\mathbf{v}_1 + \\cdots + c_p\\mathbf{v}_p : c_1, \\ldots, c_p \\in \\mathbb{R}\\}\n$$\n\nand it is always a subspace, as is the intersection of any number of subspaces, $\\bigcap_{i=1}^k H_i$. The vectors are linearly independent when the only solution of $c_1\\mathbf{v}_1 + \\cdots + c_p\\mathbf{v}_p = \\mathbf{0}$ is $c_1 = c_2 = \\cdots = c_p = 0$. A basis of a subspace $H$ is a linearly independent set that spans $H$; every basis of $H$ has the same number of vectors, the dimension $\\dim H$.\n\nTwo subspaces come with every $m \\times n$ matrix $A$. The null space is $\\text{Nul } A = \\{\\mathbf{x} \\in \\mathbb{R}^n : A\\mathbf{x} = \\mathbf{0}\\}$, and the column space $\\text{Col } A$ is the span of the columns of $A$, a subspace of $\\mathbb{R}^m$. The pivot columns of $A$ form a basis of $\\text{Col } A$, and the rank-nullity theorem links the two dimensions:\n\n$$\n\\text{rank } A + \\dim \\text{Nul } A = n\n$$\n\n## Eigenvalues and eigenvectors\n\nAn eigenvector of an $n \\times n$ matrix $A$ is a nonzero vector $\\mathbf{x}$ with $A\\mathbf{x} = \\lambda \\mathbf{x}$ for some scalar $\\lambda$, called an eigenvalue. Rewriting this as $(A - \\lambda I)\\mathbf{x} = \\mathbf{0}$ shows that $\\lambda$ is an eigenvalue exactly when $A - \\lambda I$ is not invertible, that is, when $\\lambda$ solves the characteristic equation\n\n$$\n\\det(A - \\lambda I) = 0\n$$"
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "98891d5dd177b0bbb5cee5db2a79070c94077dc8fe843d77fc6d81bef4bfd7e5",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 24.6,
+  "answer": "Example. For\n\\[ A = \\begin{pmatrix} 2 & 3 \\\\ 3 & -6 \\end{pmatrix} \\]\n\n\\[ \\det(A - \\lambda I) = \\begin{vmatrix} 2 - \\lambda & 3 \\\\ 3 & -6 - \\lambda \\end{vmatrix} = \\lambda^2 + 4\\lambda - 21 = (\\lambda - 3)(\\lambda + 7) \\]\n\nso the eigenvalues are \\(\\lambda_1 = 3\\) and \\(\\lambda_2 = -7\\). Solving \\((A - 3I)\\mathbf{x} = \\mathbf{0}\\) gives the eigenvector\n\\[ \\mathbf{v}_1 = \\begin{pmatrix} 3 \\\\ 1 \\end{pmatrix}, \\]\nand \\((A + 7I)\\mathbf{x} = \\mathbf{0}\\) gives \\(\\mathbf{v}_2 = \\begin{pmatrix} -1 \\\\ 3 \\end{pmatrix}\\). The sum of the eigenvalues equals the trace, \\(3 + (-7) = -4 = 2 + (-6)\\), and their product equals the determinant, \\(-21\\).\n\n### Diagonalization\n\nA matrix is diagonalizable when \\(A = PDP^{-1}\\) with \\(D\\) diagonal. This happens exactly when \\(A\\) has \\(n\\) linearly independent eigenvectors: they form the columns of \\(P\\), and the matching eigenvalues form the diagonal of \\(D\\). For the example above,\n\n\\[ P = \\begin{pmatrix} 3 & -1 \\\\ 1 & 3 \\end{pmatrix}, \\quad D = \\begin{pmatrix} 3 & 0 \\\\ 0 & -7 \\end{pmatrix} \\]\n\nPowers then cost almost nothing: \\(A^k = PD^kP^{-1}\\), and \\(D^k\\) has entries \\(3^k\\) and \\((-7)^k\\). A matrix with \\(n\\) distinct eigenvalues is always diagonalizable, and a symmetric matrix can always be diagonalized by an orthogonal \\(P\\), one with \\(P^{-1} = P^T\\)."
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "cc4e3ebb00332f6539c702782d896e979662b9893a991b0fb072065a9bc5b21c",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 34.0,
+  "answer": "# Vector Spaces, Eigenvalues and Orthogonality\n\n## Inner products and orthogonality\n\nThe inner product of **u**, **v** ∈ ℝⁿ is ⟨**u**, **v**⟩ = **u**ᵀ**v** = u₁v₁ + ... + uₙvₙ, and the length of a vector is its norm, ||**v**|| = √⟨**v**, **v**⟩. Two vectors are orthogonal, **u** ⊥ **v**, when ⟨**u**, **v**⟩ = 0; the eigenvectors (3, 1) and (−1, 3) above are orthogonal, as eigenvectors for different eigenvalues always are. The Cauchy–Schwarz inequality |⟨**u**, **v**⟩| ≤ ||**u**|| ||**v**|| makes the angle θ between two vectors well defined by cos θ = ⟨**u**, **v**⟩ / (||**u**|| ||**v**||).\n\nThe orthogonal projection of **y** onto the line spanned by a nonzero **u** is\n\n$$\n\\hat{\\mathbf{y}} = \\frac{\\langle \\mathbf{y}, \\mathbf{u} \\rangle}{\\langle \\mathbf{u}, \\mathbf{u} \\rangle} \\mathbf{u}\n$$\n\nand **y** − **ŷ** is orthogonal to **u**. Among all points of the line, **ŷ** is the one closest to **y**.\n\n## Least squares\n\nWhen \\( A\\mathbf{x} = \\mathbf{b} \\) has no solution, a least-squares solution \\(\\hat{\\mathbf{x}}\\) makes ||**b** − A\\(\\hat{\\mathbf{x}}\\)|| as small as possible. Such an \\(\\hat{\\mathbf{x}}\\) solves the normal equations\n\n$$\nA^T A \\hat{\\mathbf{x}} = A^T \\mathbf{b}\n$$\n\nand if the columns of \\( A \\) are linearly independent it is unique, \\(\\hat{\\mathbf{x}} = (A^T A)^{-1} A^T \\mathbf{b}\\). Fitting a line \\( y = \\beta_0 + \\beta_1 x \\) to the points (0, 1), (1, 1) and (2, 4) gives\n\n$$\nA^T A = \\begin{pmatrix}\n3 & 3 \\\\\n3 & 5\n\\end{pmatrix}, \\quad A^T \\mathbf{b} = \\begin{pmatrix}\n6 \\\\\n9\n\\end{pmatrix}, \\quad\n\\begin{pmatrix}\n\\hat{\\beta}_0 \\\\\n\\hat{\\beta}_1\n\\end{pmatrix} = \\begin{pmatrix}\n\\frac{1}{2} \\\\\n\\frac{3}{2}\n\\end{pmatrix}\n$$\n\nso the least-squares line is \\( y = \\frac{1}{2} + \\frac{3}{2}x \\), and the error ||**b** − A\\(\\hat{\\mathbf{\\beta}}\\)||² = \\(\\frac{3}{2}\\) is the smallest any line can reach."
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "36ed07b77b5b0460997451a95e7e9648f816990cb62aec3d6d6d9d9f7d9b5544",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 36.9,
+  "answer": "# Vector Spaces, Eigenvalues and Orthogonality\n\n## Inner products and orthogonality\n\nThe inner product of $\\mathbf{u}, \\mathbf{v} \\in \\mathbb{R}^n$ is $\\langle \\mathbf{u}, \\mathbf{v} \\rangle = \\mathbf{u}^T \\mathbf{v} = u_1 v_1 + \\cdots + u_n v_n$, and the length of a vector is its norm, $\\|\\mathbf{v}\\| = \\sqrt{\\langle \\mathbf{v}, \\mathbf{v} \\rangle}$. Two vectors are orthogonal, $\\mathbf{u} \\perp \\mathbf{v}$, when $\\langle \\mathbf{u}, \\mathbf{v} \\rangle = 0$; the eigenvectors $(3, 1)$ and $(-1, 3)$ above are orthogonal, as eigenvectors of a symmetric matrix for different eigenvalues always are. The Cauchy–Schwarz inequality $|\\langle \\mathbf{u}, \\mathbf{v} \\rangle| \\leq \\|\\mathbf{u}\\| \\|\\mathbf{v}\\|$ makes the angle $\\theta$ between two vectors well defined by $\\cos \\theta = \\frac{\\langle \\mathbf{u}, \\mathbf{v} \\rangle}{\\|\\mathbf{u}\\| \\|\\mathbf{v}\\|}$.\n\nThe orthogonal projection of $\\mathbf{y}$ onto the line spanned by a nonzero $\\mathbf{u}$ is\n\n$$\n\\hat{\\mathbf{y}} = \\frac{\\langle \\mathbf{y}, \\mathbf{u} \\rangle}{\\langle \\mathbf{u}, \\mathbf{u} \\rangle} \\mathbf{u}\n$$\n\nand $\\mathbf{y} - \\hat{\\mathbf{y}}$ is orthogonal to $\\mathbf{u}$. Among all points of the line, $\\hat{\\mathbf{y}}$ is the one closest to $\\mathbf{y}$.\n\n## Least squares\n\nWhen $A\\mathbf{x} = \\mathbf{b}$ has no solution, a least-squares solution $\\hat{\\mathbf{x}}$ makes $\\|\\mathbf{b} - A\\hat{\\mathbf{x}}\\|$ as small as possible. Such an $\\hat{\\mathbf{x}}$ solves the normal equations\n\n$$\nA^T A \\hat{\\mathbf{x}} = A^T \\mathbf{b}\n$$\n\nand if the columns of $A$ are linearly independent it is unique, $\\hat{\\mathbf{x}} = (A^T A)^{-1} A^T \\mathbf{b}$. Fitting a line $y = \\beta_0 + \\beta_1 x$ to the points $(0,1)$, $(1,1)$ and $(2,4)$ gives\n\n$$\nA^T A = \\begin{pmatrix} 3 & 3 \\\\ 3 & 5 \\end{pmatrix}, \\quad A^T \\mathbf{b} = \\begin{pmatrix} 6 \\\\ 9 \\end{pmatrix}, \\quad \\begin{pmatrix} \\hat{\\beta}_0 \\\\ \\hat{\\beta}_1 \\end{pmatrix} = \\begin{pmatrix} \\frac{1}{2} \\\\ \\frac{3}{2} \\end{pmatrix}\n$$"
+ },
+ {
+  "lecture": "03-vector-spaces-and-eigenvalues.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "7213c6e1c69eab77d0ad49a4063c7204844ea0e8763b1b8b11ba0f491ac5a8a5",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 9.5,
+  "answer": "so the least-squares line is $y = \\frac{1}{2} + \\frac{3}{2}x$, and the error $\\left\\| \\mathbf{b} - A\\hat{\\mathbf{\\beta}} \\right\\|^2 = \\frac{3}{2}$ is the smallest any line can reach."
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "c267cd3e530f51539cc0a634e1f120f6e7ea6050735de54433bb256ab8ae643a",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 57.1,
+  "answer": "# Limits, Derivatives and Integrals\n\n## Limits\n\nWe write $\\lim_{x \\to a} f(x) = L$ when $f(x)$ can be made as close to $L$ as we like by taking $x$ close enough to $a$, but not equal to it. The precise definition uses two small positive numbers, $\\epsilon$ and $\\delta$:\n\n$$\n\\lim_{x \\to a} f(x) = L \\iff \\forall \\epsilon > 0 \\ \\exists \\delta > 0 : 0 < |x - a| < \\delta \\implies |f(x) - L| < \\epsilon\n$$\n\nLimits respect sums, products and quotients, so $\\lim_{x \\to 2}(x^2 + 3x) = 10$ by substitution. Some limits need more care. The function $\\frac{\\sin x}{x}$ is not defined at 0, yet $\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$, and $\\lim_{x \\to \\infty} \\left(1 + \\frac{1}{x}\\right)^x = e \\approx 2.71828$.\n\nA function is continuous at $a$ when $\\lim_{x \\to a} f(x) = f(a)$. The piecewise function\n\n$$\ng(x) = \\begin{cases}\nx^2 & \\text{if } x < 1 \\\\\n2x - 1 & \\text{if } x \\geq 1\n\\end{cases}\n$$\n\nis continuous everywhere, since both pieces approach 1 as $x \\to 1$, while the function that is 0 for $x < 0$ and 1 for $x \\geq 0$ jumps at 0. The absolute value is piecewise too,\n\n$$\n|x| = \\begin{cases}\nx & \\text{if } x \\geq 0 \\\\\n-x & \\text{if } x < 0\n\\end{cases}\n$$\n\nand it is continuous at 0 but has no derivative there.\n\n## The derivative\n\nThe derivative of $f$ at $x$ is the limit of the slopes of secant lines. With $\\Delta x = h$ and $\\Delta y = f(x + h) - f(x)$,\n\n$$\nf'(x) = \\lim_{\\Delta x \\to 0} \\frac{\\Delta y}{\\Delta x} = \\lim_{h \\to 0} \\frac{f(x + h) - f(x)}{h}\n$$\n\nIn Leibniz notation the derivative of $y = f(x)$ is $\\frac{dy}{dx}$, and the second derivative is $f''(x) = \\frac{d^2y}{dx^2}$. The $n$-th derivative is written $f^{(n)}(x)$. For $f(x) = x^3$, the definition gives\n\n$$\nf'(x) = \\lim_{h \\to 0} \\frac{(x + h)^3 - x^3}{h}\n$$\n\n$$\n= \\lim_{h \\to 0} \\frac{3x^2h + 3xh^2 + h^3}{h}\n$$\n\n$$\n= \\lim_{h \\to 0} (3x^2 + 3xh + h^2) = 3x^2\n$$\n\nand then $f''(x) = 6x$ and $f'''(x) = 6$.\n\nThe rules of differentiation follow from the definition:\n\n- power rule: $\\frac{d}{dx} x^n = nx^{n-1}$ for every real $n$;\n\n- product rule: $(fg)' = f'g + fg'$;\n\n- quotient rule: $\\left(\\frac{f}{g}\\right)' = \\frac{f'g - fg'}{g^2}$ wherever $g \\neq 0$;\n\n- chain rule: if $y = f(u)$ and $u = g(x)$, then $\\frac{dy}{dx} = \\frac{dy}{du} \\cdot \\frac{du}{dx}$.\n\nSome derivatives are worth knowing by heart: $\\frac{d}{dx} e^x = e^x$, $\\frac{d}{dx} \\ln x = \\frac{1}{x}$ for $x > 0$, $\\frac{d}{dx} \\sin x = \\cos x$ and $\\frac{d}{dx} \\cos x = -\\sin x$. By the chain rule, $\\frac{d}{dx} \\sqrt{1 + x^2} = \\frac{x}{\\sqrt{1+x^2}}$."
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "331087d72578cd837e80640625c65f6fe0a0ef96b6e057f18b6530e9d99e9dfe",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.0,
+  "answer": "# Limits, Derivatives and Integrals\n\n## Limits\n\nWe write $\\lim_{x \\to a} f(x) = L$ when $f(x)$ can be made as close to $L$ as we like by taking $x$ close enough to $a$, but not equal to it. The precise definition uses two small positive numbers, $\\varepsilon$ and $\\delta$:\n\n$$\n\\lim_{x \\to a} f(x) = L \\iff \\forall \\varepsilon > 0 \\ \\exists \\delta > 0 : 0 < |x - a| < \\delta \\implies |f(x) - L| < \\varepsilon\n$$\n\nLimits respect sums, products and quotients, so $\\lim_{x \\to 2}(x^2 + 3x) = 10$ by substitution. Some limits need more care. The function $\\frac{\\sin x}{x}$ is not defined at 0, yet $\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$, and $\\lim_{x \\to \\infty} \\left(1 + \\frac{1}{x}\\right)^x = e \\approx 2.71828$.\n\nA function is continuous at $a$ when $\\lim_{x \\to a} f(x) = f(a)$. The piecewise function\n\n$$\ng(x) = \\begin{cases}\nx^2 & \\text{if } x < 1 \\\\\n2x - 1 & \\text{if } x \\geq 1\n\\end{cases}\n$$\n\nis continuous everywhere, since both pieces approach 1 as $x \\to 1$, while the function that is 0 for $x < 0$ and 1 for $x \\geq 0$ jumps at 0. The absolute value is piecewise too,\n\n$$\n|x| = \\begin{cases}\nx & \\text{if } x \\geq 0 \\\\\n-x & \\text{if } x < 0\n\\end{cases}\n$$\n\nand it is continuous at 0 but has no derivative there.\n\n## The derivative"
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "ae072fb24622a75d985de561f62a43c1f325ae9d573b571a735a413aece77b26",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 37.4,
+  "answer": "The derivative of $f$ at $x$ is the limit of the slopes of secant lines. With $\\Delta x = h$ and $\\Delta y = f(x+h) - f(x)$,\n\n$$\nf'(x) = \\lim_{\\Delta x \\to 0} \\frac{\\Delta y}{\\Delta x} = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}\n$$\n\nIn Leibniz notation the derivative of $y = f(x)$ is $\\frac{dy}{dx}$, and the second derivative is $f''(x) = \\frac{d^2y}{dx^2}$. The $n$-th derivative is written $f^{(n)}(x)$. For $f(x) = x^3$, the definition gives\n\n$$\nf'(x) = \\lim_{h \\to 0} \\frac{(x+h)^3 - x^3}{h}\n$$\n\n$$\n= \\lim_{h \\to 0} \\frac{3x^2h + 3xh^2 + h^3}{h}\n$$\n\n$$\n= \\lim_{h \\to 0} \\left(3x^2 + 3xh + h^2\\right) = 3x^2\n$$\n\nand then $f''(x) = 6x$ and $f'''(x) = 6$.\n\nThe rules of differentiation follow from the definition:\n\n- power rule: $\\frac{d}{dx} x^n = nx^{n-1}$ for every real $n$;\n\n- product rule: $(fg)' = f'g + fg'$;\n\n- quotient rule: $\\left(\\frac{f}{g}\\right)' = \\frac{f'g - fg'}{g^2}$ wherever $g \\neq 0$;\n\n- chain rule: if $y = f(u)$ and $u = g(x)$, then $\\frac{dy}{dx} = \\frac{dy}{du} \\cdot \\frac{du}{dx}$.\n\nSome derivatives are worth knowing by heart: $\\frac{d}{dx} e^x = e^x$, $\\frac{d}{dx} \\ln x = \\frac{1}{x}$ for $x > 0$, $\\frac{d}{dx} \\sin x = \\cos x$ and $\\frac{d}{dx} \\cos x = -\\sin x$. By the chain rule, $\\frac{d}{dx} \\sqrt{1+x^2} = \\frac{x}{\\sqrt{1+x^2}}$."
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "cab8289f4d9e99fbe517b31648a6ca75817147ef00ed2147eef9df182b0029ee",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 54.3,
+  "answer": "# Limits, Derivatives and Integrals\n\n## Linear approximation and extreme values\n\nNear a point $a$, a differentiable function is close to its tangent line: $f(x) \\approx f(a) + f'(a)(x-a)$. For example $\\sqrt{4.1} \\approx 2 + \\frac{1}{4}(0.1) = 2.025$, against the true value $2.02485\\ldots$. A small change $\\Delta x$ in the input changes the output by about $\\Delta y \\approx f'(x)\\Delta x$.\n\nIf $f$ has a local maximum or minimum at an interior point $c$ where it is differentiable, then $f'(c) = 0$. If also $f''(c) > 0$ the point is a local minimum, and if $f''(c) < 0$ it is a local maximum. For $f(x) = x^3 - 3x$, $f'(x) = 3x^2 - 3 = 0$ at $x = \\pm 1$; since $f''(-1) = -6 < 0$ and $f''(1) = 6 > 0$, there is a local maximum $f(-1) = 2$ and a local minimum $f(1) = -2$.\n\n## The definite integral\n\nDivide $[a,b]$ into $n$ pieces of width $\\Delta x = \\frac{b-a}{n}$ and pick a point $x_i^*$ in the $i$-th piece. The Riemann sum $\\sum_{i=1}^n f(x_i^*) \\Delta x$ adds the areas of thin rectangles, and the definite integral is its limit:\n\n$$\n\\int_a^b f(x) \\, dx = \\lim_{n \\to \\infty} \\sum_{i=1}^n f(x_i^*) \\Delta x\n$$\n\n**Theorem (Fundamental Theorem of Calculus).** If $f$ is continuous on $[a,b]$ and $F' = f$, then\n\n$$\n\\int_a^b f(x) \\, dx = F(b) - F(a), \\quad \\frac{d}{dx} \\int_a^x f(t) \\, dt = f(x)\n$$\n\nSo $\\int_0^2 (3x^2 + 1) \\, dx = [x^3 + x]_0^2 = 10$, and $\\int_0^\\pi \\sin x \\, dx = [-\\cos x]_0^\\pi = 2$.\n\n## Techniques and improper integrals\n\nThe substitution $u = g(x)$, $du = g'(x) \\, dx$ undoes the chain rule: $\\int 2x \\cos(x^2) \\, dx = \\sin(x^2) + C$. Integration by parts undoes the product rule, $\\int u \\, dv = uv - \\int v \\, du$, so that $\\int xe^x \\, dx = xe^x - e^x + C$.\n\nAn integral over an infinite interval is a limit of ordinary integrals:\n\n$$\n\\int_1^\\infty \\frac{1}{x^2} \\, dx = \\lim_{b \\to \\infty} \\left[ -\\frac{1}{x} \\right]_1^b = \\lim_{b \\to \\infty} \\left( 1 - \\frac{1}{b} \\right) = 1\n$$\n\nwhereas $\\int_1^\\infty \\frac{1}{x} \\, dx$ diverges, because $\\ln b \\to \\infty$. The Gaussian integral $\\int_{-\\infty}^\\infty e^{-x^2} \\, dx = \\sqrt{\\pi}$ has no elementary antiderivative but a famous value."
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "b5eb3bef5d667f16ae92077c3d4d8d23dea85a4eab0fda4965c7fdfe344762f6",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 38.3,
+  "answer": "# Limits, Derivatives and Integrals\n\n## Linear approximation and extreme values\n\nNear a point $a$, a differentiable function is close to its tangent line: $f(x) \\approx f(a) + f'(a)(x-a)$. For example $\\sqrt{4.1} \\approx 2 + \\frac{1}{4}(0.1) = 2.025$, against the true value $2.02485 \\dots$. A small change $\\Delta x$ in the input changes the output by about $\\Delta y \\approx f'(x) \\Delta x$.\n\nIf $f$ has a local maximum or minimum at an interior point $c$ where it is differentiable, then $f'(c) = 0$. If also $f''(c) > 0$ the point is a local minimum, and if $f''(c) < 0$ it is a local maximum. For $f(x) = x^3 - 3x$, $f'(x) = 3x^2 - 3 = 0$ at $x = \\pm 1$; since $f''(-1) = -6 < 0$ and $f''(1) = 6 > 0$, there is a local maximum $f(-1) = 2$ and a local minimum $f(1) = -2$.\n\n## The definite integral\n\nDivide $[a,b]$ into $n$ pieces of width $\\Delta x = \\frac{b-a}{n}$ and pick a point $x_i^*$ in the $i$-th piece. The Riemann sum $\\sum_{i=1}^n f(x_i^*) \\Delta x$ adds the areas of thin rectangles, and the definite integral is its limit:\n\n$$\n\\int_a^b f(x) \\, dx = \\lim_{n \\to \\infty} \\sum_{i=1}^n f(x_i^*) \\Delta x\n$$\n\n**Theorem (Fundamental Theorem of Calculus).** If $f$ is continuous on $[a,b]$ and $F' = f$,\n\n$$\n\\int_a^b f(x) \\, dx = F(b) - F(a), \\quad \\frac{d}{dx} \\int_a^x f(t) \\, dt = f(x)\n$$\n\nSo $\\int_0^2 (3x^2 + 1) \\, dx = \\left[x^3 + x\\right]_0^2 = 10$, and $\\int_0^\\pi \\sin x \\, dx = \\left[-\\cos x\\right]_0^\\pi = 2$.\n\n## Techniques and improper integrals"
+ },
+ {
+  "lecture": "04-limits-derivatives-integrals.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "562f96cb1a82cb3c4761c22cc60e362c0e9032d33d989e4154c143a774e2fc29",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 21.0,
+  "answer": "The substitution $u = g(x)$, $du = g'(x)\\,dx$ undoes the chain rule: $\\int 2x \\cos(x^2)\\,dx = \\sin(x^2) + C$.\n\nIntegration by parts undoes the product rule, $\\int u\\,dv = uv - \\int v\\,du$, so that $\\int xe^x\\,dx = xe^x - e^x + C$.\n\nAn integral over an infinite interval is a limit of ordinary integrals:\n\n$$\n\\int_{1}^{\\infty} \\frac{1}{x^2}\\,dx = \\lim_{b \\to \\infty} \\left[ -\\frac{1}{x} \\right]_{1}^{b} = \\lim_{b \\to \\infty} \\left(1 - \\frac{1}{b}\\right) = 1\n$$\n\nwhereas $\\int_{1}^{\\infty} \\frac{1}{x}\\,dx$ diverges, because $\\ln b \\to \\infty$. The Gaussian integral $\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}$ has no elementary antiderivative but a famous value."
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "5eb73856e8b118a5917c829f55031b254479c16145e1ddbf5f66157371b9ed83",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 65.5,
+  "answer": "# Multivariable Calculus\n\n## Vectors in space\n\nA vector in $\\mathbb{R}^3$ is written $\\vec{v} = \\langle v_1, v_2, v_3 \\rangle$ or $\\vec{v} = v_1 \\hat{\\mathbf{i}} + v_2 \\hat{\\mathbf{j}} + v_3 \\hat{\\mathbf{k}}$, where $\\hat{\\mathbf{i}}$, $\\hat{\\mathbf{j}}$, and $\\hat{\\mathbf{k}}$ are the unit vectors along the axes. Its length is $\\|\\vec{v}\\| = \\sqrt{v_1^2 + v_2^2 + v_3^2}$, and $\\hat{\\mathbf{v}} = \\frac{\\vec{v}}{\\|\\vec{v}\\|}$ is the unit vector in its direction. The dot product $\\vec{u} \\cdot \\vec{v} = u_1v_1 + u_2v_2 + u_3v_3 = \\|\\vec{u}\\|\\|\\vec{v}\\|\\cos\\theta$ is a number, while the cross product is a vector orthogonal to both:\n\n$$\n\\vec{u} \\times \\vec{v} =\n\\begin{vmatrix}\n\\hat{\\mathbf{i}} & \\hat{\\mathbf{j}} & \\hat{\\mathbf{k}} \\\\\nu_1 & u_2 & u_3 \\\\\nv_1 & v_2 & v_3 \\\\\n\\end{vmatrix}\n= (u_2v_3 - u_3v_2)\\hat{\\mathbf{i}} - (u_1v_3 - u_3v_1)\\hat{\\mathbf{j}} + (u_1v_2 - u_2v_1)\\hat{\\mathbf{k}}\n$$\n\nIts length $\\|\\vec{u} \\times \\vec{v}\\| = \\|\\vec{u}\\|\\|\\vec{v}\\|\\sin\\theta$ is the area of the parallelogram the two vectors span.\n\n## Partial derivatives\n\nFor a function of two variables $f(x, y)$, the partial derivative with respect to $x$ holds $y$ fixed:\n\n$$\n\\frac{\\partial f}{\\partial x}(x, y) = \\lim_{h \\to 0} \\frac{f(x+h, y) - f(x, y)}{h}\n$$\n\nIt is also written $f_x$ or $\\partial_x f$. For $f(x, y) = x^2y + \\sin(xy)$, we get $f_x = 2xy + y\\cos(xy)$ and $f_y = x^2 + x\\cos(xy)$. Second partial derivatives are written $\\frac{\\partial^2 f}{\\partial x^2}$ and $\\frac{\\partial^2 f}{\\partial y^2}$, and when they are continuous the mixed ones agree, $f_{xy} = f_{yx}$. They form the Hessian matrix\n\n$$\nH_f = \\begin{pmatrix}\n\\frac{\\partial^2 f}{\\partial x^2} & \\frac{\\partial^2 f}{\\partial x \\partial y} \\\\\n\\frac{\\partial^2 f}{\\partial y \\partial x} & \\frac{\\partial^2 f}{\\partial y^2}\n\\end{pmatrix}\n$$\n\nAt a critical point, where $f_x = f_y = 0$, the point is a local minimum if $\\det H_f > 0$ and $f_{xx} > 0$, a local maximum if $\\det H_f > 0$ and $f_{xx} < 0$, and a saddle point if $\\det H_f < 0$.\n\n## The gradient\n\nThe gradient of $f$ collects its partial derivatives into a vector, $\\nabla f = \\left\\langle \\frac{\\partial f}{\\partial x}, \\frac{\\partial f}{\\partial y} \\right\\rangle$. The rate of change of $f$ in the direction of a unit vector $\\vec{u}$ is the directional derivative\n\n$$\nD_{\\vec{u}}f = \\nabla f \\cdot \\vec{u} = \\|\\nabla f\\| \\cos \\theta\n$$\n\nso $f$ increases fastest in the direction of $\\nabla f$, at the rate $\\|\\nabla f\\|$, and $\\nabla f$ is perpendicular to the level curves of $f$. For $f(x, y) = x^2 + 3y^2$ at the point $(1, 1)$, $\\nabla f = \\langle 2x, 6y \\rangle = \\langle 2, 6 \\rangle$, and in the direction $\\vec{u} = \\left\\langle \\frac{2}{5}, \\frac{6}{5} \\right\\rangle$ the directional derivative is $\\frac{24}{5} = 6$.\n\nWhen $x$ and $y$ themselves depend on $t$, the chain rule reads\n\n$$\n\\frac{dz}{dt} = \\frac{\\partial z}{\\partial x} \\frac{dx}{dt} + \\frac{\\partial z}{\\partial y} \\frac{dy}{dt}\n$$\n\n## Double integrals\n\nThe integral of $f$ over a region $D$ in the plane is written $\\iint_D f(x, y) \\, dA$. Over a rectangle it is an iterated integral, and by Fubini’s theorem the order does not matter:\n\n$$\n\\iint_R xy^2 \\, dA = \\int_0^2 \\int_0^3 xy^2 \\, dy \\, dx = \\int_0^2 \\frac{26}{3}x \\, dx = \\frac{52}{3}\n$$"
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "018fb216e07aed092d5ae2846f686530847d09230027269b4034233156dbb583",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 42.8,
+  "answer": "# Multivariable Calculus\n\n## Vectors in space\n\nA vector in $\\mathbb{R}^3$ is written $\\vec{v} = \\langle v_1, v_2, v_3 \\rangle$ or $\\mathbf{v} = v_1\\hat{\\mathbf{i}} + v_2\\hat{\\mathbf{j}} + v_3\\hat{\\mathbf{k}}$, where $\\hat{\\mathbf{i}}$, $\\hat{\\mathbf{j}}$ and $\\hat{\\mathbf{k}}$ are the unit vectors along the axes. Its length is $\\|\\mathbf{v}\\| = \\sqrt{v_1^2 + v_2^2 + v_3^2}$, and $\\hat{\\mathbf{v}} = \\frac{\\mathbf{v}}{\\|\\mathbf{v}\\|}$ is the unit vector in its direction. The dot product $\\mathbf{u} \\cdot \\mathbf{v} = u_1v_1 + u_2v_2 + u_3v_3 = \\|\\mathbf{u}\\|\\|\\mathbf{v}\\| \\cos \\theta$ is a number, while the cross product is a vector orthogonal to both:\n\n$$\n\\mathbf{u} \\times \\mathbf{v} = \\begin{vmatrix}\n\\hat{\\mathbf{i}} & \\hat{\\mathbf{j}} & \\hat{\\mathbf{k}} \\\\\nu_1 & u_2 & u_3 \\\\\nv_1 & v_2 & v_3\n\\end{vmatrix} = (u_2v_3 - u_3v_2)\\hat{\\mathbf{i}} - (u_1v_3 - u_3v_1)\\hat{\\mathbf{j}} + (u_1v_2 - u_2v_1)\\hat{\\mathbf{k}}\n$$\n\nIts length $\\|\\mathbf{u} \\times \\mathbf{v}\\| = \\|\\mathbf{u}\\|\\|\\mathbf{v}\\| \\sin \\theta$ is the area of the parallelogram the two vectors span.\n\n## Partial derivatives\n\nFor a function of two variables $f(x,y)$, the partial derivative with respect to $x$ holds $y$ fixed:\n\n$$\n\\frac{\\partial f}{\\partial x}(x,y) = \\lim_{h \\to 0} \\frac{f(x+h,y) - f(x,y)}{h}\n$$\n\nIt is also written $f_x$ or $\\partial_x f$. For $f(x,y) = x^2y + \\sin(xy)$, we get $f_x = 2xy + y \\cos(xy)$ and $f_y = x^2 + x \\cos(xy)$. Second partial derivatives are written $\\frac{\\partial^2 f}{\\partial x^2}$ and $\\frac{\\partial^2 f}{\\partial y^2}$, and when they are continuous the mixed ones agree, $f_{xy} = f_{yx}$. They form the Hessian matrix\n\n$$\nH_f = \\begin{pmatrix}\n\\frac{\\partial^2 f}{\\partial x^2} & \\frac{\\partial^2 f}{\\partial x \\partial y} \\\\\n\\frac{\\partial^2 f}{\\partial y \\partial x} & \\frac{\\partial^2 f}{\\partial y^2}\n\\end{pmatrix}\n$$"
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "46f3951c2a5ad4dc8cfe93e8f85b9b6a69cb831eadf8cf04c7fbf55e4213fd24",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.2,
+  "answer": "At a critical point, where $f_x = f_y = 0$, the point is a local minimum if $\\det H_f > 0$ and $f_{xx} > 0$, a local maximum if $\\det H_f > 0$ and $f_{xx} < 0$, and a saddle point if $\\det H_f < 0$.\n\n### The gradient\n\nThe gradient of $f$ collects its partial derivatives into a vector, $\\nabla f = \\left\\langle \\frac{\\partial f}{\\partial x}, \\frac{\\partial f}{\\partial y}, \\frac{\\partial f}{\\partial z} \\right\\rangle$. The rate of change of $f$ in the direction of a unit vector $\\mathbf{u}$ is the directional derivative\n\n$$D_{\\mathbf{u}} f = \\nabla f \\cdot \\mathbf{u} = \\|\\nabla f\\| \\cos \\theta$$\n\nso $f$ increases fastest in the direction of $\\nabla f$, at the rate $\\|\\nabla f\\|$, and $\\nabla f$ is perpendicular to the level curves of $f$. For $f(x, y) = x^2 + 3y^2$ at the point $(1, 1)$, $\\nabla f = \\langle 2x, 6y \\rangle = \\langle 2, 6 \\rangle$, and in the direction $\\mathbf{u} = \\left\\langle \\frac{3}{5}, \\frac{4}{5} \\right\\rangle$ the directional derivative is $\\frac{6}{5} + \\frac{24}{5} = 6$.\n\nWhen $x$ and $y$ themselves depend on $t$, the chain rule reads\n\n$$\\frac{dz}{dt} = \\frac{\\partial z}{\\partial x} \\frac{dx}{dt} + \\frac{\\partial z}{\\partial y} \\frac{dy}{dt}$$\n\n### Double integrals\n\nThe integral of $f$ over a region $D$ in the plane is written $\\iint_D f(x, y) \\, dA$. Over a rectangle it is an iterated integral, and by Fubini’s theorem the order does not matter:\n\n$$\\iint_R xy^2 \\, dA = \\int_0^2 \\int_1^3 xy^2 \\, dy \\, dx = \\int_0^2 \\frac{26}{3} x \\, dx = \\frac{52}{3}$$"
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "6d97b82e9ea09a93b40661abdbef705f1248768065b9710d81d10558b078cf5e",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 25.8,
+  "answer": "Multivariable Calculus\n\nRegions bounded by circles are easier in polar coordinates, $x = r \\cos \\theta$ and $y = r \\sin \\theta$, where the area element becomes $dA = r \\, dr \\, d\\theta$. The area of the disc of radius $a$ is then $\\int_0^{2\\pi} \\int_0^a r \\, dr \\, d\\theta = \\pi a^2$.\n\nIn general, a change of variables $x = x(u,v)$, $y = y(u,v)$ scales areas by the absolute value of the Jacobian determinant:\n\n$$\n\\frac{\\partial(x,y)}{\\partial(u,v)} = \\begin{vmatrix}\n\\frac{\\partial x}{\\partial u} & \\frac{\\partial x}{\\partial v} \\\\\n\\frac{\\partial y}{\\partial u} & \\frac{\\partial y}{\\partial v}\n\\end{vmatrix}\n$$\n\nFor polar coordinates it is $\\cos \\theta \\cdot r \\cos \\theta - (-r \\sin \\theta) \\sin \\theta = r$, which is where the factor $r$ comes from.\n\n### Line integrals and Green’s theorem\n\nThe work done by a force field $\\mathbf{F}$ along a curve $C$ is the line integral $\\int_C \\mathbf{F} \\cdot d\\mathbf{r}$. If $\\mathbf{F} = \\nabla \\phi$ for some potential $\\phi$, the integral depends only on the endpoints, $\\int_C \\nabla \\phi \\cdot d\\mathbf{r} = \\phi(\\mathbf{r}(b)) - \\phi(\\mathbf{r}(a))$, and around any closed curve it is zero. For $\\mathbf{F} = \\langle P, Q \\rangle$ and a closed curve $C$ bounding a region $D$ counterclockwise, Green’s theorem turns the line integral into a double integral:\n\n$$\n\\oint_C P \\, dx + Q \\, dy = \\iint_D \\left( \\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y} \\right) dA\n$$"
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "0b90018751225c6e5313d39d8f76280457e1315673d156580656fbcae8a860bf",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 23.2,
+  "answer": "Multivariable Calculus\n\nRegions bounded by circles are easier in polar coordinates, $x = r \\cos \\theta$ and $y = r \\sin \\theta$, where the area element becomes $dA = r \\, dr \\, d\\theta$. The area of the disc of radius $a$ is then $\\int_0^{2\\pi} \\int_0^a r \\, dr \\, d\\theta = \\pi a^2$.\n\nIn general, a change of variables $x = x(u,v)$, $y = y(u,v)$ scales areas by the absolute value of the Jacobian determinant:\n\n$$\n\\frac{\\partial(x,y)}{\\partial(u,v)} = \\begin{vmatrix}\n\\frac{\\partial x}{\\partial u} & \\frac{\\partial x}{\\partial v} \\\\\n\\frac{\\partial y}{\\partial u} & \\frac{\\partial y}{\\partial v}\n\\end{vmatrix}\n$$\n\nFor polar coordinates it is $\\cos \\theta \\cdot r \\cos \\theta - (-r \\sin \\theta) \\sin \\theta = r$, which is where the factor $r$ comes from.\n\n### Line integrals and Green’s theorem\n\nThe work done by a force field $\\mathbf{F}$ along a curve $C$ is the line integral $\\int_C \\mathbf{F} \\cdot d\\mathbf{r}$. If $\\mathbf{F} = \\nabla \\phi$ for some potential $\\phi$, the integral depends only on the endpoints, $\\int_C \\nabla \\phi \\cdot d\\mathbf{r} = \\phi(\\mathbf{r}(b)) - \\phi(\\mathbf{r}(a))$, and around any closed curve it is zero. For $\\mathbf{F} = \\langle P, Q \\rangle$ and a closed curve $C$ bounding a region $D$ counterclockwise, Green’s theorem turns the line integral into a double integral:"
+ },
+ {
+  "lecture": "05-multivariable-calculus.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "73bbd41933ea85c09e359644d1d9f7d73bbd5d22b7fd5ae0138dd7bf6cba5f1f",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 8.4,
+  "answer": "The transcribed content from the image is:\n\n$$\n\\int_{C} P \\, dx + Q \\, dy = \\iint_{D} \\left( \\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y} \\right) dA\n$$"
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "e2e120cacf610f76d7135a3b13c5d710e8fd05cf77ca9b28c4535d6697bfcec5",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 58.4,
+  "answer": "# Differential Equations\n\n## First-order equations\n\nA differential equation relates an unknown function to its derivatives. The simplest model of growth says that a quantity changes at a rate proportional to its size, $y' = ky$, and its solutions are\n\n$$y(t) = y_0 e^{kt}, \\quad y_0 = y(0)$$\n\nWith $k > 0$ this is exponential growth, with doubling time $\\frac{\\ln 2}{k}$; with $k < 0$ it is decay, and a radioactive sample with half-life $T$ has $k = -\\frac{\\ln 2}{T}$. Fixing $y(0) = y_0$ turns the equation into an initial value problem with exactly one solution.\n\nAn equation $\\frac{dy}{dx} = g(x)h(y)$ is separable: dividing by $h(y)$ and integrating both sides gives\n\n$$\\int \\frac{dy}{h(y)} = \\int g(x) \\, dx.$$ For $\\frac{dy}{dx} = -2xy^2$ with $y(0) = 1$,\n\n$$\\int \\frac{dy}{y^2} = \\int -2x \\, dx \\implies -\\frac{1}{y} = -x^2 + C \\implies y = \\frac{1}{x^2 + 1}$$\n\nA linear first-order equation $y' + p(t)y = q(t)$ is solved with the integrating factor $\\mu(t) = e^{\\int p(t) \\, dt}$, since $(\\mu y)' = \\mu q$. Logistic growth, $\\frac{dP}{dt} = rP \\left(1 - \\frac{P}{K}\\right)$, adds a carrying capacity $K$: the population grows almost exponentially while $P \\ll K$ and levels off as $P \\to K$.\n\n## Second-order linear equations\n\nA homogeneous linear equation with constant coefficients,\n\n$$ay'' + by' + cy = 0, \\quad a \\neq 0$$\n\nhas solutions of the form $e^{rt}$ exactly when $r$ solves the characteristic equation $ar^2 + br + c = 0$. Its discriminant $\\Delta = b^2 - 4ac$ decides the shape of the general solution:\n\n$$y(t) = \\begin{cases}\nc_1 e^{r_1 t} + c_2 e^{r_2 t} & \\text{if } \\Delta > 0 \\\\\n(c_1 + c_2 t)e^{rt} & \\text{if } \\Delta = 0 \\\\\ne^{\\alpha t}(c_1 \\cos \\beta t + c_2 \\sin \\beta t) & \\text{if } \\Delta < 0\n\\end{cases}$$\n\nwhere $r_1, r_2$ are the two real roots, $r = -\\frac{b}{2a}$ is the double root, and $\\alpha \\pm i\\beta$ are the complex roots. For $y'' - 5y' + 6y = 0$ the roots are $2$ and $3$, so $y = c_1 e^{2t} + c_2 e^{3t}$; the conditions $y(0) = 1$ and $y'(0) = 0$ give $c_1 = 3$ and $c_2 = -2$. Two solutions $y_1, y_2$ are independent exactly when their Wronskian is not zero:\n\n$$W(y_1, y_2) = \\begin{vmatrix}\ny_1 & y_2 \\\\\ny_1' & y_2'\n\\end{vmatrix} = y_1 y_2' - y_2 y_1' \\neq 0$$\n\n$$W(e^{2t}, e^{3t}) = e^{5t} \\neq 0$$\n\n## Oscillations\n\nIn mechanics, time derivatives are often written with dots: $\\dot{x} = \\frac{dx}{dt}$ is velocity and $\\ddot{x} = \\frac{d^2x}{dt^2}$ is acceleration. A mass $m$ on a spring of stiffness $k$ obeys Newton’s law $m\\ddot{x} = -kx$, so\n\n$$\\ddot{x} + \\omega^2 x = 0, \\quad \\omega = \\sqrt{\\frac{k}{m}}$$\n\nand it oscillates as $x(t) = A \\cos(\\omega t - \\varphi)$ with period $\\frac{2\\pi}{\\omega}$. Friction adds a term $\\gamma \\dot{x}$: the motion is underdamped when $\\gamma^2 < 4mk$, critically damped when $\\gamma^2 = 4mk$ and overdamped when $\\gamma^2 > 4mk$, the three cases of the discriminant above."
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "538455e59c16abd03619fc2194836adc02fbb1f7ee60b7be43eebbaf64b3f4f9",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 25.9,
+  "answer": "# Differential Equations\n\n## First-order equations\n\nA differential equation relates an unknown function to its derivatives. The simplest model of growth says that a quantity changes at a rate proportional to its size, $y' = ky$, and its solutions are\n\n$$y(t) = y_0 e^{kt}, \\quad y_0 = y(0)$$\n\nWith $k > 0$ this is exponential growth, with doubling time $\\frac{\\ln 2}{k}$; with $k < 0$ it is decay, and a radioactive sample with half-life $T$ has $k = -\\frac{\\ln 2}{T}$. Fixing $y(0) = y_0$ turns the equation into an initial value problem with exactly one solution.\n\nAn equation $\\frac{dy}{dx} = g(x)h(y)$ is separable: dividing by $h(y)$ and integrating both sides gives\n\n$$\\int \\frac{dy}{h(y)} = \\int g(x) \\, dx.$$\n\nFor $\\frac{dy}{dx} = -2xy^2$ with $y(0) = 1$,\n\n$$\\int \\frac{dy}{y^2} = \\int -2x \\, dx \\implies -\\frac{1}{y} = -x^2 + C \\implies y = \\frac{1}{x^2 + 1}$$\n\nA linear first-order equation $y' + p(t)y = q(t)$ is solved with the integrating factor $\\mu(t) = e^{\\int p(t) \\, dt}$, since $(\\mu y)' = \\mu q$. Logistic growth, $\\frac{dP}{dt} = rP \\left(1 - \\frac{P}{K}\\right)$, adds a carrying capacity $K$: the population grows almost exponentially while $P \\ll K$ and levels off as $P \\to K$.\n\n## Second-order linear equations\n\nA homogeneous linear equation with constant coefficients,\n\n$$ay'' + by' + cy = 0, \\quad a \\neq 0$$"
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "4d6f7ad7d7f674e5f5535c52d3f04835d7ffa313625361497259a64cfeda969a",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 35.7,
+  "answer": "The general solution to a second-order linear differential equation of the form \\( y'' + by' + cy = 0 \\) has solutions of the form \\( e^{rt} \\) exactly when \\( r \\) solves the characteristic equation \\( ar^2 + br + c = 0 \\). Its discriminant \\( \\Delta = b^2 - 4ac \\) decides the shape of the general solution:\n\n\\[ y(t) = \\begin{cases}\nc_1 e^{r_1 t} + c_2 e^{r_2 t} & \\text{if } \\Delta > 0 \\\\\n(c_1 + c_2 t)e^{rt} & \\text{if } \\Delta = 0 \\\\\ne^{\\alpha t}(c_1 \\cos \\beta t + c_2 \\sin \\beta t) & \\text{if } \\Delta < 0\n\\end{cases} \\]\n\nwhere \\( r_1, r_2 \\) are the two real roots, \\( r = -\\frac{b}{2a} \\) is the double root, and \\( \\alpha \\pm i\\beta \\) are the complex roots. For \\( y'' - 5y' + 6y = 0 \\) the roots are 2 and 3, so \\( y = c_1 e^{2t} + c_2 e^{3t} \\); the conditions \\( y(0) = 1 \\) and \\( y'(0) = 0 \\) give \\( c_1 = 3 \\) and \\( c_2 = -2 \\). Two solutions \\( y_1, y_2 \\) are independent exactly when their Wronskian is not zero:\n\n\\[ W(y_1, y_2) = \\begin{vmatrix} y_1 & y_2 \\\\ y_1' & y_2' \\end{vmatrix} = y_1 y_2' - y_2 y_1', \\quad W(e^{2t}, e^{3t}) = e^{5t} \\neq 0 \\]\n\n### Oscillations\n\nIn mechanics, time derivatives are often written with dots: \\( \\dot{x} = \\frac{dx}{dt} \\) is velocity and \\( \\ddot{x} = \\frac{d^2x}{dt^2} \\) is acceleration. A mass \\( m \\) on a spring of stiffness \\( k \\) obeys Newton’s law \\( m\\ddot{x} = -kx \\), so\n\n\\[ \\ddot{x} + \\omega^2 x = 0, \\quad \\omega = \\sqrt{\\frac{k}{m}} \\]\n\nand it oscillates as \\( x(t) = A \\cos(\\omega t - \\varphi) \\) with period \\( \\frac{2\\pi}{\\omega} \\). Friction adds a term \\( \\gamma \\dot{x} \\): the motion is underdamped when \\( \\gamma^2 < 4mk \\), critically damped when \\( \\gamma^2 = 4mk \\) and overdamped when \\( \\gamma^2 > 4mk \\), the three cases of the discriminant above."
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "2ace5643bf31dba26af3cc2d6f0ad3dbdee775183fe1fb7c7e982ef4acbf128b",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 32.0,
+  "answer": "### Differential Equations\n\n---\n\n### Systems of equations\n\nTwo populations, or two masses joined by springs, lead to a system **x'** = **Ax**. If λ is an eigenvalue of **A** with eigenvector **v**, then **x**(t) = e^λt**v** is a solution, and when **A** has independent eigenvectors **v**₁, **v**₂ the general solution is **x**(t) = c₁e^λ₁t**v**₁ + c₂e^λ₂t**v**₂. For\n\n$$\n\\begin{pmatrix}\nx_1' \\\\\nx_2'\n\\end{pmatrix}\n=\n\\begin{pmatrix}\n1 & 2 \\\\\n2 & 1\n\\end{pmatrix}\n\\begin{pmatrix}\nx_1 \\\\\nx_2\n\\end{pmatrix}\n$$\n\nthe eigenvalues are 3 and -1, with eigenvectors (1, 1) and (1, -1). Because one eigenvalue is positive and one negative, the origin is a saddle: solutions approach it along (1, -1) and leave along (1, 1).\n\n---\n\n### Euler’s method and the Laplace transform\n\nMost equations have no formula for their solution, and are solved step by step. Euler’s method for y' = f(t, y) takes steps of size h = Δt:\n\n$$\ny_{n+1} = y_n + h f(t_n, y_n), \\quad t_{n+1} = t_n + h\n$$\n\nFor y' = y with y(0) = 1 and h = 0.1, ten steps give y₁₀ ≈ 1.1^10 ≈ 2.5937, against the true e ≈ 2.7183. The error at a fixed time shrinks in proportion to h.\n\nThe Laplace transform turns derivatives into multiplication by s, so that a linear equation becomes an algebra problem:\n\n$$\n\\mathcal{L}\\{f\\}(s) = \\int_0^\\infty e^{-st} f(t) \\, dt, \\quad \\mathcal{L}\\{f'\\}(s) = s \\mathcal{L}\\{f\\}(s) - f(0)\n$$\n\nFor instance $\\mathcal{L}\\{e^{at}\\} = \\frac{1}{s-a}$ for s > a, and $\\mathcal{L}\\{\\sin \\omega t\\} = \\frac{\\omega}{s^2 + \\omega^2}$."
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "821330f94460edc4d8e4f895b35b4b4258e2ca4b887772a6e1998900684fdd05",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 28.6,
+  "answer": "### Systems of equations\n\nTwo populations, or two masses joined by springs, lead to a system **x'** = **Ax**. If λ is an eigenvalue of **A** with eigenvector **v**, then **x**(t) = e^{λt}**v** is a solution, and when **A** has independent eigenvectors **v**₁, **v**₂ the general solution is **x**(t) = c₁e^{λ₁t}**v**₁ + c₂e^{λ₂t}**v**₂. For\n\n$$\n\\begin{pmatrix}\nx_1' \\\\\nx_2'\n\\end{pmatrix}\n=\n\\begin{pmatrix}\n1 & 2 \\\\\n2 & 1\n\\end{pmatrix}\n\\begin{pmatrix}\nx_1 \\\\\nx_2\n\\end{pmatrix}\n$$\n\nthe eigenvalues are 3 and -1, with eigenvectors (1, 1) and (1, -1). Because one eigenvalue is positive and one negative, the origin is a saddle: solutions approach it along (1, -1) and leave along (1, 1).\n\n### Euler’s method and the Laplace transform\n\nMost equations have no formula for their solution, and are solved step by step. Euler’s method for y' = f(t, y) takes steps of size h = Δt:\n\n$$\ny_{n+1} = y_n + h f(t_n, y_n), \\quad t_{n+1} = t_n + h\n$$\n\nFor y' = y with y(0) = 1 and h = 0.1, ten steps give y₁₀ = 1.1¹⁰ ≈ 2.5937, against the true e ≈ 2.7183. The error at a fixed time shrinks in proportion to h.\n\nThe Laplace transform turns derivatives into multiplication by s, so that a linear equation with initial values becomes an algebra problem:\n\n$$\n\\mathcal{L}\\{f\\}(s) = \\int_0^\\infty e^{-st}f(t) \\, dt, \\quad \\mathcal{L}\\{f'\\}(s) = s \\mathcal{L}\\{f\\}(s) - f(0)\n$$"
+ },
+ {
+  "lecture": "06-differential-equations.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "13be6a1e55b88a8f07de93813ebffeffa78b9dcdd0472cd19f33f32a45b401ff",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 8.8,
+  "answer": "For instance\n$\n\\mathcal{L}\\{e^{at}\\} = \\frac{1}{s-a} \\text{ for } s > a,\n$\nand\n$\n\\mathcal{L}\\{\\sin \\omega t\\} = \\frac{\\omega}{s^2 + \\omega^2}.\n$"
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "fa497e755f9eae7862a1b30e0831cde41f811cf3b64f0e473e7a474bb8236c24",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 50.2,
+  "answer": "# Probability and Statistics\n\n## Events and probability\n\nAn experiment has a sample space Ω, the set of its possible outcomes, and an event is a subset A ⊆ Ω. A probability P gives each event a number with P(Ω) = 1, 0 ≤ P(A) ≤ 1, and P(∪_{i=1}^∞ A_i) = ∑_{i=1}^∞ P(A_i) whenever the events A_i are pairwise disjoint. From these axioms follow the complement rule P(A^c) = 1 - P(A) and the addition rule\n\n$$P(A \\cup B) = P(A) + P(B) - P(A \\cap B)$$\n\nWhen all [Ω] outcomes are equally likely, P(A) = |A| / |Ω|. Rolling two dice gives 36 outcomes, and six of them have a sum of 7, so that event has probability $\\frac{6}{36} = \\frac{1}{6}$.\n\n## Conditional probability and Bayes’ rule\n\nThe probability of A given that B has happened is\n\n$$P(A | B) = \\frac{P(A \\cap B)}{P(B)}, \\quad P(B) > 0$$\n\nand A and B are independent when P(A ∩ B) = P(A)P(B), that is, when knowing B does not change the probability of A. Events A_1, ..., A_n are mutually independent when every selection of them satisfies the product rule, in particular P(A_1 ∩ ... ∩ A_n) = ∏_{i=1}^n P(A_i). If B_1, ..., B_k split Ω into disjoint pieces, the law of total probability gives P(A) = ∑_{i=1}^k P(A | B_i)P(B_i), and Bayes’ rule reverses a conditional probability:\n\n$$P(B_j | A) = \\frac{P(A | B_j)P(B_j)}{\\sum_{i=1}^k P(A | B_i)P(B_i)}$$\n\n**Example.** A disease affects 1% of a population. A test detects it 95% of the time and gives a false positive 5% of the time. Then the probability of having the disease after a positive test is only\n\n$$\\frac{0.95 \\times 0.01}{0.95 \\times 0.01 + 0.05 \\times 0.99} = \\frac{0.0095}{0.059} \\approx 0.161$$\n\n## Random variables, expectation and variance\n\nA discrete random variable X has a probability mass function p(x) = P(X = x), and a continuous one a density f with P(a ≤ X ≤ b) = ∫_a^b f(x) dx. The expected value is the average of the values weighted by their probabilities:\n\n$$E[X] = \\sum_x x p(x) \\quad \\text{or} \\quad E[X] = \\int_{-∞}^∞ x f(x) dx$$\n\nExpectation is linear, E[aX + bY] = aE[X] + bE[Y]. The simplest random variable is a Bernoulli trial, which is 1 with probability p:\n\n$$p(x) = \\begin{cases}\np & \\text{if } x = 1 \\\\\n1 - p & \\text{if } x = 0\n\\end{cases}$$\n\nso its mean is p. The variance measures spread around the mean μ = E[X], and expanding the square shows a shorter way to compute it:\n\n$$Var(X) = E[(X - μ)^2] = E[X^2] - 2μE[X] + μ^2 = E[X^2] - μ^2$$"
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "33c7adb0a34357ac6e270c93574f87393b6f8c081ba01427dd3f60d230c2bb63",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 30.7,
+  "answer": "# Probability and Statistics\n\n## Events and probability\n\nAn experiment has a sample space $\\Omega$, the set of its possible outcomes, and an event is a subset $A \\subseteq \\Omega$. A probability $P$ gives each event a number with $P(\\Omega) = 1$, $0 \\leq P(A) \\leq 1$, and\n$$P\\left(\\bigcup_{i=1}^{\\infty} A_i\\right) = \\sum_{i=1}^{\\infty} P(A_i)$$\nwhenever the events $A_i$ are pairwise disjoint. From these axioms follow the complement rule $P(A^c) = 1 - P(A)$ and the addition rule\n$$P(A \\cup B) = P(A) + P(B) - P(A \\cap B)$$\n\nWhen all $|\\Omega|$ outcomes are equally likely, $P(A) = \\frac{|A|}{|\\Omega|}$. Rolling two dice gives 36 outcomes, and six of them have a sum of 7, so that event has probability $\\frac{6}{36} = \\frac{1}{6}$.\n\n## Conditional probability and Bayes’ rule\n\nThe probability of $A$ given that $B$ has happened is\n$$P(A \\mid B) = \\frac{P(A \\cap B)}{P(B)}, \\quad P(B) > 0$$\nand $A$ and $B$ are independent when $P(A \\cap B) = P(A)P(B)$, that is, when knowing $B$ does not change the probability of $A$. Events $A_1, \\ldots, A_n$ are mutually independent when every selection of them satisfies the product rule, in particular $P(A_1 \\cap \\cdots \\cap A_n) = \\prod_{i=1}^n P(A_i)$. If $B_1, \\ldots, B_k$ split $\\Omega$ into disjoint pieces, the law of total probability gives\n$$P(A) = \\sum_{i=1}^k P(A \\mid B_i)P(B_i),$$\nand Bayes’ rule reverses a conditional probability:\n$$P(B_j \\mid A) = \\frac{P(A \\mid B_j)P(B_j)}{\\sum_{i=1}^k P(A \\mid B_i)P(B_i)}$$"
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "efab9049166505f05e887e5108752eceb2c76f67eb949a4e6c4032046492851e",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 27.6,
+  "answer": "Example. A disease affects 1% of a population. A test detects it 95% of the time and gives a false positive 5% of the time. Then the probability of having the disease after a positive test is only\n\n$$\n\\frac{0.95 \\times 0.01}{0.95 \\times 0.01 + 0.05 \\times 0.99} = \\frac{0.0095}{0.059} \\approx 0.161\n$$\n\n---\n\n### Random variables, expectation and variance\n\nA discrete random variable \\( X \\) has a probability mass function \\( p(x) = P(X = x) \\), and a continuous one a density \\( f \\) with \\( P(a \\leq X \\leq b) = \\int_{a}^{b} f(x) \\, dx \\). The expected value is the average of the values weighted by their probabilities:\n\n$$\n\\mathbb{E}[X] = \\sum_{x} x \\, p(x) \\quad \\text{or} \\quad \\mathbb{E}[X] = \\int_{-\\infty}^{\\infty} x f(x) \\, dx\n$$\n\nExpectation is linear, \\( \\mathbb{E}[aX + bY] = a \\mathbb{E}[X] + b \\mathbb{E}[Y] \\). The simplest random variable is a Bernoulli trial, which is 1 with probability \\( p \\):\n\n$$\np(x) =\n\\begin{cases}\np & \\text{if } x = 1 \\\\\n1 - p & \\text{if } x = 0\n\\end{cases}\n$$\n\nso its mean is \\( p \\). The variance measures spread around the mean \\( \\mu = \\mathbb{E}[X] \\), and expanding the square shows a shorter way to compute it:\n\n$$\n\\text{Var}(X) = \\mathbb{E} \\left[(X - \\mu)^2\\right]\n$$\n\n$$\n= \\mathbb{E}[X^2] - 2\\mu \\mathbb{E}[X] + \\mu^2\n$$\n\n$$\n= \\mathbb{E}[X^2] - \\mu^2\n$$"
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "9524ec8c2089ebf192767bf48fb4384b3b9a655107b5fcaded69341b8bfb6da2",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 51.3,
+  "answer": "The standard deviation is $\\sigma = \\sqrt{\\text{Var}(X)}$, and a Bernoulli trial has $\\sigma^2 = p - p^2 = p(1-p)$. For a fair die, $\\mu = 3.5$ and $\\sigma^2 = \\frac{35}{6} - 3.5^2 = \\frac{35}{12}$. For two variables, $\\text{Cov}(X,Y) = \\mathbb{E}[XY] - \\mathbb{E}[X]\\mathbb{E}[Y]$ and the correlation is $\\rho = \\frac{\\text{Cov}(X,Y)}{\\sigma_X \\sigma_Y}$, a number between $-1$ and $1$.\n\n### Common distributions\n\nThe number of successes in $n$ independent trials, each succeeding with probability $p$, has the binomial distribution $X \\sim \\text{Bin}(n,p)$:\n\n$$P(X = k) = \\binom{n}{k} p^k (1-p)^{n-k}, \\quad k = 0, 1, \\ldots, n$$\n\nwith $\\mathbb{E}[X] = np$ and $\\text{Var}(X) = np(1-p)$. Here $\\binom{n}{k} = \\frac{n!}{k!(n-k)!}$ counts the ways to choose which $k$ trials succeed; for instance $\\binom{5}{2} = 10$. A Poisson variable with rate $\\lambda$ has $P(X=k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}$, and both its mean and its variance are $\\lambda$.\n\nThe normal distribution $X \\sim \\mathcal{N}(\\mu, \\sigma^2)$ has the bell-shaped density\n\n$$f(x) = \\frac{1}{\\sigma \\sqrt{2\\pi}} \\exp \\left(-\\frac{(x-\\mu)^2}{2\\sigma^2}\\right)$$\n\nand $Z = \\frac{X-\\mu}{\\sigma}$ is standard normal. About 68% of its values lie within $\\mu \\pm \\sigma$ and about 95% within $\\mu \\pm 1.96\\sigma$.\n\n### Estimation\n\nFrom a sample $x_1, \\ldots, x_n$, the sample mean and the sample variance are\n\n$$\\bar{x} = \\frac{1}{n} \\sum_{i=1}^n x_i, \\quad s^2 = \\frac{1}{n-1} \\sum_{i=1}^n (x_i - \\bar{x})^2$$\n\nThe divisor $n-1$ makes $s^2$ an unbiased estimator: $\\mathbb{E}[s^2] = \\sigma^2$. An estimator of a parameter $\\theta$ is written $\\hat{\\theta}$. For $n$ independent Bernoulli trials $x_1, \\ldots, x_n$, the likelihood of $p$ is the product $L(p) = \\prod_{i=1}^n p^{x_i}(1-p)^{1-x_i}$, and it is largest at the proportion of successes, $\\hat{p} = \\frac{1}{n} \\sum_{i=1}^n x_i$. By the central limit theorem the mean of $n$ independent observations is approximately $\\mathcal{N}\\left(\\mu, \\frac{\\sigma^2}{n}\\right)$ for large $n$, so an approximate 95% confidence interval for $\\mu$ is\n\n$$\\bar{x} \\pm 1.96 \\frac{s}{\\sqrt{n}}$$\n\nWith $n = 100$, $\\bar{x} = 52.3$ and $s = 8$, the interval is $52.3 \\pm 1.568$, from $50.732$ to $53.868$."
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "0f2adafb35209a086129136c9d4ba92557889c4f7425f433ccd7e1ab3127a11c",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.1,
+  "answer": "The standard deviation is $\\sigma = \\sqrt{\\text{Var}(X)}$, and a Bernoulli trial has $\\sigma^2 = p - p^2 = p(1-p)$. For a fair die, $\\mu = 3.5$ and $\\sigma^2 = \\frac{91}{6} - 3.5^2 = \\frac{35}{12}$. For two variables, $\\text{Cov}(X, Y) = \\mathbb{E}[XY] - \\mathbb{E}[X]\\mathbb{E}[Y]$ and the correlation is $\\rho = \\frac{\\text{Cov}(X,Y)}{\\sigma_X\\sigma_Y}$, a number between $-1$ and $1$.\n\n### Common distributions\n\nThe number of successes in $n$ independent trials, each succeeding with probability $p$, has the binomial distribution $X \\sim \\text{Bin}(n,p)$:\n\n$$P(X = k) = \\binom{n}{k} p^k (1-p)^{n-k}, \\quad k = 0, 1, \\ldots, n$$\n\nwith $\\mathbb{E}[X] = np$ and $\\text{Var}(X) = np(1-p)$. Here $\\binom{n}{k} = \\frac{n!}{k!(n-k)!}$ counts the ways to choose which $k$ trials succeed; for instance $\\binom{5}{2} = 10$. A Poisson variable with rate $\\lambda$ has $P(X = k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}$, and both its mean and its variance are $\\lambda$.\n\nThe normal distribution $X \\sim \\mathcal{N}(\\mu, \\sigma^2)$ has the bell-shaped density\n\n$$f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} \\exp\\left(-\\frac{(x-\\mu)^2}{2\\sigma^2}\\right)$$\n\nand $Z = \\frac{X-\\mu}{\\sigma}$ is standard normal. About 68% of its values lie within $\\mu \\pm \\sigma$ and about 95% within $\\mu \\pm 1.96\\sigma$.\n\n### Estimation\n\nFrom a sample $x_1, \\ldots, x_n$, the sample mean and the sample variance are"
+ },
+ {
+  "lecture": "07-probability-and-statistics.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "23c7b5a3c0b35247a489d9343c5752b85a207fbfe8add7ae97797fdfa5911878",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 24.0,
+  "answer": "The formulas for sample mean and sample variance are given by:\n\n$$\n\\bar{x} = \\frac{1}{n} \\sum_{i=1}^{n} x_i, \\quad s^2 = \\frac{1}{n-1} \\sum_{i=1}^{n} (x_i - \\bar{x})^2\n$$\n\nThe divisor \\( n - 1 \\) makes \\( s^2 \\) an unbiased estimator: \\( \\mathbb{E}[s^2] = \\sigma^2 \\). An estimator of a parameter \\( \\theta \\) is written \\( \\hat{\\theta} \\). For \\( n \\) independent Bernoulli trials \\( x_1, \\ldots, x_n \\), the likelihood of \\( p \\) is the product\n\n$$\nL(p) = \\prod_{i=1}^{n} p^{x_i}(1-p)^{1-x_i},\n$$\n\nand it is largest at the proportion of successes,\n\n$$\n\\hat{p} = \\frac{1}{n} \\sum_{i=1}^{n} x_i.\n$$\n\nBy the central limit theorem the mean of \\( n \\) independent observations is approximately \\( \\mathcal{N}\\left(\\mu, \\frac{\\sigma^2}{n}\\right) \\) for large \\( n \\), so an approximate 95% confidence interval for \\( \\mu \\) is\n\n$$\n\\bar{x} \\pm 1.96 \\frac{s}{\\sqrt{n}}\n$$\n\nWith \\( n = 100 \\), \\( \\bar{x} = 52.3 \\) and \\( s = 8 \\), the interval is \\( 52.3 \\pm 1.568 \\), from 50.732 to 53.868."
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "ed5ae1427d9607e16eebf317b7022f0b561473ab766cfe3c44345b872595b6ce",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 67.0,
+  "answer": "# Sets, Logic and Proof\n\n## Sets\n\nA set is a collection of distinct objects, its elements. We write $x \\in A$ when $x$ is an element of $A$ and $x \\notin A$ when it is not. A set can be listed, as in $A = \\{1, 2, 3, 4\\}$, or described by a property in set-builder notation:\n\n$$B = \\{x \\in \\mathbb{Z} : x^2 < 10\\} = \\{-3, -2, -1, 0, 1, 2, 3\\}$$\n\nThe standard number sets are the natural numbers $\\mathbb{N} = \\{0, 1, 2, \\ldots\\}$, the integers $\\mathbb{Z}$, the rationals $\\mathbb{Q} = \\left\\{ \\frac{p}{q} : p, q \\in \\mathbb{Z}, q \\neq 0 \\right\\}$, the reals $\\mathbb{R}$ and the complex numbers $\\mathbb{C}$, and $\\mathbb{N} \\subset \\mathbb{Z} \\subset \\mathbb{Q} \\subset \\mathbb{R} \\subset \\mathbb{C}$. The empty set $\\emptyset$ has no elements and is a subset of every set.\n\n$A$ is a subset of $B$, written $A \\subseteq B$, when every element of $A$ is in $B$, and two sets are equal when each is a subset of the other. From two sets we build their union, intersection and difference:\n\n$$A \\cup B = \\{x : x \\in A \\lor x \\in B\\}, \\quad A \\cap B = \\{x : x \\in A \\land x \\in B\\}, \\quad A \\setminus B = \\{x \\in A : x \\notin B\\}$$\n\nInside a universal set $U$, the complement of $A$ is $A^c = U \\setminus A$, and De Morgan’s laws say $(A \\cup B)^c = A^c \\cap B^c$ and $(A \\cap B)^c = A^c \\cup B^c$. With $A = \\{1, 2, 3, 4\\}$ and $B$ as above, $A \\cup B = \\{1, 2, 3\\}$ and $A \\setminus B = \\{4\\}$. Unions and intersections of many sets are written $\\bigcup_{i=1}^n A_i$ and $\\bigcap_{i=1}^n A_i$, and they may have infinitely many terms:\n\n$$\\bigcup_{n=1}^\\infty \\left[ \\frac{1}{n}, 1 \\right] = (0, 1], \\quad \\bigcap_{n=1}^\\infty \\left( -\\frac{1}{n}, \\frac{1}{n} \\right) = \\{0\\}$$\n\nThe indicator function of a set $A$ records membership as a number:\n\n$$\n\\mathbf{1}_A(x) =\n\\begin{cases}\n1 & \\text{if } x \\in A \\\\\n0 & \\text{if } x \\notin A\n\\end{cases}\n$$\n\nThe number of elements of a finite set is its cardinality $|A|$. The Cartesian product $A \\times B = \\{(a, b) : a \\in A, b \\in B\\}$ has $|A| \\cdot |B|$ elements, and the power set $\\mathcal{P}(A)$, the set of all subsets of $A$, has $|\\mathcal{P}(A)| = 2^{|A|}$ of them. By inclusion and exclusion, $|A \\cup B| = |A| + |B| - |A \\cap B|$.\n\n## Logic\n\nA proposition is a statement that is either true or false. From propositions $p$ and $q$ we form the negation $\\neg p$, the conjunction $p \\land q$, the disjunction $p \\lor q$, the implication $p \\implies q$ and the equivalence $p \\iff q$. An implication is false only when $p$ is true and $q$ is false, so it is equivalent to its contrapositive:\n\n$$(p \\implies q) \\iff (\\neg q \\implies \\neg p)$$\n\nbut not to its converse $q \\implies p$. De Morgan’s laws hold for propositions too: $\\neg(p \\land q) \\iff \\neg p \\lor \\neg q$.\n\nQuantifiers make statements about every element or some element of a set. The statement $\\forall x \\in \\mathbb{R}, x^2 \\geq 0$ is true, and $\\exists x \\in \\mathbb{Z} : 2x = 7$ is false. Negating a quantified statement swaps the quantifier and negates what follows:\n\n$$\\neg (\\forall x \\, P(x)) \\iff \\exists x \\, \\neg P(x), \\quad \\neg (\\exists x \\, P(x)) \\iff \\forall x \\, \\neg P(x)$$\n\nThe order of quantifiers matters: $\\forall n \\in \\mathbb{N} \\exists m \\in \\mathbb{N} : m > n$ is true, but $\\exists m \\in \\mathbb{N} \\forall n \\in \\mathbb{N} : m > n$ is false."
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "ac30b005c0c9a071ca2986f98c2c14de11c1789a1b032cf223002e12442cae82",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 37.7,
+  "answer": "# Sets, Logic and Proof\n\n## Sets\n\nA set is a collection of distinct objects, its elements. We write $x \\in A$ when $x$ is an element of $A$ and $x \\notin A$ when it is not. A set can be listed, as in $A = \\{1, 2, 3, 4\\}$, or described by a property in set-builder notation:\n\n$$B = \\{x \\in \\mathbb{Z} : x^2 < 10\\} = \\{-3, -2, -1, 0, 1, 2, 3\\}$$\n\nThe standard number sets are the natural numbers $\\mathbb{N} = \\{0, 1, 2, \\ldots\\}$, the integers $\\mathbb{Z}$, the rationals $\\mathbb{Q} = \\left\\{\\frac{p}{q} : p, q \\in \\mathbb{Z}, q \\neq 0\\right\\}$, the reals $\\mathbb{R}$ and the complex numbers $\\mathbb{C}$, and $\\mathbb{N} \\subset \\mathbb{Z} \\subset \\mathbb{Q} \\subset \\mathbb{R} \\subset \\mathbb{C}$. The empty set $\\emptyset$ has no elements and is a subset of every set.\n\n$A$ is a subset of $B$, written $A \\subseteq B$, when every element of $A$ is in $B$, and two sets are equal when each is a subset of the other. From two sets we build their union, intersection and difference:\n\n$$A \\cup B = \\{x : x \\in A \\lor x \\in B\\}, \\quad A \\cap B = \\{x : x \\in A \\land x \\in B\\}, \\quad A \\setminus B = \\{x \\in A : x \\notin B\\}$$\n\nInside a universal set $U$, the complement of $A$ is $A^c = U \\setminus A$, and De Morgan’s laws say $(A \\cup B)^c = A^c \\cap B^c$ and $(A \\cap B)^c = A^c \\cup B^c$. With $A = \\{1, 2, 3, 4\\}$ and $B$ as above, $A \\cap B = \\{1, 2, 3\\}$ and $A \\setminus B = \\{4\\}$. Unions and intersections of many sets are written $\\bigcup_{i=1}^n A_i$ and $\\bigcap_{i=1}^n A_i$, and they may have infinitely many terms:\n\n$$\\bigcup_{n=1}^{\\infty} \\left[\\frac{1}{n}, 1\\right] = (0, 1], \\quad \\bigcap_{n=1}^{\\infty} \\left(-\\frac{1}{n}, \\frac{1}{n}\\right) = \\{0\\}$$\n\nThe indicator function of a set $A$ records membership as a number:"
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "0ce91c2611e466c8fabe57bfc1d0d7550cb6fd0af8738a41949158ade026ba40",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.5,
+  "answer": "The indicator function of a set \\( A \\) is defined as:\n\n$$\n\\mathbf{1}_{A}(x) = \\begin{cases}\n1 & \\text{if } x \\in A \\\\\n0 & \\text{if } x \\notin A\n\\end{cases}\n$$\n\nThe number of elements of a finite set is its cardinality \\(|A|\\). The Cartesian product \\( A \\times B = \\{(a, b) : a \\in A, b \\in B\\} \\) has \\(|A| \\cdot |B|\\) elements, and the power set \\(\\mathcal{P}(A)\\), the set of all subsets of \\( A \\), has \\(|\\mathcal{P}(A)| = 2^{|A|}\\) of them. By inclusion and exclusion, \\(|A \\cup B| = |A| + |B| - |A \\cap B|\\).\n\n### Logic\n\nA proposition is a statement that is either true or false. From propositions \\( p \\) and \\( q \\) we form the negation \\(\\neg p\\), the conjunction \\( p \\land q \\), the disjunction \\( p \\lor q \\), the implication \\( p \\implies q \\) and the equivalence \\( p \\iff q \\). An implication is false only when \\( p \\) is true and \\( q \\) is false, so it is equivalent to its contrapositive:\n\n$$(p \\implies q) \\iff (\\neg q \\implies \\neg p)$$\n\nbut not to its converse \\( q \\implies p \\). De Morgan’s laws hold for propositions too:\n\n$$\\neg(p \\land q) \\iff \\neg p \\lor \\neg q.$$\n\nQuantifiers make statements about every element or some element of a set. The statement \\(\\forall x \\in \\mathbb{R}, x^2 \\geq 0\\) is true, and \\(\\exists x \\in \\mathbb{Z} : 2x = 7\\) is false. Negating a quantified statement swaps the quantifier and negates what follows:\n\n$$\\neg(\\forall x \\, P(x)) \\iff \\exists x \\, \\neg P(x), \\quad \\neg(\\exists x \\, P(x)) \\iff \\forall x \\, \\neg P(x)$$\n\nThe order of quantifiers matters: \\(\\forall n \\in \\mathbb{N} \\, \\exists m \\in \\mathbb{N} : m > n\\) is true, but \\(\\exists m \\in \\mathbb{N} \\, \\forall n \\in \\mathbb{N} : m > n\\) is false."
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "d83e42c6e95d68a190ba97257a2db473ea35145f9a79725088375343cc0a2569",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 47.8,
+  "answer": "### Functions\n\nA function $f : A \\rightarrow B$ assigns to each $x \\in A$ exactly one value $f(x) \\in B$. It is injective when $f(x_1) = f(x_2) \\implies x_1 = x_2$, surjective when every $y \\in B$ equals $f(x)$ for some $x$, and bijective when it is both, in which case it has an inverse $f^{-1} : B \\rightarrow A$. The composition of $f : A \\rightarrow B$ and $g : B \\rightarrow C$ is $(g \\circ f)(x) = g(f(x))$. The floor and ceiling functions round to integers: $\\lfloor 3.7 \\rfloor = 3$, $\\lceil 3.2 \\rceil = 4$ and $\\lfloor -1.5 \\rfloor = -2$.\n\n### Proof by induction\n\nTo prove that a statement $P(n)$ holds for every $n \\geq 1$, it is enough to prove $P(1)$, and to prove $P(k) \\implies P(k+1)$ for every $k \\geq 1$. **Theorem.** For every $n \\geq 1$,\n\n$$\n\\sum_{k=1}^n k = 1 + 2 + \\cdots + n = \\frac{n(n+1)}{2}\n$$\n\n**Proof.** For $n=1$ both sides equal 1. Assume the formula holds for $n$. Then\n\n$$\n\\sum_{k=1}^{n+1} k = \\sum_{k=1}^n k + (n+1) = \\frac{n(n+1)}{2} + (n+1) = \\frac{(n+1)(n+2)}{2}\n$$\n\nwhich is the formula for $n+1$, so it holds for every $n$. In the same way one proves $\\sum_{k=1}^n k^2 = \\frac{n(n+1)(2n+1)}{6}$. The binomial coefficients obey Pascal’s rule $\\binom{n}{k} = \\binom{n-1}{k} + \\binom{n-1}{k-1}$, and induction on $n$ with this rule proves the binomial theorem\n\n$$\n(x + y)^n = \\sum_{k=0}^n \\binom{n}{k} x^{n-k} y^k\n$$\n\nSetting $x = y = 1$ gives $\\sum_{k=0}^n \\binom{n}{k} = 2^n$, the number of subsets of a set of $n$ elements.\n\n### Divisibility and congruences\n\nFor integers $a$ and $b$, $a \\mid b$ means that $a$ divides $b$. Two integers are congruent modulo $n$ when $n$ divides their difference:\n\n$$\na \\equiv b \\pmod{n} \\iff n \\mid (a - b)\n$$\n\nSo $38 \\equiv 2 \\pmod{12}$, which is why 38 hours after midnight a clock shows 2. Congruences can be added and multiplied like equations: if $a \\equiv b$ and $c \\equiv d \\pmod{n}$, then $a + c \\equiv b + d$ and $ac \\equiv bd \\pmod{n}$. Hence $10 \\equiv 1 \\pmod{9}$ gives $10^k \\equiv 1 \\pmod{9}$ for every $k$, which is why a number is divisible by 9 exactly when the sum of its digits is. The greatest common divisor satisfies Bezout’s identity: for all $a, b$ not both zero, there are integers $x, y$ with $ax + by = \\gcd(a, b)$, as in $\\gcd(12, 42) = 6 = 4 \\cdot 12 - 1 \\cdot 42$."
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "680bbdebe9af34c611296dd22bf94d6663df75b4ec68b2c3012d9a160e82ea2c",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 30.5,
+  "answer": "# Sets, Logic and Proof\n\n## Functions\n\nA function $f : A \\rightarrow B$ assigns to each $x \\in A$ exactly one value $f(x) \\in B$. It is injective when\n$f(x_1) = f(x_2) \\implies x_1 = x_2$, surjective when every $y \\in B$ equals $f(x)$ for some $x$, and bijective when it is both, in which case it has an inverse $f^{-1} : B \\rightarrow A$. The composition of $f : A \\rightarrow B$ and $g : B \\rightarrow C$ is $(g \\circ f)(x) = g(f(x))$. The floor and ceiling functions round to integers: $\\lfloor 3.7 \\rfloor = 3$, $\\lceil 3.2 \\rceil = 4$ and $\\lfloor -1.5 \\rfloor = -2$.\n\n## Proof by Induction\n\nTo prove that a statement $P(n)$ holds for every $n \\geq 1$, it is enough to prove $P(1)$, and to prove\n$P(k) \\implies P(k+1)$ for every $k \\geq 1$. **Theorem.** For every $n \\geq 1$,\n\n$$\n\\sum_{k=1}^n k = 1 + 2 + \\cdots + n = \\frac{n(n+1)}{2}\n$$\n\n**Proof.** For $n = 1$ both sides equal 1. Assume the formula holds for $n$. Then\n\n$$\n\\sum_{k=1}^{n+1} k = \\sum_{k=1}^n k + (n+1) = \\frac{n(n+1)}{2} + (n+1) = \\frac{n(n+1) + 2(n+1)}{2} = \\frac{(n+1)(n+2)}{2}\n$$\n\nwhich is the formula for $n+1$, so it holds for every $n$. In the same way one proves $\\sum_{k=1}^n k^2 = \\frac{n(n+1)(2n+1)}{6}$. The binomial coefficients obey Pascal’s rule $\\binom{n}{k} = \\binom{n-1}{k-1} + \\binom{n-1}{k}$, and induction on $n$ with this rule proves the binomial theorem."
+ },
+ {
+  "lecture": "08-sets-logic-and-proof.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "95c0940dccebd4b33e5e793cc17f2edadd02d5e45aedfa3e74d77ab23a377e1a",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 23.0,
+  "answer": "The binomial expansion is given by:\n\n$$(x + y)^n = \\sum_{k=0}^{n} \\binom{n}{k} x^{n-k} y^k$$\n\nSetting \\( x = y = 1 \\) gives:\n\n$$\\sum_{k=0}^{n} \\binom{n}{k} = 2^n,$$\n\nthe number of subsets of a set of \\( n \\) elements.\n\n### Divisibility and congruences\n\nFor integers \\( a \\) and \\( b \\), \\( a \\mid b \\) means that \\( a \\) divides \\( b \\). Two integers are congruent modulo \\( n \\) when \\( n \\) divides their difference:\n\n$$a \\equiv b \\pmod{n} \\iff n \\mid (a - b)$$\n\nSo \\( 38 \\equiv 2 \\pmod{12} \\), which is why 38 hours after midnight a clock shows 2. Congruences can be added and multiplied like equations: if \\( a \\equiv b \\) and \\( c \\equiv d \\pmod{n} \\), then \\( a + c \\equiv b + d \\) and \\( ac \\equiv bd \\pmod{n} \\). Hence \\( 10^k \\equiv 1 \\pmod{9} \\) gives \\( 10^k \\equiv 1 \\pmod{9} \\) for every \\( k \\), which is why a number is divisible by 9 exactly when the sum of its digits is.\n\nThe greatest common divisor satisfies Bezout’s identity: for all \\( a, b \\) not both zero, there are integers \\( x, y \\) with \\( ax + by = \\gcd(a, b) \\), as in \\( \\gcd(12, 42) = 6 = 4 \\cdot 12 - 1 \\cdot 42 \\)."
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "6a1daacf6ca024e04891aa5881669f59eb167dec3f441ce7f466b9dd51b9fdfd",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 59.6,
+  "answer": "# Series and Complex Numbers\n\n## Sequences and series\n\nA sequence $(a_n)$ converges to $L$, written $\\lim_{n \\to \\infty} a_n = L$, when for every $\\epsilon > 0$ there is an $N$ with $|a_n - L| < \\epsilon$ for all $n > N$. For example $\\lim_{n \\to \\infty} \\frac{3n^2 + 1}{n^2 + 2} = 3$ and $\\lim_{n \\to \\infty} \\sqrt{n} = \\infty$.\n\nA series adds the terms of a sequence. Its partial sums are $S_N = \\sum_{n=1}^N a_n$, and the series converges to $S$ when $S_N \\to S$:\n\n$$\n\\sum_{n=1}^\\infty a_n = \\lim_{N \\to \\infty} \\sum_{n=1}^N a_n\n$$\n\nThe geometric series is the model for all others. For $|r| < 1$,\n\n$$\n\\sum_{n=0}^\\infty r^n = 1 + r + r^2 + \\cdots = \\frac{1}{1-r}\n$$\n\nand it diverges when $|r| \\geq 1$. So $\\sum_{n=1}^\\infty \\left(\\frac{1}{2}\\right)^n = 1$ and $0.999\\ldots = \\sum_{n=1}^\\infty \\frac{9}{10^n} = 1$.\n\n## Tests for convergence\n\nIf $\\sum a_n$ converges then $a_n \\to 0$, but the converse fails: the harmonic series $\\sum_{n=1}^\\infty \\frac{1}{n}$ diverges, although its terms tend to zero. More generally the $p$-series $\\sum_{n=1}^\\infty \\frac{1}{n^p}$ converges exactly when $p > 1$, and Euler showed that $\\sum_{n=1}^\\infty \\frac{1}{n^2} = \\frac{\\pi^2}{6}$.\n\nThe ratio test compares consecutive terms. Let\n\n$$\n\\rho = \\lim_{n \\to \\infty} \\left| \\frac{a_{n+1}}{a_n} \\right|\n$$\n\nIf $\\rho < 1$ the series converges absolutely, if $\\rho > 1$ it diverges, and if $\\rho = 1$ the test says nothing. For $a_n = \\frac{2^n}{n!}$ the ratio is $\\frac{2}{n+1} \\to 0$, so $\\sum \\frac{2^n}{n!}$ converges. An alternating series $\\sum (-1)^{n+1} b_n$ with $b_n$ decreasing to $0$ converges, as $1 - \\frac{1}{2} + \\frac{1}{3} - \\frac{1}{4} + \\cdots = \\ln 2$ does.\n\n## Taylor series\n\nA function with derivatives of every order at $a$ has the Taylor series\n\n$$\nf(x) = \\sum_{n=0}^\\infty \\frac{f^{(n)}(a)}{n!}(x-a)^n = f(a) + f'(a)(x-a) + \\frac{f''(a)}{2!}(x-a)^2 + \\cdots\n$$\n\nwhere $n! = \\prod_{k=1}^n k$ and $0! = 1$. Around $a = 0$ the most useful series are\n\n$$\ne^x = \\sum_{n=0}^\\infty \\frac{x^n}{n!}, \\quad \\sin x = \\sum_{n=0}^\\infty \\frac{(-1)^n x^{2n+1}}{(2n+1)!}, \\quad \\cos x = \\sum_{n=0}^\\infty \\frac{(-1)^n x^{2n}}{(2n)!}\n$$\n\nall valid for every real $x$, while $\\frac{1}{1-x} = \\sum_{n=0}^\\infty x^n$ holds only for $|x| < 1$. Cutting a series after the term in $x^n$ leaves an error of order $x^{n+1}$, so $\\sin x \\approx x - \\frac{x^3}{6}$ is very accurate for small $x$.\n\n## Complex numbers\n\nA complex number is $z = a + bi$ with $a, b \\in \\mathbb{R}$ and $i^2 = -1$. Its real and imaginary parts are $\\operatorname{Re} z = a$ and $\\operatorname{Im} z = b$, its conjugate is $\\overline{z} = a - bi$, and its modulus is\n\n$$\n|z| = \\sqrt{a^2 + b^2} = \\sqrt{z \\overline{z}}\n$$"
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "21df648455946f58a60188c3c495b9e5f96760468ff093dce3f2dfa1aca4778c",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 28.1,
+  "answer": "# Series and Complex Numbers\n\n## Sequences and series\n\nA sequence $(a_n)$ converges to $L$, written $\\lim_{n \\to \\infty} a_n = L$, when for every $\\varepsilon > 0$ there is an $N$ with $|a_n - L| < \\varepsilon$ for all $n > N$. For example $\\lim_{n \\to \\infty} \\frac{3n+1}{n+2} = 3$ and $\\lim_{n \\to \\infty} \\sqrt[n]{n} = 1$.\n\nA series adds the terms of a sequence. Its partial sums are $S_N = \\sum_{n=1}^N a_n$, and the series converges to $S$ when $S_N \\to S$:\n\n$$\n\\sum_{n=1}^{\\infty} a_n = \\lim_{N \\to \\infty} \\sum_{n=1}^N a_n\n$$\n\nThe geometric series is the model for all others. For $|r| < 1$,\n\n$$\n\\sum_{n=0}^{\\infty} r^n = 1 + r + r^2 + \\cdots = \\frac{1}{1-r}\n$$\n\nand it diverges when $|r| \\geq 1$. So $\\sum_{n=1}^{\\infty} \\left(\\frac{1}{2}\\right)^n = 1$ and $0.999\\ldots = \\sum_{n=1}^{\\infty} \\frac{9}{10^n} = 1$.\n\n## Tests for convergence\n\nIf $\\sum a_n$ converges then $a_n \\to 0$, but the converse fails: the harmonic series $\\sum_{n=1}^{\\infty} \\frac{1}{n}$ diverges, although its terms tend to zero. More generally the $p$-series $\\sum_{n=1}^{\\infty} \\frac{1}{n^p}$ converges exactly when $p > 1$, and Euler showed that $\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$.\n\nThe ratio test compares consecutive terms. Let\n\n$$\n\\rho = \\lim_{n \\to \\infty} \\left| \\frac{a_{n+1}}{a_n} \\right|\n$$"
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "55068b24096460000d86c357c4af50b3fb6c759db46207f29d4162ae288e41e4",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 32.6,
+  "answer": "If $\\rho < 1$ the series converges absolutely, if $\\rho > 1$ it diverges, and if $\\rho = 1$ the test says nothing.\nFor $a_n = \\frac{2^n}{n!}$ the ratio is $\\frac{2}{n+1} \\to 0$, so $\\sum \\frac{2^n}{n!}$ converges. An alternating series $\\sum (-1)^{n+1}b_n$ with $b_n$ decreasing to 0 converges, as $1 - \\frac{1}{2} + \\frac{1}{3} - \\frac{1}{4} + \\cdots = \\ln 2$ does.\n\n### Taylor series\n\nA function with derivatives of every order at $a$ has the Taylor series\n\n$$\nf(x) = \\sum_{n=0}^{\\infty} \\frac{f^{(n)}(a)}{n!}(x-a)^n = f(a) + f'(a)(x-a) + \\frac{f''(a)}{2!}(x-a)^2 + \\cdots\n$$\n\nwhere $n! = \\prod_{k=1}^n k$ and $0! = 1$. Around $a = 0$ the most useful series are\n\n$$\ne^x = \\sum_{n=0}^{\\infty} \\frac{x^n}{n!}, \\quad \\sin x = \\sum_{n=0}^{\\infty} \\frac{(-1)^n x^{2n+1}}{(2n+1)!}, \\quad \\cos x = \\sum_{n=0}^{\\infty} \\frac{(-1)^n x^{2n}}{(2n)!}\n$$\n\nall valid for every real $x$, while $\\frac{1}{1-x} = \\sum_{n=0}^{\\infty} x^n$ holds only for $|x| < 1$. Cutting a series after the term in $x^n$ leaves an error of order $x^{n+1}$, so $\\sin x \\approx x - \\frac{x^3}{6}$ is very accurate for small $x$.\n\n### Complex numbers\n\nA complex number is $z = a + bi$ with $a, b \\in \\mathbb{R}$ and $i^2 = -1$. Its real and imaginary parts are $\\operatorname{Re} z = a$ and $\\operatorname{Im} z = b$, its conjugate is $\\overline{z} = a - bi$, and its modulus is\n\n$$\n|z| = \\sqrt{a^2 + b^2} = \\sqrt{z\\overline{z}}\n$$"
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "4d37aa85bae4b755b47074d3a7e1b3489bde51b73918974fd146910bacdd36f3",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.3,
+  "answer": "Series and Complex Numbers\n\nComplex numbers are added part by part and multiplied using $i^2 = -1$:\n\n$$(2 + 3i)(1 - i) = 2 - 2i + 3i - 3i^2$$\n$$= 2 + i + 3 + i$$\n$$= 5 + 4i$$\n\nTo divide, multiply above and below by the conjugate of the denominator: $\\frac{1}{3+4i} = \\frac{3-4i}{25}$. Conjugation respects sums and products: $\\overline{z + w} = \\overline{z} + \\overline{w}$ and $\\overline{zw} = \\overline{z}\\overline{w}$, and it recovers the two parts:\n\n$$\\text{Re } z = \\frac{z + \\overline{z}}{2}, \\quad \\text{Im } z = \\frac{z - \\overline{z}}{2i}$$\n\n### Polar form and roots of unity\n\nPlotting $z = a + bi$ as the point $(a, b)$, its distance from the origin is $r = |z|$ and its angle with the positive real axis is the argument $\\theta = \\arg z$. Euler’s formula links the exponential function to the circle:\n\n$$e^{i\\theta} = \\cos \\theta + i \\sin \\theta$$\n\nso $z = re^{i\\theta}$, and $e^{i\\pi} + 1 = 0$. In polar form, multiplication multiplies the moduli and adds the arguments, which gives De Moivre’s formula $(\\cos \\theta + i \\sin \\theta)^n = \\cos n\\theta + i \\sin n\\theta$. The equation $z^n = 1$ has exactly $n$ solutions, the $n$-th roots of unity,\n\n$$z_k = e^{2\\pi ik/n}, \\quad k = 0, 1, \\ldots, n-1$$\n\nevenly spaced around the unit circle. They sum to zero, $\\sum_{k=0}^{n-1} z_k = 0$ for $n \\geq 2$, and their product is $\\prod_{k=0}^{n-1} z_k = (-1)^{n+1}$. For $n = 4$ they are $1, i, -1$ and $-i$."
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "92ba1875fef01afaccdabcd5953d538f25c74506690e3d4d78727a263f3e5155",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 24.2,
+  "answer": "### Series and Complex Numbers\n\nComplex numbers are added part by part and multiplied using $i^2 = -1$:\n\n$$(2 + 3i)(1 - i) = 2 - 2i + 3i - 3i^2$$\n$$= 2 + i + 3 = 5 + i$$\n\nTo divide, multiply above and below by the conjugate of the denominator: $\\frac{1}{3+4i} = \\frac{3-4i}{25}$. Conjugation respects sums and products, $\\overline{z + w} = \\overline{z} + \\overline{w}$ and $\\overline{zw} = \\overline{z}\\overline{w}$, and it recovers the two parts:\n\n$$\\text{Re } z = \\frac{z + \\overline{z}}{2}, \\quad \\text{Im } z = \\frac{z - \\overline{z}}{2i}$$\n\n### Polar form and roots of unity\n\nPlotting $z = a + bi$ as the point $(a, b)$, its distance from the origin is $r = |z|$ and its angle with the positive real axis is the argument $\\theta = \\arg z$. Euler’s formula links the exponential function to the circle:\n\n$$e^{i\\theta} = \\cos \\theta + i \\sin \\theta$$\n\nso $z = re^{i\\theta}$, and $e^{i\\pi} + 1 = 0$. In polar form, multiplication multiplies the moduli and adds the arguments, which gives De Moivre’s formula $(\\cos \\theta + i \\sin \\theta)^n = \\cos n\\theta + i \\sin n\\theta$. The equation $z^n = 1$ has exactly $n$ solutions, the $n$-th roots of unity,\n\n$$z_k = e^{2\\pi ik/n}, \\quad k = 0, 1, \\ldots, n-1$$"
+ },
+ {
+  "lecture": "09-series-and-complex-numbers.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "cd232f6d096f7232d642d1186bca2671bb853f1973e7f26c616f7b36ffd945fb",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 10.6,
+  "answer": "The $n$-th roots of unity are $n$ complex numbers evenly spaced around the unit circle. They satisfy the following properties:\n\n- They sum to zero, $\\sum_{k=0}^{n-1} z_k = 0$ for $n \\geq 2$.\n- Their product is $\\prod_{k=0}^{n-1} z_k = (-1)^{n+1}$.\n\nFor $n = 4$, the roots of unity are $1$, $i$, $-1$, and $-i$."
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 1,
+  "part": "whole",
+  "image": "381253c501733627ce7f1b37ec767dc3d4c80b9758950d63be27d459fa5e3e06",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 52.9,
+  "answer": "# Numerical Methods and Error\n\n## Floating-point numbers\n\nComputers store real numbers in floating point, as $\\pm m \\times 2^e$ with a fixed number of binary digits in $m$. In double precision the gap between 1 and the next representable number is the machine epsilon, $\\epsilon_{\\text{mach}} = 2^{-52} \\approx 2.22 \\times 10^{-16}$, and every real number $x$ in range is stored as some $\\text{fl}(x)$ with\n\n$$\n\\frac{|\\text{fl}(x) - x|}{|x|} \\leq \\frac{\\epsilon_{\\text{mach}}}{2}\n$$\n\nRounding errors are small, but subtraction can magnify them. Computing $\\sqrt{x+1} - \\sqrt{x}$ for $x = 10^{12}$ loses most of its digits, while the equal expression $\\frac{1}{\\sqrt{x+1} + \\sqrt{x}} \\approx 5 \\times 10^{-7}$ is accurate.\n\nThe absolute error of an approximation $\\tilde{x}$ to $x$ is $|\\tilde{x} - x|$, and its relative error is $\\frac{|\\tilde{x} - x|}{|x|}$. Approximating $\\pi$ by $\\frac{22}{7}$ gives an absolute error of about $1.26 \\times 10^{-3}$ and a relative error of about 0.04%.\n\n## Solving equations\n\nThe bisection method finds a root of a continuous $f$ on $[a,b]$ with $f(a)f(b) < 0$. It halves the interval at each step and keeps the half where the sign changes, so after $n$ steps the root is known to within $\\frac{b-a}{2^n}$. Reaching a tolerance $\\epsilon$ takes\n\n$$\nn = \\left\\lceil \\log_2 \\frac{b-a}{\\epsilon} \\right\\rceil\n$$\n\nsteps; for $b-a=1$ and $\\epsilon = 10^{-6}$ that is $\\lceil 19.93 \\rceil = 20$.\n\nNewton’s method follows the tangent line from the current guess to where it crosses zero:\n\n$$\nx_{n+1} = x_n - \\frac{f(x_n)}{f'(x_n)}\n$$\n\nFor $f(x) = x^2 - 2$ it becomes $x_{n+1} = \\frac{1}{2} \\left(x_n + \\frac{2}{x_n}\\right)$. Starting from $x_0 = 1$ it gives $x_1 = 1.5$, $x_2 = 1.416$ and $x_3 = 1.414215686\\ldots$, already within $2.2 \\times 10^{-6}$ of $\\sqrt{2}$. Near a simple root the error $e_n = x_n - x^*$ satisfies\n\n$$\n|e_{n+1}| \\approx \\left| \\frac{f''(x^*)}{2f'(x^*)} \\right| e_n^2\n$$\n\nso the number of correct digits roughly doubles at every step. This is quadratic convergence; bisection, which gains one binary digit per step, converges only linearly.\n\n## Approximating derivatives\n\nA derivative can be approximated by a difference quotient with a small step $h$. The forward difference and the central difference are\n\n$$\nf'(x) \\approx \\frac{f(x+h) - f(x)}{h}, \\quad f'(x) \\approx \\frac{f(x+h) - f(x-h)}{2h}\n$$\n\nBy Taylor’s theorem their errors are $O(h)$ and $O(h^2)$: halving $h$ halves the first error but quarters the second. With the difference operator $\\Delta f(x) = f(x+h) - f(x)$, the second difference $\\Delta^2 f(x) = f(x+2h) - 2f(x+h) + f(x)$ approximates $h^2 f''(x)$. The step cannot be made arbitrarily small, because rounding errors of size $\\epsilon_{\\text{mach}}/h$ grow as $h \\to 0$; for the forward difference the best step is near $h \\approx \\sqrt{\\epsilon_{\\text{mach}}} \\approx 10^{-8}$."
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 1,
+  "part": "top",
+  "image": "8c5ec33b0aefefd616f97629fdd5dec6538937ecc321c529b60b13608fe21064",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 27.3,
+  "answer": "# Numerical Methods and Error\n\n## Floating-point numbers\n\nComputers store real numbers in floating point, as $\\pm m \\times 2^e$ with a fixed number of binary digits in $m$. In double precision the gap between 1 and the next representable number is the machine epsilon, $\\epsilon_{\\text{mach}} = 2^{-52} \\approx 2.22 \\times 10^{-16}$, and every real number $x$ in range is stored as some $\\text{fl}(x)$ with\n\n$$\n\\frac{|\\text{fl}(x) - x|}{|x|} \\leq \\frac{\\epsilon_{\\text{mach}}}{2}\n$$\n\nRounding errors are small, but subtraction can magnify them. Computing $\\sqrt{x+1} - \\sqrt{x}$ for $x = 10^{12}$ loses most of its digits, while the equal expression $\\frac{1}{\\sqrt{x+1} + \\sqrt{x}} \\approx 5 \\times 10^{-7}$ is accurate.\n\nThe absolute error of an approximation $\\tilde{x}$ to $x$ is $|\\tilde{x} - x|$, and its relative error is $\\frac{|\\tilde{x} - x|}{|x|}$. Approximating $\\pi$ by $\\frac{22}{7}$ gives an absolute error of about $1.26 \\times 10^{-3}$ and a relative error of about 0.04%.\n\n## Solving equations\n\nThe bisection method finds a root of a continuous $f$ on $[a, b]$ with $f(a)f(b) < 0$. It halves the interval at each step and keeps the half where the sign changes, so after $n$ steps the root is known to within $\\frac{b-a}{2^n}$. Reaching a tolerance $\\epsilon$ takes\n\n$$\nn = \\left\\lceil \\log_2 \\frac{b-a}{\\epsilon} \\right\\rceil\n$$\n\nsteps; for $b-a = 1$ and $\\epsilon = 10^{-6}$ that is $\\lceil 19.93 \\rceil = 20$."
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 1,
+  "part": "bottom",
+  "image": "c04c5e3000a29363f4b37c5a743b14ea610253f3bbcc0952e53947b1f609a0fd",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 29.1,
+  "answer": "Newton’s method follows the tangent line from the current guess to where it crosses zero:\n\n$$\nx_{n+1} = x_n - \\frac{f(x_n)}{f'(x_n)}\n$$\n\nFor $f(x) = x^2 - 2$ it becomes $x_{n+1} = \\frac{1}{2}\\left(x_n + \\frac{2}{x_n}\\right)$. Starting from $x_0 = 1$ it gives $x_1 = 1.5$,\n$x_2 = 1.41\\overline{6}$ and $x_3 = 1.414215686\\ldots$, already within $2.2 \\times 10^{-6}$ of $\\sqrt{2}$. Near a simple root the error $e_n = x_n - x^*$ satisfies\n\n$$\n|e_{n+1}| \\approx \\left|\\frac{f''(x^*)}{2f'(x^*)}\\right| |e_n|^2\n$$\n\nso the number of correct digits roughly doubles at every step. This is quadratic convergence; bisection, which gains one binary digit per step, converges only linearly.\n\n### Approximating derivatives\n\nA derivative can be approximated by a difference quotient with a small step $h$. The forward difference and the central difference are\n\n$$\nf'(x) \\approx \\frac{f(x+h) - f(x)}{h}, \\quad f'(x) \\approx \\frac{f(x+h) - f(x-h)}{2h}\n$$\n\nBy Taylor’s theorem their errors are $O(h)$ and $O(h^2)$: halving $h$ halves the first error but quarters the second. With the difference operator $\\Delta f(x) = f(x+h) - f(x)$, the second difference $\\Delta^2 f(x) = f(x+2h) - 2f(x+h) + f(x)$ approximates $h^2 f''(x)$. The step cannot be made arbitrarily small, because rounding errors of size $\\epsilon_{\\text{mach}}$ grow as $h \\to 0$; for the forward difference the best step is near $h \\approx \\sqrt{\\epsilon_{\\text{mach}}} \\approx 10^{-8}$."
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 2,
+  "part": "whole",
+  "image": "c1cfbd03b088690c61499e819c5af3d59cc66556e43a4e3e3a0d8cb6536dd34f",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 32.6,
+  "answer": "### Numerical Methods and Error\n\n#### Numerical integration\n\nThe trapezoidal rule with $n$ subintervals of width $h = \\frac{b-a}{n}$ and nodes $x_i = a + ih$ is\n\n$$\n\\int_a^b f(x)\\,dx \\approx \\frac{h}{2} \\left[ f(x_0) + 2 \\sum_{i=1}^{n-1} f(x_i) + f(x_n) \\right]\n$$\n\nwith an error of at most $\\frac{(b-a)h^2}{12} \\max_{a \\leq x \\leq b} |f''(x)|$. Simpson’s rule, for even $n$, fits parabolas instead of lines and has an error of order $h^4$. With $n = 4$ on $\\int_0^1 x^2 \\,dx = \\frac{1}{3}$, the trapezoidal rule gives 0.34375 while Simpson’s rule is exact.\n\n#### Conditioning and cost\n\nA problem is ill-conditioned when small changes in its data cause large changes in its answer. For a linear system $Ax = b$ this is measured by the condition number\n\n$$\n\\kappa(A) = \\|A\\| \\|A^{-1}\\| \\geq 1\n$$\n\nand a relative change $\\delta$ in $b$ can change $x$ by as much as $\\kappa(A) \\delta$. As a rule, about $\\log_{10} \\kappa(A)$ decimal digits are lost in solving the system.\n\nThe cost of an algorithm is described by how it grows with the size $n$ of its input. Merge sort splits a list in two halves, sorts each and merges them, so its running time satisfies\n\n$$\nT(n) = \\begin{cases}\n1 & \\text{if } n = 1 \\\\\n2T\\left(\\frac{n}{2}\\right) + n & \\text{if } n > 1\n\\end{cases}\n$$\n\nwhose solution is $T(n) = n \\log_2 n + n$ for powers of two, that is $T(n) = O(n \\log n)$. Since $n \\log n \\ll n^2$ for large $n$, merge sort beats simple quadratic sorts: for $n = 10^6$ it needs about $2 \\times 10^7$ steps instead of $10^{12}$."
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 2,
+  "part": "top",
+  "image": "7a59ff0d6b8f2bef2f0716085a49a1d219441472098acf63b72d31a3f19922cb",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 24.8,
+  "answer": "# Numerical Methods and Error\n\n## Numerical integration\n\nThe trapezoidal rule with $n$ subintervals of width $h = \\frac{b-a}{n}$ and nodes $x_i = a + ih$ is\n\n$$\n\\int_a^b f(x)\\,dx \\approx \\frac{h}{2} \\left[ f(x_0) + 2 \\sum_{i=1}^{n-1} f(x_i) + f(x_n) \\right]\n$$\n\nwith an error of at most $\\frac{(b-a)h^2}{12} \\max_{a \\leq x \\leq b} |f''(x)|$. Simpson’s rule, for even $n$, fits parabolas instead of lines and has an error of order $h^4$. With $n = 4$ on $\\int_0^1 x^2 \\,dx = \\frac{1}{3}$, the trapezoidal rule gives 0.34375 while Simpson’s rule is exact.\n\n## Conditioning and cost\n\nA problem is ill-conditioned when small changes in its data cause large changes in its answer. For a linear system $Ax = b$ this is measured by the condition number\n\n$$\n\\kappa(A) = \\|A\\| \\|A^{-1}\\| \\geq 1\n$$\n\nand a relative change $\\delta$ in $b$ can change $x$ by as much as $\\kappa(A) \\delta$. As a rule, about $\\log_{10} \\kappa(A)$ decimal digits are lost in solving the system.\n\nThe cost of an algorithm is described by how it grows with the size $n$ of its input. Merge sort splits a list in two halves, sorts each and merges them, so its running time satisfies\n\n$$\nT(n) = \\begin{cases}\n1 & \\text{if } n = 1 \\\\\n2T\\left(\\frac{n}{2}\\right) + n & \\text{if } n > 1\n\\end{cases}\n$$"
+ },
+ {
+  "lecture": "10-numerical-methods.pdf",
+  "page": 2,
+  "part": "bottom",
+  "image": "5b2f340207846d7edaf005a104c5862604db9a79f8222f03f496b4714ef00757",
+  "model": "ministral-3:8b",
+  "prompt": "page_transcription/v1",
+  "seconds": 10.1,
+  "answer": "whose solution is $T(n) = n \\log_2 n + n$ for powers of two, that is $T(n) = O(n \\log n)$. Since $n \\log n \\ll n^2$ for large $n$, merge sort beats simple quadratic sorts: for $n = 10^6$ it needs about $2 \\times 10^7$ steps instead of $10^{12}$."
+ }
+]
