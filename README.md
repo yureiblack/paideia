@@ -492,15 +492,70 @@ neighbouring one, not the one that says it.
   independent person**.
 - Latency is one laptop, with one person searching.
 
+### Maths
+
+Reading maths is measured by a second benchmark
+([record 30](docs/architecture/30-maths-evaluation.md),
+[full report](docs/evaluation/maths-benchmark.md)).
+
+**The setup:**
+- **Corpus:** ten lectures written for it, typeset with TeX, across maths:
+  linear algebra, calculus, differential equations, probability, sets and
+  logic, series and complex numbers, numerical methods. 20 pages, 860
+  formulas.
+- **Notation:** 41 kinds named, each in at least five formulas: sigmas and
+  deltas, sums and integrals, primes, hats, matrices, determinants,
+  augmented matrices, set and logic notation, cases, congruences and more.
+- **Truth:** each page's perfect reading is the source itself, so every
+  formula the model writes is compared with what the page says.
+- **Kept readings:** every page the model read is kept, so a change to the
+  check is measured again in minutes, without the model.
+
+The local model's readings:
+
+| Read | Formulas right |
+|---|---|
+| The whole page | 90.1% of 860 |
+| In two halves, each seen larger | 98.8% of 831 |
+
+The check that decides whether a reading replaces a page, before and after
+this phase's fixes:
+
+| | Before | After |
+|---|---|---|
+| Perfect readings accepted | 12 of 20 pages | 20 of 20 |
+| Planted mistakes caught, the same 452 | 46% | 65% |
+| Pages the app keeps read | 9 of 20 | 14 of 20 |
+
+- **Every planted mistake in a sign, a digit, a Greek letter, a prime, a
+  root, a sum or integral sign, ∂, a set relation or a logic symbol is now
+  caught.** A changed Latin letter, a fraction turned upside down, swapped
+  bounds and swapped matrix entries are not: they leave the same characters
+  on the page.
+- **On the pages the app keeps, 99.3% of formulas are right.**
+- **Reading the maths hardly changes search:** MRR@10 is 0.869 on the PDF's
+  own text, 0.836 with the model's readings and 0.891 with perfect ones.
+- **A page takes the model about 83 s** (median, both attempts when
+  needed): about nine hours for a 400-page textbook.
+- **On two real textbooks**, 20 pages each of *Interactive Linear Algebra*
+  and OpenStax *Calculus*, judged against the page images in a second pass,
+  the fixed check kept 24 pages read instead of 14, with the same 4 pages
+  of wrong maths among them, all of kinds it cannot see: absolute-value
+  bars, a repeating decimal's bar, a rewritten step and a corrected
+  misprint.
+- **Practice stays where it belongs.** Of 97 concepts the app extracted from
+  the lectures, 26 were offered a computed exercise, all of them linear
+  algebra, and 33 of the 35 exercises were of a type their lecture teaches.
+
 ## Testing
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 869 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 955 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
-  - Coverage, lines and branches, is 91%, reported but never enforced.
+  - Coverage, lines and branches, is 89%, reported but never enforced.
   - mypy checks `app/`.
 - **Frontend:** 104 tests with Vitest and Testing Library, most of them of
   components.
@@ -707,17 +762,20 @@ ones:
 
 Known limits, each stated in its decision record:
 
-- **Maths is in progress.** Maths written as LaTeX is typeset and checked
-  ([24](docs/architecture/24-maths-notation.md)). A PDF's maths can be read
-  by the local vision model, and what the model writes may only quote it
-  ([26](docs/architecture/26-reading-maths.md)). Linear algebra exercises
-  are written, solved and marked by the backend
-  ([27](docs/architecture/27-computed-exercises.md)), from a catalogue of
-  nine small types. A maths benchmark is planned as phase 30.
+- **Computed exercises are linear algebra only.** Maths of any kind is
+  typeset, read from PDFs and checked
+  ([24](docs/architecture/24-maths-notation.md),
+  [26](docs/architecture/26-reading-maths.md),
+  [30](docs/architecture/30-maths-evaluation.md)), but the backend writes,
+  solves and marks exercises from a catalogue of nine small linear algebra
+  types ([27](docs/architecture/27-computed-exercises.md)).
 - **Reading maths checks which characters a page shows, not their order.**
-  A matrix with two columns swapped would pass. A textbook takes hours to
-  read, and a PDF whose maths is drawn as pictures has none to offer
-  ([26](docs/architecture/26-reading-maths.md)).
+  A matrix with two entries swapped, a fraction turned upside down, an
+  integral's bounds swapped or a variable's letter changed would pass. A
+  symbol a PDF draws as a picture cannot be checked at all. A textbook
+  takes hours to read
+  ([26](docs/architecture/26-reading-maths.md),
+  [30](docs/architecture/30-maths-evaluation.md)).
 
 - **One learner per installation,** with no accounts, and one worker.
   Several workers would need the model lock moved into Postgres or Redis,
@@ -756,8 +814,9 @@ Known limits, each stated in its decision record:
   one per phase, with an index.
 - [docs/setup.md](docs/setup.md): running it, developing it, testing it.
 - [docs/api.md](docs/api.md): every endpoint.
-- [docs/evaluation/](docs/evaluation/retrieval-benchmark.md): the benchmark,
-  its corpus, questions and results.
+- [docs/evaluation/](docs/evaluation/retrieval-benchmark.md): the retrieval
+  benchmark, and [the maths benchmark](docs/evaluation/maths-benchmark.md),
+  with their corpora, questions and results.
 - [docs/demo.md](docs/demo.md): how to record a demo, and how the one above
   was made.
 
@@ -793,7 +852,7 @@ api/                    FastAPI backend
     context.py          the request, job and update being worked on
     services/           business logic, no HTTP
     routers/            HTTP endpoints
-  evaluation/           the offline benchmark: corpus to PDFs, dataset checks, metrics, report
+  evaluation/           the offline benchmarks: retrieval (record 20) and maths (record 30)
   migrations/           Alembic migrations
   tests/                pytest suite
     e2e/                the API and worker as the end-to-end test runs them
@@ -809,12 +868,12 @@ web/                    Next.js frontend
   e2e/                  the end-to-end journey (Playwright)
 data/                   uploaded files and the model cache, never committed
 docs/architecture/      decision records, with an index
-docs/evaluation/        the benchmark's corpus, questions, key facts, results and report
+docs/evaluation/        the benchmarks' corpora, questions, results and reports; maths/ for record 30
 docs/images/            the screenshots and the demo above
 docs/setup.md           running, developing and testing it
 docs/api.md             every endpoint
 docs/demo.md            recording a demo
-scripts/                evaluate_retrieval.py, which runs the benchmark
+scripts/                evaluate_retrieval.py and evaluate_maths.py, which run the benchmarks
 docker-compose.yml      local Postgres and Redis
 .github/workflows/      CI
 ```

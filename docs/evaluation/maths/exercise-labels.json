@@ -1,0 +1,15 @@
+{
+ "about": "The computed exercise types (app/exercises.py, decision record 27) each lecture of the maths corpus teaches. A type the app offers for a concept fits when one of the lectures its passages come from lists it. Lectures outside linear algebra list none: an exercise offered there is a misfire, however its words matched.",
+ "lectures": {
+  "01-linear-systems.pdf": ["solve_system", "reduced_form", "rank"],
+  "02-matrices-and-determinants.pdf": ["determinant", "inverse", "product"],
+  "03-vector-spaces-and-eigenvalues.pdf": ["eigen", "null_space", "independence", "rank"],
+  "04-limits-derivatives-integrals.pdf": [],
+  "05-multivariable-calculus.pdf": ["determinant"],
+  "06-differential-equations.pdf": ["eigen"],
+  "07-probability-and-statistics.pdf": [],
+  "08-sets-logic-and-proof.pdf": [],
+  "09-series-and-complex-numbers.pdf": [],
+  "10-numerical-methods.pdf": []
+ }
+}
