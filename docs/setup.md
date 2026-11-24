@@ -23,6 +23,9 @@ Nothing is sent to a hosted service.
   `brew install tesseract`; on Debian or Ubuntu:
   `sudo apt-get install tesseract-ocr`). Without it, a scan or a photograph
   is stored with no text, and everything else works.
+- Only to run the maths benchmark: Tectonic, a self-contained TeX engine
+  that typesets its lectures (on a Mac: `brew install tectonic`). Its first
+  run downloads about 40 MB of TeX packages. The app never needs it.
 
 The language model needs about 6 GB of disk and about 7.5 GB of memory while it
 works. Everything else in the app runs without it.
@@ -286,6 +289,22 @@ python scripts/evaluate_retrieval.py --generation   # also the summaries, with O
 It rebuilds its own database, the development database's name with `_eval`
 appended, and rewrites the tables in
 [`docs/evaluation/retrieval-benchmark.md`](evaluation/retrieval-benchmark.md).
+
+**The maths benchmark** (decision record 30) is not run in CI either. It
+needs Tectonic. The model's readings of its pages are kept in the
+repository, so without `--read` it needs no model and takes a few minutes:
+
+```sh
+python scripts/evaluate_maths.py                # scores the kept readings
+python scripts/evaluate_maths.py --read         # reads new pages with Ollama, about 40 s a part
+python scripts/evaluate_maths.py --practice     # also concepts and exercises, with Ollama
+```
+
+It rebuilds its own database, the development database's name with
+`_maths_eval` appended, and rewrites the tables in
+[`docs/evaluation/maths-benchmark.md`](evaluation/maths-benchmark.md). Its
+tests, in CI, check the lectures, the questions, the comparison and the
+planted mistakes without typesetting anything.
 
 **CI** runs on every pull request and every push to main, in three jobs:
 - **Backend:** lint, format, types, the migrations, the check that models
