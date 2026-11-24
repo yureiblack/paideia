@@ -241,3 +241,24 @@ def test_maths_the_sources_do_not_show_is_not_quoted(
     worked_out: str, formula: str
 ) -> None:
     assert maths.unquoted(worked_out, SOURCES) == [formula]
+
+
+def test_symbols_are_shown_only_for_the_check_of_a_reading():
+    # A passage's stored text keeps a PDF's big operators as its fonts wrote
+    # them, a summation as "X", so the rule on quoted maths does not compare
+    # them; the check of a reading does (decision record 30).
+    formula = r"\(\sum_k \sqrt{x_k'} \hat{y} \partial \forall\)"
+
+    assert maths.shown(formula) == "kxky"
+    assert maths.shown(formula, symbols=True) == "∑k√xk′̂y∂∀"
+    assert maths.shown(r"\(f^{\prime}(x)\)", symbols=True) == "f′x"  # the command too
+
+
+def test_a_layers_accents_are_never_letters():
+    assert maths.shown("ˆθ = ¯x") == "θ=x"
+    assert maths.shown("ˆθ = ¯x", symbols=True) == "̂θ=̄x"
+
+
+def test_a_hyphen_after_a_formula_and_a_congruence_s_mod():
+    assert maths.shown(r"the \(n\)-th, \(a \equiv b \pmod{n}\)") == "thenth" + "a≡bmodn"
+    assert maths.shown("the n-th, a ≡b (mod n)") == "thenth" + "a≡bmodn"

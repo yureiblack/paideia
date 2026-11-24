@@ -111,13 +111,18 @@ def test_a_page_is_cut_between_lines_nearest_its_middle(tmp_path):
     assert first_bottom < cut < second_top
 
 
-def test_symbols_whose_text_layer_is_a_letter_are_left_out():
+def test_symbols_whose_text_layer_is_a_letter_are_read_as_what_they_draw():
     # TeX's symbol fonts set the radical sign where "p" would be, and the
-    # extension fonts a summation sign where "X" would be. A test PDF cannot
-    # embed those fonts, so the rule is checked on spans as PyMuPDF gives them.
-    assert parsing._span_text("p", "MathDesign-CH-Regular-Sy") == ""
+    # extension fonts a summation sign where "X" would be (decision record
+    # 30). A test PDF cannot embed those fonts, so the rule is checked on
+    # spans as PyMuPDF gives them.
+    assert parsing._span_text("p", "MathDesign-CH-Regular-Sy") == "√"
     assert parsing._span_text("−A", "CMSY10") == "−A"  # capitals: calligraphic
-    assert parsing._span_text("X", "MathDesign-CH-Regular-Ex") == ""
+    assert parsing._span_text("bx", "CMSY10") == ""  # other symbols: left out
+    assert parsing._span_text("X", "MathDesign-CH-Regular-Ex") == "∑"
+    assert parsing._span_text("PQRZISTp", "CMEX10") == "∑ ∏ ∫ ∫ ∮ ∪ ∩ √"
+    assert parsing._span_text('()[]"#{}DE', "CMEX10") == ""  # big brackets
+    assert parsing._span_text("∑∫√", "CMEX10") == "∑ ∫ √"  # already symbols
     assert parsing._span_text("det p", "CharterBT-Roman") == "det p"
 
 

@@ -346,3 +346,138 @@ def test_an_equation_number_and_a_footnote_mark_may_be_left_out():
         )
         is None
     )
+
+
+# --- what the maths benchmark found (decision record 30) ------------------------
+# Layers below are written as TeX's fonts leave them in a PDF: a prime "′",
+# a hat "ˆ" before its letter, \notin as "/∈", a congruence's "(mod n)".
+
+
+def test_a_line_of_a_displayed_formula_starting_with_e_is_not_a_command():
+    # Joined after the repair of JSON's damage, "\n" + "e^x" read as \ne^x.
+    page = page_text(
+        "so\n\n$$\ne^x = \\sum_{n=0}^{\\infty} \\frac{x^n}{n!}\n$$",
+        layer("so\nex =\n∞\nX\nn=0\nxn\nn!"),
+    )
+
+    assert page.text == "so\n\n\\[e^x = \\sum_{n=0}^{\\infty} \\frac{x^n}{n!}\\]"
+
+
+def test_a_hyphen_after_a_formula_joins_a_word():
+    page = layer("The n-th derivative and the p-series.")
+
+    assert reason("The $n$-th derivative and the $p$-series.", page) is None
+
+
+def test_tex_s_not_in_and_a_congruence_s_mod_match():
+    page = layer("x /∈A and 38 ≡2 (mod 12)")
+
+    assert reason("$x \\notin A$ and $38 \\equiv 2 \\pmod{12}$", page) is None
+    assert reason("$x \\in A$ and $38 \\equiv 2 \\pmod{12}$", page) is not None
+
+
+def test_a_hat_in_the_layer_is_an_accent_not_a_letter():
+    page = layer("ˆθ = ¯x and ˆy, ˆp, ˆβ, ˆx")
+
+    assert (
+        reason(
+            "$\\hat{\\theta} = \\bar{x}$ and $\\hat{y}$, $\\hat{p}$, $\\hat{\\beta}$, $\\hat{x}$",
+            page,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("layer_text", "right", "wrong", "what"),
+    [
+        ("f′(x) = 3x2", "$f'(x) = 3x^2$", "$f(x) = 3x^2$", "operators"),
+        ("ω = √k", "$\\omega = \\sqrt{k}$", "$\\omega = k$", "operators"),
+        (
+            "ˆθ is an estimate",
+            "$\\hat{\\theta}$ is an estimate",
+            "$\\theta$ is an estimate",
+            "operators",
+        ),
+        # As parsing.page_layer gives TeX's big operators (test_page_maths).
+        (
+            "∑\nk\nak and ∑\nk ak",
+            "$$\\sum_k a_k$$ and $\\sum_k a_k$",
+            "$$\\prod_k a_k$$ and $\\sum_k a_k$",
+            "operators",
+        ),
+        ("∫ 1\n0\nf", "$$\\int_0^1 f$$", "$$\\sum_0^1 f$$", "operators"),
+        (
+            "∂f\n∂x and ∇f",
+            "$\\frac{\\partial f}{\\partial x}$ and $\\nabla f$",
+            "$\\frac{df}{dx}$ and $\\nabla f$",
+            "operators",
+        ),
+        (
+            "∀ε > 0 ∃δ",
+            "$\\forall \\varepsilon > 0 \\exists \\delta$",
+            "$\\exists \\varepsilon > 0 \\exists \\delta$",
+            "operators",
+        ),
+        (
+            "λ2 + 4λ −21",
+            "$\\lambda^2 + 4\\lambda - 21$",
+            "$\\mu^2 + 4\\lambda - 21$",
+            "Greek letters",
+        ),
+        ("∆x = h", "$\\Delta x = h$", "$\\delta x = h$", "Greek letters"),
+    ],
+)
+def test_symbols_greek_letters_and_accents_are_compared(layer_text, right, wrong, what):
+    # Each would have passed before: the check counted none of these
+    # symbols, and Greek letters only within the prose's slack.
+    page = layer(layer_text)
+
+    assert reason(right, page) is None
+    assert reason(wrong, page).startswith(f"Its {what} differ")
+
+
+def test_a_letter_s_change_is_still_within_the_slack_a_known_limit():
+    page = layer("Ri →cRi multiplies row i by c.")
+
+    assert reason("$R_j \\to cR_i$ multiplies row $i$ by $c$.", page) is None
+
+
+def test_a_symbol_the_layer_never_records_is_not_compared():
+    # OpenStax's Calculus draws every radical as lines, and sets a big
+    # integral in two pieces, "⌠" over "⌡".
+    page = layer("ω = k and ⌠\n⌡ 1\n0 f and ∫ g")
+
+    assert (
+        reason("$\\omega = \\sqrt{k}$ and $$\\int_0^1 f$$ and $\\int g$", page) is None
+    )
+    assert reason("$\\omega = \\sqrt{k}$ and $$\\int_0^1 f$$ and $g$", page).startswith(
+        "Its operators differ"
+    )
+
+
+def test_a_hyphen_in_words_inside_a_formula_is_not_a_minus():
+    page = layer("(Area below the x-axis) −1")
+
+    assert reason("$(\\text{Area below the } x\\text{-axis}) - 1$", page) is None
+
+
+def test_a_picture_s_placeholder_is_not_text():
+    page = page_text(
+        "The car's speed.\n\n![Figure 5.20](image_url)\n\nFigure 5.20 The area under the curve.",
+        layer("The car's speed.\nFigure 5.20 The area under the curve."),
+    )
+
+    assert page.text == "The car's speed.\n\nFigure 5.20 The area under the curve."
+
+
+def test_a_hyphen_after_a_number_joins_a_word():
+    page = layer("The 1-eigenspace, the −1-eigenspace and the (3 + √2)-eigenspace.")
+
+    assert (
+        reason(
+            "The $1$-eigenspace, the $-1$-eigenspace and the $(3 + \\sqrt{2})$-eigenspace.",
+            page,
+        )
+        is None
+    )

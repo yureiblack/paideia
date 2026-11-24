@@ -364,11 +364,12 @@ MATHS_FONT = re.compile(
 MATHS_MIN_CHARS = 10
 
 # The extension fonts hold big operators and delimiters, whose text layer is
-# not the symbol drawn: a summation sign reads "X".
+# often not the symbol drawn: a summation sign reads "X" (_span_text).
 _EXTENSION_FONT = re.compile(r"cmex|-Ex\b|extension", re.IGNORECASE)
 # The symbol fonts, laid out as TeX's CMSY, set symbols in the places of the
 # lowercase letters: a square root reads "p". They set no lowercase letter
-# of text, so those are left out. Their capitals are calligraphic letters.
+# of text, so those are left out, but for the root. Their capitals are
+# calligraphic letters.
 _SYMBOL_FONT = re.compile(r"cmsy|-Sy\b", re.IGNORECASE)
 
 # The model scales every image to the same budget of about 1,600 tokens, so
@@ -477,13 +478,31 @@ def page_image(path: Path, page_number: int, half: str | None = None) -> bytes:
         return page.get_pixmap(dpi=HALF_PAGE_DPI, clip=clip).tobytes("png")
 
 
+# TeX's extension fonts (the OMX layout) hold big operators and radicals in
+# the places of letters; a text layer without the font's own names for them
+# reads a summation as "P" or "X". Each is read as the symbol it draws, and
+# the rest of such a font, big brackets and their pieces, is left out.
+_EXTENSION_SYMBOLS = {
+    **dict.fromkeys("PX∑", "∑"),
+    **dict.fromkeys("QY∏", "∏"),
+    **dict.fromkeys("RZ∫", "∫"),
+    **dict.fromkeys("HI∮", "∮"),
+    # Not the display sizes, "[" and a backslash: those are also brackets'.
+    **dict.fromkeys("S∪⋃", "∪"),
+    **dict.fromkeys("T∩⋂", "∩"),
+    **dict.fromkeys("pqrst√", "√"),
+}
+
+
 def _span_text(text: str, font: str) -> str:
-    """A span's text as a transcription is checked against it: nothing from
-    an extension font, no lowercase letter from a symbol font."""
+    """A span's text as a transcription is checked against it: an extension
+    font's big operators and radicals as the symbols they draw, and nothing
+    else of it; no lowercase letter from a symbol font, but its radical,
+    "p", as the root it is."""
     if _EXTENSION_FONT.search(font):
-        return ""
+        return " ".join(_EXTENSION_SYMBOLS[c] for c in text if c in _EXTENSION_SYMBOLS)
     if _SYMBOL_FONT.search(font):
-        return re.sub("[a-z]", "", text)
+        return re.sub("[a-z]", "", text.replace("p", "√"))
     return text
 
 

@@ -18,10 +18,15 @@ lines, "≠" an equals sign under a separate stroke. What survives every
 layout is which characters are there. So both are reduced to their digits,
 letters and operators, counted, and compared:
 
-- Digits and operators must match exactly. A changed sign or a lost entry
-  changes the maths.
-- Letters may differ by 1%, at least 3: the model drops a word now and then,
-  or corrects a typo of the book's, and that changes no maths.
+- Digits, operators and Greek letters must match exactly. A changed sign, a
+  lost entry or a λ read as μ changes the maths. Operators include what a
+  text layer records of primes, roots, big operators (∑ ∏ ∫ ∮), ∂, ∇, the
+  symbols of logic and accents such as hats and bars (decision record 30),
+  each compared only on a page whose layer records it at all: some PDFs
+  draw roots and big operators as pictures.
+- Latin letters may differ by 1%, at least 3: the model drops a word now and
+  then, or corrects a typo of the book's, and that changes no maths. A
+  variable's letter changed is therefore not seen, a known limit.
 - Figure labels, equation numbers, footnote marks and the lines in the top
   and bottom margin band may be left out or written (decision record 29:
   a book without a running header has real text there).
@@ -30,7 +35,8 @@ letters and operators, counted, and compared:
   written as HTML, L<sub>1</sub>, keep their letters and lose the tags.
 
 Counting cannot see order: a matrix whose columns the model put back in
-order has the same characters. That is a known limit of the check.
+order has the same characters, as do a fraction turned upside down and an
+integral's bounds swapped. That is a known limit of the check.
 """
 
 import re
@@ -84,6 +90,9 @@ _HTML_MARK = re.compile(r"</?(?:sub|sup|b|i|em|strong|u|small)\s*>", re.IGNORECA
 _HTML_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
 # A Markdown table: rows between pipes, and the separator row under the
 # header, "| --- | :---: |", which holds no text.
+# A picture's placeholder in Markdown, ![Figure 5.20](image_url): the model
+# marks where a figure is, which is not text on the page (decision record 30).
+_IMAGE = re.compile(r"!\[[^\]\n]*\]\([^)\n]*\)")
 _TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 _TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 
@@ -157,6 +166,18 @@ def _paragraphs(lines: list[str]) -> list[str]:
     return paragraphs
 
 
+# A formula in Markdown, displayed or inline, in either notation.
+_FORMULA = re.compile(r"\$\$.*?\$\$|\\\[.*?\\\]|\\\(.*?\\\)|\$[^$]*\$", re.DOTALL)
+
+
+def _one_line_formulas(paragraph: str) -> str:
+    """The paragraph with each formula on one line. A line break inside a
+    formula is only layout, but maths.from_model, which repairs what JSON
+    did to LaTeX, would read a break followed by "e" as the command \\ne,
+    and "u" as \\nu (decision record 30)."""
+    return _FORMULA.sub(lambda m: re.sub(r"\s*\n\s*", " ", m.group()), paragraph)
+
+
 def _prose(text: str) -> str:
     """Markdown's marks taken out of prose, the formulas left alone."""
     prose, restore = maths.prose(text)
@@ -186,7 +207,7 @@ def without_chatter(markdown: str) -> str:
 
 def page_text(markdown: str, layer: PageLayer) -> PageText:
     """The transcription as page text, or Unusable."""
-    lines = without_chatter(markdown).split("\n")
+    lines = _IMAGE.sub("", without_chatter(markdown)).split("\n")
     lines = _table_rows(lines)
     lines = [line for line in lines if not _RULE.match(line)]
     lines = _without_margins(lines, layer.margins, layer.required)
@@ -195,7 +216,7 @@ def page_text(markdown: str, layer: PageLayer) -> PageText:
     for paragraph in _paragraphs(lines):
         heading = bool(_HEADING.match(paragraph))
         paragraph = _HEADING.sub("", paragraph)
-        paragraph = _prose(maths.from_model(paragraph))
+        paragraph = _prose(maths.from_model(_one_line_formulas(paragraph)))
         paragraph = re.sub(r"\s*\n\s*", " ", paragraph).strip()
         if not paragraph:
             continue
@@ -214,12 +235,17 @@ def page_text(markdown: str, layer: PageLayer) -> PageText:
 # --- the characters ---------------------------------------------------------------
 
 
-def _counts(text: str) -> tuple[Counter, Counter, Counter]:
-    shown = maths.shown(text)
+def _counts(text: str) -> tuple[Counter, Counter, Counter, Counter]:
+    shown = maths.shown(text, symbols=True)
     digits = Counter(c for c in shown if c.isdigit())
-    letters = Counter(c for c in shown if c.isalpha())
+    greek = Counter(c for c in shown if _is_greek(c))
+    letters = Counter(c for c in shown if c.isalpha() and not _is_greek(c))
     operators = Counter(c for c in shown if not c.isalnum())
-    return digits, letters, operators
+    return digits, letters, operators, greek
+
+
+def _is_greek(c: str) -> bool:
+    return "\u0370" <= c <= "\u03ff"
 
 
 # --- the check -------------------------------------------------------------------
@@ -238,7 +264,7 @@ class Check:
     @property
     def reason(self) -> str | None:
         """Why the transcription disagrees with the text layer, or None."""
-        for kind in ("digits", "operators"):
+        for kind in ("digits", "operators", "Greek letters"):
             missing, extra = self.missing[kind], self.extra[kind]
             if missing or extra:
                 return f"Its {kind} differ from the PDF's text: {_describe(missing, extra)}."
@@ -273,7 +299,14 @@ def check(page: PageText, layer: PageLayer) -> Check:
     required = _counts(layer.required)
     optional = _counts(layer.optional)
     found = _counts(page.text)
-    names = ("digits", "letters", "operators")
+    # A symbol the layer never records on this page is drawn as a picture
+    # there, and cannot be compared (decision record 30).
+    recorded = required[2] + optional[2]
+    for symbol in [
+        c for c in found[2] if c in maths.CHECKED_SYMBOLS and not recorded[c]
+    ]:
+        del found[2][symbol]
+    names = ("digits", "letters", "operators", "Greek letters")
     return Check(
         missing={n: r - f for n, r, f in zip(names, required, found, strict=True)},
         extra={

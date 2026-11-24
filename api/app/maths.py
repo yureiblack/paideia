@@ -571,9 +571,62 @@ _DRAWS = {
             "deg",
             "arg",
             "Pr",
+            "mod",
         )
     },
+    # A congruence's (mod n) is set in words (decision record 30).
+    "pmod": "mod",
+    "bmod": "mod",
 }
+# What the check of a page's reading also compares (decision record 30):
+# symbols a text layer records but a formula's other uses need not, since
+# a passage's stored text keeps them as the PDF's fonts wrote them.
+_SYMBOL_DRAWS = {
+    "prime": "′",
+    "sqrt": "√",
+    "sum": "∑",
+    "prod": "∏",
+    "int": "∫",
+    "iint": "∫∫",
+    "iiint": "∫∫∫",
+    "oint": "∮",
+    "bigcup": "∪",
+    "bigcap": "∩",
+    "partial": "∂",
+    "nabla": "∇",
+    "forall": "∀",
+    "exists": "∃",
+    "neg": "¬",
+    "lnot": "¬",
+    "land": "∧",
+    "wedge": "∧",
+    "lor": "∨",
+    "vee": "∨",
+    "emptyset": "∅",
+    "varnothing": "∅",
+    "ll": "≪",
+    "gg": "≫",
+    # Accents, as the combining marks they are once a layer's are decomposed.
+    "hat": "\u0302",
+    "bar": "\u0304",
+    "dot": "\u0307",
+    "ddot": "\u0308",
+    "tilde": "\u0303",
+    "vec": "\u20d7",
+    "check": "\u030c",
+    "breve": "\u0306",
+}
+_ACCENTS = set("\u0302\u0304\u0307\u0308\u0303\u20d7\u030c\u0306")
+# The symbols shown only with symbols=True. Some PDFs draw them as pictures
+# (OpenStax's Calculus draws every radical), so the check compares one only
+# on a page whose text layer records it at all (app/transcription.py).
+CHECKED_SYMBOLS = frozenset("′√∑∏∫∮∂∇∀∃¬∧∨∅≪≫") | _ACCENTS
+# A text layer's accents set as letters of their own, spacing, before they
+# are decomposed: TeX's hat is "ˆ", its caron "ˇ". A big integral set in two
+# pieces, "⌠" over "⌡", is one integral.
+_SPACING_ACCENTS = str.maketrans(
+    {"ˆ": "\u0302", "ˇ": "\u030c", "^": "\u0302", "⌠": "∫", "⌡": None, "⎮": None}
+)
 # Commands whose braced argument names a layout, not text: \begin{array}{cc|c}.
 _LAYOUT = re.compile(r"\\(begin|end)\{[a-zA-Z*]+\}(\{[^{}]*\})?")
 _SIZE = re.compile(r"\\(left|right|middle|[Bb]igg?[lrm]?)\b\.?")
@@ -598,25 +651,38 @@ def _without_rules(latex: str) -> str:
     return _MATRIX.sub(rows, latex)
 
 
-def _drawn(latex: str) -> str:
-    """The characters a formula draws that a text layer would have."""
+def _drawn(latex: str, symbols: bool = False) -> str:
+    """The characters a formula draws that a text layer would have, and with
+    symbols, those of _SYMBOL_DRAWS too."""
+    draws = {**_DRAWS, **_SYMBOL_DRAWS} if symbols else _DRAWS
+    # Words inside a formula, \text{-axis}, hyphenate as words do.
+    latex = _TEXT_GROUP.sub(lambda m: m.group().replace("-", " "), latex)
     # Row breaks first: a row break followed by v is a break and a letter,
     # not a backslash and a command named v.
     text = _LAYOUT.sub(" ", _without_rules(latex)).replace("\\\\", " ")
     text = _SIZE.sub(" ", text)
-    text = re.sub(r"\\([A-Za-z]+)", lambda m: f" {_DRAWS.get(m.group(1), '')} ", text)
+    text = re.sub(r"\\([A-Za-z]+)", lambda m: f" {draws.get(m.group(1), '')} ", text)
     text = re.sub(r"\\.", " ", text)  # \{ \} \, and the like
-    # Every minus in a formula is a minus, never a hyphen.
-    return re.sub(r"[{}^_&]", " ", text).replace("-", "−")
+    # Every minus in a formula is a minus, never a hyphen; its apostrophes
+    # are primes.
+    text = re.sub(r"[{}^_&]", " ", text).replace("-", "−")
+    return text.replace("'", "′") if symbols else text
 
 
-def _plain(text: str) -> str:
+_TEXT_GROUP = re.compile(r"\\(?:text|textrm|textit|textbf|mbox)\{[^{}]*\}")
+# A hyphen right after a formula, before a word, joins them: "the \(n\)-th
+# term", "a \(p\)-series" (decision record 30).
+_FORMULA_HYPHEN = re.compile(r"(\\\))-(?=[^\W\d_])")
+
+
+def _plain(text: str, symbols: bool = False) -> str:
     """Page text with each formula replaced by the characters it draws."""
+    text = _FORMULA_HYPHEN.sub(r"\1 ", text)
     found, _ = spans(text)
     return "".join(
         text[s.body_start : s.body_end]
         if s.kind == "prose"
-        else " " + _drawn(text[s.body_start : s.body_end]) + " "
+        else " " + _drawn(text[s.body_start : s.body_end], symbols) + " "
         for s in found
     )
 
@@ -626,6 +692,8 @@ _OPERATORS = set("+−=<>≤≥≠·×÷±∓→←↦⇒⇔∈∉⊂⊆⊃⊇�
 _LAYER_FORMS = [
     (re.compile("\u0338\\s*="), "≠"),  # an equals sign struck through
     (re.compile("\u0338\\s*∈"), "∉"),
+    (re.compile("/\\s*∈"), "∉"),  # LaTeX's \notin: a slash set over ∈
+    (re.compile("∆"), "Δ"),  # TeX's \Delta, read as the increment sign
     (re.compile("(−\\s*)+→"), "→"),  # a long arrow: minus signs and an arrow
     (re.compile("(=\\s*)+⇒"), "⇒"),  # a long implication
     (re.compile("⇐\\s*⇒"), "⇔"),
@@ -633,19 +701,37 @@ _LAYER_FORMS = [
     (re.compile("[∗⋆]"), "*"),
 ]
 # A hyphen between two letters, or ending a line after one, joins words; it
-# is not a minus. Any other hyphen-minus is.
-_WORD_HYPHEN = re.compile(r"(?<=[^\W\d_])-(?=[^\W\d_]|\s*$)", re.MULTILINE)
+# is not a minus. So does one after a digit and before a letter: "the
+# 1-eigenspace" (decision record 30), whose maths a reading writes as
+# \(1\)-eigenspace, and one after a bracket: "the (3 + √2)-eigenspace". A
+# text layer's minus is "−", never "-". Any other hyphen-minus is a minus.
+_WORD_HYPHEN = re.compile(r"(?:(?<=[^\W_])|(?<=\)))-(?=[^\W\d_]|\s*$)", re.MULTILINE)
 
 
-def shown(text: str) -> str:
+def shown(text: str, symbols: bool = False) -> str:
     """The digits, letters and operators the text shows, in order, each
     formula as the characters it draws: "\\(\\lambda^2 - 6\\lambda\\)" and the
-    text layer's "λ2 −6λ" both show "λ2−6λ"."""
-    text = unicodedata.normalize("NFKC", _plain(text))
+    text layer's "λ2 −6λ" both show "λ2−6λ". With symbols, also primes,
+    roots, big operators, ∂, ∇ and accents, as the check of a page's reading
+    compares them (decision record 30). A layer's accent is never a letter."""
+    text = unicodedata.normalize("NFKC", _plain(text, symbols))
     for pattern, replacement in _LAYER_FORMS:
         text = pattern.sub(replacement, text)
     text = _WORD_HYPHEN.sub(" ", text).replace("-", "−")
-    return "".join(c for c in text if c.isalnum() or c in _OPERATORS)
+    kept = _OPERATORS
+    if symbols:
+        # An accented letter becomes its letter and its accent; ≠ and ∉
+        # stay whole.
+        text = "".join(
+            unicodedata.normalize("NFD", c) if c.isalpha() else c
+            for c in text.translate(_SPACING_ACCENTS)
+        )
+        kept = _OPERATORS | CHECKED_SYMBOLS
+    return "".join(
+        c
+        for c in text
+        if (c.isalnum() and unicodedata.category(c) != "Lm") or c in kept
+    )
 
 
 def _states(found: str) -> bool:
