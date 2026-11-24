@@ -545,9 +545,7 @@ def _intact(session: Session, items: list[LearningItem]) -> set[uuid.UUID]:
             select(LearningItemSource.item_id, func.count())
             .where(LearningItemSource.item_id.in_([i.id for i in items]))
             .group_by(LearningItemSource.item_id)
-        )
-        .tuples()
-        .all()
+        ).all()
     )
     return {
         i.id
