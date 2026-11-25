@@ -6,10 +6,11 @@ Purpose: prove the whole reading end to end with a scripted model. The offer
 lists the figures found, with their captions, and an estimate; a reading
 that agrees with the figure takes the place of the figure's text in its
 page, caption and labels, as one passage of its own, found by search and
-never summarised; one that gives a number the figure does not show is asked
-again, and if it still does the page keeps the PDF's text and says why; a
-table is read as rows; the figure's picture is served; and a figure read
-already is not read again.
+never summarised; one that gives a number the figure does not show, or a
+table's reading that leaves out most of its numbers, is asked again, and if
+it still does the page keeps the PDF's text and says why; a table is read as
+rows; the figure's picture is served; and a figure read already is not read
+again.
 """
 
 import pytest
@@ -215,6 +216,27 @@ def test_a_table_is_read_as_rows(client, document, llm):
         {"title": None, "rows": [["Name", "Value"], ["alpha", "12"], ["beta", "34"]]}
     ]
     assert "Name | Value / alpha | 12 / beta | 34" in second["content"]
+
+
+def test_a_table_that_leaves_out_its_numbers_keeps_the_pdfs_text(client, document, llm):
+    names_only = (
+        "KIND\ntable\n\nTEXT\nName\nValue\nalpha\nbeta\n\nDESCRIPTION\nTwo names."
+    )
+    answers = iter(
+        [
+            "KIND\ndiagram\n\nTEXT\n(a) Before.\n(b) After.\n\nDESCRIPTION\nTwo circles.",
+            names_only,
+            names_only,
+        ]
+    )
+    llm.transcription = lambda prompt, image: next(answers)
+
+    read_figures(client, document, 2, 2)
+
+    [kept] = figures(client, document)["kept"]
+    assert kept["caption"] == "Table 1. Some values."
+    assert kept["reason"] == "It leaves out numbers the table shows: 2 of 2."
+    assert "12" in pages(client, document)[1]["content"]
 
 
 def test_figures_read_already_are_not_read_again(client, document, llm):

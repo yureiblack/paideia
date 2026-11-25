@@ -613,6 +613,11 @@ class Figure:
         return f"{self.page}:" + ",".join(f"{v:.0f}" for v in self.rect)
 
     @property
+    def is_table(self) -> bool:
+        """Whether its caption calls it a table."""
+        return (self.caption or "").lstrip().lower().startswith("table")
+
+    @property
     def crop(self) -> tuple[float, float, float, float]:
         """The figure with its caption, as the model and the reader see it."""
         rect = pymupdf.Rect(self.rect)
