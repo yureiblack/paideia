@@ -41,7 +41,7 @@ const STEPS: Step[] = [
   {
     id: 2,
     title: "Add your study materials",
-    text: "Upload PDFs of up to 50 MB: lecture notes, chapters, problem sheets. Pictures work too, as PNG or JPEG: a scan, a photograph of a board, a screenshot, whose text is read from the picture. Each is read page by page as soon as it arrives, and you can keep working meanwhile. When a file changes, upload it as a new version and Paideia says what changed.",
+    text: "Upload PDFs of up to 50 MB: lecture notes, chapters, problem sheets. Pictures work too, as PNG or JPEG: a scan, a photograph of a board, a screenshot, whose text is read from the picture. Each is read page by page as soon as it arrives, and you can keep working meanwhile; then the local model reads its maths and its figures, about a minute for a page of maths and a quarter of a minute for a figure. When a file changes, upload it as a new version and Paideia says what changed.",
     where: "Materials → Upload PDF or picture",
     excerpt: (
       <div className="flex flex-col gap-4">
@@ -59,8 +59,8 @@ const STEPS: Step[] = [
   {
     id: 3,
     title: "Build your knowledge base",
-    text: "Each page is split into passages. Search finds them by your words and by their meaning, and shows each one inside its page. The concepts in the passages are found too, with how they build on one another: that is the knowledge map. When you ask, the model reads a document's figures and tables as well: what is written in them is checked against them, and what it says they show is marked as the model's own.",
-    where: "Search · Knowledge map · Document → Figures",
+    text: "Each page is split into passages. Search finds them by your words and by their meaning, and shows each one inside its page. The concepts in the passages are found too, with how they build on one another: that is the knowledge map. A figure's labels and a table's rows count as passages too, as the model read them and checked against the figure; the page itself shows the figure's picture.",
+    where: "Search · Knowledge map · Document → Text",
     excerpt: (
       <div className="flex flex-col gap-2.5">
         <p className="label text-ink-2">Scheduling.pdf · p. 2 · Round robin</p>

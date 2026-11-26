@@ -98,7 +98,7 @@ describe("Search", () => {
     expect(screen.queryByText(/Again later/)).toBeNull();
   });
 
-  it("shows the picture of a figure it found, marked as the model's description", async () => {
+  it("shows the picture of a figure it found, marked as read by the model", async () => {
     open(
       [{ status: "ready" }],
       [
@@ -107,7 +107,7 @@ describe("Search", () => {
             chunk_id: "c2",
             heading: "Figure 2.1 The data pipeline",
             excerpt:
-              "Figure 2.1 The data pipeline Diagram: raw; clean. Described by the model: Three boxes in a row.",
+              "Figure 2.1 The data pipeline Diagram: raw; clean.",
             figure_id: "f9",
           }),
           score: 0.8,
@@ -123,10 +123,10 @@ describe("Search", () => {
     const picture = within(figure).getByRole("img", { name: "Figure 2.1 The data pipeline" });
     expect(picture.getAttribute("src")).toMatch(/\/api\/figures\/f9\/image$/);
     expect(picture).toHaveAttribute("loading", "lazy");
-    expect(within(figure).getByText("Figure · described by the model")).toBeInTheDocument();
+    expect(within(figure).getByText("Figure · read by the model")).toBeInTheDocument();
     // An ordinary passage has neither.
     expect(within(passage).queryByRole("img")).toBeNull();
-    expect(within(passage).queryByText("Figure · described by the model")).toBeNull();
+    expect(within(passage).queryByText("Figure · read by the model")).toBeNull();
   });
 
   it("says there is nothing to search before any document has been read", async () => {

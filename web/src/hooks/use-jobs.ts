@@ -1,7 +1,8 @@
 // An environment's background work. Checked every second and a half while a
 // job is queued or running, so progress fills in live; when work finishes,
-// everything the environment shows is asked for again, as it may have
-// changed.
+// everything the environment and its documents show is asked for again, as
+// it may have changed: a document's text, read again with its maths and
+// figures, and its pages.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -23,6 +24,7 @@ export function useJobs(environmentId: string) {
   useEffect(() => {
     if (active < before.current) {
       queryClient.invalidateQueries({ queryKey: ["environments", environmentId] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
     }
     before.current = active;
   }, [active, environmentId, queryClient]);

@@ -90,7 +90,7 @@ function open(documents: Document[], jobs: Job[] = [], updates: MaterialUpdate[]
 afterEach(() => window.localStorage.clear());
 
 describe("Materials", () => {
-  it("opens a document on its own page, and its summary, maths and figures there", async () => {
+  it("opens a document on its own page, and its summary there", async () => {
     open([{ ...ready, pages_ocr: 2 }]);
 
     const row = await screen.findByRole("listitem");
@@ -106,14 +106,8 @@ describe("Materials", () => {
       "href",
       "/environments/e1/materials/d1?tab=summary",
     );
-    expect(within(row).getByRole("link", { name: "Read the maths" })).toHaveAttribute(
-      "href",
-      "/environments/e1/materials/d1?tab=maths",
-    );
-    expect(within(row).getByRole("link", { name: "Read the figures" })).toHaveAttribute(
-      "href",
-      "/environments/e1/materials/d1?tab=figures",
-    );
+    // Its maths and figures are read with it, never asked for apart.
+    expect(within(row).queryByRole("link", { name: /maths|figures/ })).toBeNull();
     expect(within(row).getByRole("button", { name: "Upload a new version" })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "Delete" })).toBeInTheDocument();
     // Nothing being read: no note on the first upload.
@@ -136,6 +130,35 @@ describe("Materials", () => {
     expect(
       screen.getByRole("complementary", { name: "First upload — what happens now" }),
     ).toHaveTextContent("You can leave this page: the rail shows the progress.");
+  });
+
+  it("shows its maths and figures being read as a bar, before the reading after them", async () => {
+    // The chain of an upload, queued in order: the text read, the maths and
+    // figures, the text again with them, what is made from it.
+    const at = (second: number) => `2026-11-22T09:00:0${second}.${second}00000Z`;
+    open(
+      [ready, reading],
+      [
+        job({ id: "j4", kind: "derive", status: "queued", created_at: at(4), title: "Updating from Synchronization.pdf" }),
+        job({ id: "j3", kind: "read", status: "queued", created_at: at(3), title: "Reading Synchronization.pdf with its maths and figures" }),
+        job({
+          id: "j2",
+          kind: "vision",
+          status: "queued",
+          created_at: at(2),
+          title: "Reading the maths and figures of Synchronization.pdf",
+        }),
+      ],
+      [update],
+    );
+
+    expect(
+      await screen.findByRole("progressbar", {
+        name: "Reading the maths and figures of Synchronization.pdf",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+    expect(screen.queryByRole("list", { name: "Steps for Synchronization.pdf" })).toBeNull();
   });
 
   it("offers the band when there is nothing yet, and uploads each PDF dropped on it", async () => {

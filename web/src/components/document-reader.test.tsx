@@ -1,8 +1,7 @@
 // A document's own page (decision record 28): a breadcrumb back to the
 // environment and Materials, the text page by page in regions with their
-// maths typeset, and the summary, maths and figures as tabs named in the
-// address. A figure the model read (decision record 29) is drawn in place of
-// its passage, its description marked as the model's.
+// maths typeset, and the summary as a tab named in the address. Each figure
+// is drawn as its picture in place of its text (decision record 31).
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
@@ -14,8 +13,8 @@ import type {
   CurrentSummary,
   Document,
   DocumentPage,
-  FiguresOverview,
-  MathsOverview,
+  Job,
+  MaterialUpdate,
 } from "@/lib/types";
 import { fakeApi } from "@/test/network";
 
@@ -72,27 +71,13 @@ const summary: CurrentSummary = {
   earlier_versions: 0,
 };
 
-const maths: MathsOverview = {
-  maths_pages: [1],
-  read: [],
-  waiting: [],
-  kept_text: [],
-  seconds_per_page: 60,
-};
-
-const figures: FiguresOverview = {
-  figures: [{ key: "2:a", page: 2, caption: "Figure 1 Eigenvectors" }],
-  read: [],
-  waiting: [],
-  kept: [],
-  seconds_per_figure: 20,
-};
-
 function open({
   documents = [document],
   search = "",
   documentSummary = summary as CurrentSummary | null,
   documentPages = pages,
+  jobs = [] as Job[],
+  updates = [] as MaterialUpdate[],
 } = {}) {
   address.search = search;
   const sent = fakeApi([
@@ -110,8 +95,8 @@ function open({
       },
     },
     { method: "GET", path: "/api/environments/e1/documents", answer: { body: documents } },
-    { method: "GET", path: "/api/environments/e1/jobs", answer: { body: [] } },
-    { method: "GET", path: "/api/environments/e1/updates", answer: { body: [] } },
+    { method: "GET", path: "/api/environments/e1/jobs", answer: { body: jobs } },
+    { method: "GET", path: "/api/environments/e1/updates", answer: { body: updates } },
     { method: "GET", path: "/api/documents/d1/pages", answer: { body: documentPages } },
     {
       method: "GET",
@@ -125,8 +110,6 @@ function open({
       path: "/api/documents/d1/summary",
       answer: { status: 202, body: { ...summary, status: "pending", overview: null } },
     },
-    { method: "GET", path: "/api/documents/d1/maths", answer: { body: maths } },
-    { method: "GET", path: "/api/documents/d1/figures", answer: { body: figures } },
   ]);
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -211,53 +194,35 @@ describe("DocumentReader", () => {
       "How a matrix stretches its eigenvectors.",
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Maths" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Text" }));
 
-    expect(window.location.search).toBe("?tab=maths");
-    const offer = await screen.findByRole("region", { name: "Maths of Week 3 eigenvalues.pdf" });
-    expect(await within(offer).findByRole("button", { name: "Read the maths" })).toBeEnabled();
+    expect(window.location.search).toBe("");
+    expect(await screen.findByRole("region", { name: "Page 1" })).toBeInTheDocument();
   });
 
-  it("offers to read the figures on their own tab", async () => {
+  it("opens the text at an address naming the maths or figures, which are tabs no more", async () => {
     open({ search: "?tab=figures" });
 
-    expect(await screen.findByRole("tab", { name: "Figures" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    const offer = await screen.findByRole("region", { name: "Figures of Week 3 eigenvalues.pdf" });
-    expect(await within(offer).findByRole("button", { name: "Read the figures" })).toBeEnabled();
-    expect(within(offer).getByRole("status")).toHaveTextContent("1 figure to read · under a minute");
+    expect(await screen.findByRole("tab", { name: "Text" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Text", "Summary"]);
   });
 
-  it("draws a figure the model read in place of its passage", async () => {
+  it("draws a figure as its picture, in place of all its text", async () => {
     // A character beyond the first 65,536, as maths fonts give, counts once
     // in the API's places and twice in a JavaScript string.
     const before = "Data 𝑥 arrives.\n\n";
-    const passage =
-      "Figure 1 Eigenvectors Diagram: v; Av. Sales: Year | Sales / 2020 | 5. " +
-      "Described by the model: Two arrows from the origin, one twice the other.";
+    const text =
+      "Figure 1 Eigenvectors Diagram: v; Av. Sales: Year | Sales / 2020 | 5.\n\n0 1 2 3";
     const after = "\n\nThe arrows share a line.";
     const start = [...before].length;
-    const end = start + [...passage].length;
+    const end = start + [...text].length;
     open({
       documents: [{ ...document, pages_ocr: 1 }],
       documentPages: [
         {
           page_number: 1,
-          content: before + passage + after,
-          figures: [
-            {
-              id: "f1",
-              start,
-              end,
-              caption: "Figure 1 Eigenvectors",
-              kind: "diagram",
-              text: ["v", "Av"],
-              tables: [{ title: "Sales", rows: [["Year", "Sales"], ["2020", "5"]] }],
-              description: "Two arrows from the origin, one twice the other.",
-            },
-          ],
+          content: before + text + after,
+          figures: [{ key: "1:72,90,300,200", start, end, caption: "Figure 1 Eigenvectors" }],
         },
         { page_number: 2, content: "Diagonalisation\n\nMore text.", figures: [] },
       ],
@@ -268,29 +233,41 @@ describe("DocumentReader", () => {
 
     const figure = within(page).getByRole("figure", { name: "Figure 1 Eigenvectors" });
     const picture = within(figure).getByRole("img", { name: "Figure 1 Eigenvectors" });
-    expect(picture.getAttribute("src")).toMatch(/\/api\/figures\/f1\/image$/);
+    expect(picture.getAttribute("src")).toMatch(
+      new RegExp(`/api/documents/d1/figures/1%3A72%2C90%2C300%2C200/image\\?version=${"a".repeat(64)}$`),
+    );
     expect(picture).toHaveAttribute("loading", "lazy");
-    expect(within(figure).getByText("v · Av")).toBeInTheDocument();
-    const table = within(figure).getByRole("table", { name: "Sales" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual([
-      "Year",
-      "Sales",
-    ]);
-    expect(within(table).getAllByRole("cell").map((c) => c.textContent)).toEqual(["2020", "5"]);
-    expect(within(figure).getByText("Described by the model")).toBeInTheDocument();
-    expect(within(figure).getByText("Check it against the picture.")).toBeInTheDocument();
-    expect(
-      within(figure).getByText("Two arrows from the origin, one twice the other."),
-    ).toBeInTheDocument();
+    // Only the picture: neither what the model read nor the PDF's labels.
+    expect(figure.textContent).toBe("");
+    expect(page).not.toHaveTextContent("Diagram: v; Av");
+    expect(page).not.toHaveTextContent("0 1 2 3");
+    expect(within(page).queryByRole("table")).toBeNull();
 
-    // The text around it is as it was; the passage itself is not shown.
+    // The text around it is as it was.
     expect(within(page).getByText("Data 𝑥 arrives.")).toBeInTheDocument();
     expect(within(page).getByText("The arrows share a line.")).toBeInTheDocument();
-    expect(page).not.toHaveTextContent("Described by the model: Two arrows");
 
-    // The list of pages sums the page up by its text, not the model's words.
+    // The list of pages sums the page up by its text and the figure's caption.
     const list = screen.getByRole("navigation", { name: "Pages" });
     expect(within(list).getByRole("link", { name: "Page 1 Data 𝑥 arrives." })).toBeInTheDocument();
+  });
+
+  it("draws a figure with no text of its own where it stands", async () => {
+    open({
+      documentPages: [
+        {
+          page_number: 1,
+          content: "Above.\n\nBelow.",
+          figures: [{ key: "1:72,90,300,200", start: 6, end: 6, caption: null }],
+        },
+      ],
+    });
+
+    const page = await screen.findByRole("region", { name: "Page 1" });
+    const [above, figure, below] = Array.from(page.children).slice(1);
+    expect(above).toHaveTextContent("Above.");
+    expect(figure).toBe(within(page).getByRole("figure", { name: "A figure on page 1" }));
+    expect(below).toHaveTextContent("Below.");
   });
 
   it("asks for a summary where there is none", async () => {
@@ -300,7 +277,51 @@ describe("DocumentReader", () => {
     expect(sent.filter((r) => r.method === "POST" && r.path === "/api/documents/d1/summary")).toHaveLength(1);
   });
 
-  it("offers no maths until the document has been read", async () => {
+  it("shows its maths and figures being read with one bar, beside the page", async () => {
+    // The background work beside the page shows the bar, with Cancel; the
+    // header shows it only when the contents are hidden on a desktop.
+    open({
+      updates: [
+        {
+          id: "u1",
+          kind: "added",
+          document_id: "d1",
+          filename: "Week 3 eigenvalues.pdf",
+          status: "running",
+          steps: [],
+          report: null,
+          started_at: "2026-11-21T10:00:00Z",
+          finished_at: null,
+        },
+      ],
+      jobs: [
+        {
+          id: "j1",
+          kind: "vision",
+          title: "Reading the maths and figures of Week 3 eigenvalues.pdf",
+          lane: "model",
+          status: "running",
+          progress: 40,
+          step: "Reading the maths of page 2",
+          error: null,
+          attempts: 0,
+          max_attempts: 3,
+          cancel_requested: false,
+          update_id: "u1",
+          created_at: "2026-11-21T10:00:00Z",
+          started_at: "2026-11-21T10:00:01Z",
+          finished_at: null,
+          not_before: null,
+        },
+      ],
+    });
+
+    expect(await screen.findByRole("region", { name: "Page 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Steps for Week 3 eigenvalues.pdf" })).toBeNull();
+    expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+  });
+
+  it("shows the steps until the document has been read", async () => {
     open({ documents: [{ ...document, status: "processing", page_count: null }] });
 
     expect(await screen.findByText("The text shows here once the document has been read.")).toBeInTheDocument();

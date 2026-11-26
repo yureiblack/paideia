@@ -47,31 +47,20 @@ export type Document = {
   updated_at: string;
 };
 
-// A table the model read in a figure, row by row, with its title if it has
-// one.
-export type FigureTable = {
-  title: string | null;
-  rows: string[][];
-};
-
-// A figure the model read (decision record 29), where it sits in its page:
-// content.slice(start, end) of the page is its passage. text and tables are
-// what is written in it, checked against the figure; description is the
-// model's own, which nothing can check. start and end count characters as
-// the API does, by code point.
+// A figure in its page (decision record 31): content.slice(start, end) of
+// the page is all its text there, the PDF's or what the model read in it,
+// which the reader shows as the figure's picture instead, from
+// pageFigureUrl. start equals end for a figure with no text. start and end
+// count characters as the API does, by code point.
 export type PageFigure = {
-  id: string;
+  key: string;
   start: number;
   end: number;
   caption: string | null;
-  kind: string;
-  text: string[];
-  tables: FigureTable[];
-  description: string;
 };
 
-// figures: the figures read in the page, in the order they appear. An older
-// API sends none.
+// figures: the figures in the page, in the order they appear. An older API
+// sends none.
 export type DocumentPage = {
   page_number: number;
   content: string;
@@ -556,35 +545,3 @@ export type SearchResponse = {
 // The backend's limit on a search query's length.
 export const SEARCH_QUERY_MAX_LENGTH = 500;
 
-// A document's maths (decision record 26): the pages that set maths in maths
-// fonts, the ones whose maths has been read and is in use, the ones read by a
-// reading cancelled before it put them in place (waiting: no time to read
-// again), the ones that keep the PDF's own text and why, and how many seconds
-// a page takes to read on this machine.
-export type MathsOverview = {
-  maths_pages: number[];
-  read: number[];
-  waiting: number[];
-  kept_text: { page: number; reason: string }[];
-  seconds_per_page: number;
-};
-
-// A document's figures (decision record 29): the drawings, pictures and
-// tables with a caption found in it, each by its key, page and caption; the
-// keys of those read and in use; those read by a reading cancelled before it
-// put them in place (waiting: no time to read again); those whose reading
-// disagreed with the figure, which keep the PDF's own text, and why; and how
-// many seconds a figure takes to read on this machine.
-export type FoundFigure = {
-  key: string;
-  page: number;
-  caption: string | null;
-};
-
-export type FiguresOverview = {
-  figures: FoundFigure[];
-  read: string[];
-  waiting: string[];
-  kept: (FoundFigure & { reason: string })[];
-  seconds_per_figure: number;
-};
