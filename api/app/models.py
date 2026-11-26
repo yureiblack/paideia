@@ -177,8 +177,11 @@ class DocumentPage(Base):
     # Named content rather than text, which would shadow SQLAlchemy's text()
     # in this module and is also the name of a Postgres type.
     content: Mapped[str] = mapped_column(Text)
-    # Where the page's figures read by the model are in content, each as
-    # {"id": figure reading id, "start": offset, "end": offset} (record 29).
+    # The page's figures (record 31), each as {"key", "rect", "caption",
+    # "caption_rect", "reading": the accepted reading in place or null,
+    # "start", "end"}: content[start:end] is all its text, which the reader
+    # shows as its picture. Pages read before record 31 list only figures
+    # read, as {"id": reading id, "start", "end"}.
     figures: Mapped[list | None] = mapped_column(JSONB)
 
 
@@ -239,8 +242,9 @@ class FigureReading(Base):
     and place, rect its place in PDF points, caption its caption, if any,
     and caption_rect where that is. accepted: what the model says is written
     in it (text, tables) agreed with the figure's own text and every number
-    it gave is the figure's; kind, text, tables and description are kept and
-    the figure becomes a passage of its page. rejected: reason says why, and
+    it gave is the figure's; kind, text, tables and description are kept,
+    and the figure's caption, text and tables become a passage of its page,
+    never its description (record 31). rejected: reason says why, and
     the page keeps its text layer. attempts is 1, or 2 when it was read again.
     """
 
@@ -351,8 +355,8 @@ class DocumentChunk(Base):
     )
     embedding_model: Mapped[str | None] = mapped_column(Text)
     # Set when the passage is a figure the model read (decision record 29):
-    # search finds it; summaries and concepts are written from passages
-    # without it, so nothing rests on the model's description.
+    # what is written in it, checked against it, which search, summaries and
+    # concepts read like any passage; never the model's description (31).
     figure_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("figure_readings.id", ondelete="SET NULL")
     )

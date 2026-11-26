@@ -119,97 +119,27 @@ class DocumentRead(BaseModel):
     updated_at: datetime
 
 
-class FigureTable(BaseModel):
-    """A table the model read in a figure, its title if it has one."""
-
-    title: str | None
-    rows: list[list[str]]
-
-
 class PageFigure(BaseModel):
-    """A figure the model read (decision record 29), where it is in the
-    page's content (content[start:end] is its passage), and what it read:
-    the text and tables written in it, checked against the figure, and its
-    description, which is the model's and is shown as such."""
+    """A figure in its page (decision record 31): content[start:end] is all
+    its text there, which the reader shows as its picture, at
+    /api/documents/{document_id}/figures/{key}/image. start equals end for a
+    figure with no text."""
 
-    id: uuid.UUID
+    key: str
     start: int
     end: int
     caption: str | None
-    kind: str
-    text: list[str]
-    tables: list[FigureTable]
-    description: str
 
 
 class PageRead(BaseModel):
-    """The extracted text of one page, numbered from 1, and the figures read
-    in it."""
+    """The extracted text of one page, numbered from 1, and the figures in
+    it."""
 
     model_config = ConfigDict(from_attributes=True)
 
     page_number: int
     content: str
     figures: list[PageFigure] = []
-
-
-class KeptPage(BaseModel):
-    """A page whose maths could not be read: it keeps the PDF's own text."""
-
-    page: int
-    reason: str
-
-
-class MathsRead(BaseModel):
-    """A document's maths (decision record 26): the pages that hold maths, the
-    ones read so far and in use, the ones read by a reading that was
-    cancelled or failed before it put them in place (waiting: reading them
-    again takes no time), the ones that keep the PDF's own text and why, and
-    how many seconds a page takes to read on this machine."""
-
-    maths_pages: list[int]
-    read: list[int]
-    waiting: list[int]
-    kept_text: list[KeptPage]
-    seconds_per_page: float
-
-
-class MathsRequest(BaseModel):
-    """Read the maths of the pages from first_page to last_page."""
-
-    first_page: int = Field(ge=1)
-    last_page: int = Field(ge=1)
-
-
-class FoundFigure(BaseModel):
-    """A figure found in a document: its key, page and caption."""
-
-    key: str
-    page: int
-    caption: str | None
-
-
-class KeptFigure(FoundFigure):
-    """A figure whose reading disagreed with it: it keeps the PDF's text."""
-
-    reason: str
-
-
-class FiguresRead(BaseModel):
-    """A document's figures (decision record 29): those found, the keys of
-    those read and in use, those read by a reading cancelled before it put
-    them in place (waiting), those that keep the PDF's text and why, and how
-    many seconds a figure takes to read on this machine."""
-
-    figures: list[FoundFigure]
-    read: list[str]
-    waiting: list[str]
-    kept: list[KeptFigure]
-    seconds_per_figure: float
-
-
-class FiguresRequest(MathsRequest):
-    """Read the figures on the pages from first_page to last_page."""
 
 
 class ChunkRead(BaseModel):

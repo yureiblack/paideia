@@ -1,28 +1,28 @@
-"""Reading a document's maths with the vision model (decision record 26).
+"""Reading a document's maths with the vision model (decision records 26
+and 31).
 
 Purpose
 -------
 A PDF's text layer keeps the prose but loses the maths: a matrix becomes a
 row of numbers, λ² becomes "λ2". The local model can read a page's image
-and write it out with its maths in LaTeX, at about half a minute a page.
-That is never done unasked: the Materials tab offers it for a range of
-pages, with how many hold maths and how long it should take.
+and write it out with its maths in LaTeX, at about a minute a page. Every
+page that sets maths in maths fonts is read as part of reading the document
+(record 31): its reading job, one step per page, comes after the first
+reading of the text, so the text is there to read at once.
 
-A reading is a job of its own on the model lane, one step per page, so it
-shows its progress and can be cancelled between pages. Each page is read
-whole, and if what comes back disagrees with the page's text layer
-(app/transcription.py), once more in two halves, each seen larger. A page
-that still disagrees keeps its text layer, and the document says why.
+Each page is read whole, and if what comes back disagrees with the page's
+text layer (app/transcription.py), once more in two halves, each seen
+larger. A page that still disagrees keeps its text layer, and the update
+says why.
 
-The pages read are kept per version of the file. The reading's last step
-puts the document back in the queue to be read; reading it uses every page
-read so far in place of its text layer, and the chain that follows redoes
-only what changed (decision record 17). A cancelled reading changes nothing,
-and the pages it read are used when the learner asks again.
+The pages read are kept per version of the file. After the pages, the
+document is read again; reading it uses every page read so far in place of
+its text layer, and what follows redoes only what changed (record 17). A
+reading stopped part way keeps the pages it read, and reading the document
+again later reads the rest.
 """
 
 import logging
-import statistics
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,28 +41,7 @@ logger = logging.getLogger(__name__)
 PROMPT = ("page_transcription", "v1")
 PROMPT_ID = "/".join(PROMPT)  # as Prompt.id writes it
 
-# Seconds a page takes before this machine has read any: on an Apple M3
-# Pro, 11 textbook pages took 46 s each, about 65 s counting the second
-# attempt a third of them needed.
-DEFAULT_SECONDS_PER_PAGE = 65.0
-# Once pages have been read, the estimate is the median of the most recent.
-ESTIMATE_FROM = 50
-
-
-class NothingToRead(Exception):
-    """The request names no page whose maths is still to be read."""
-
-
 # --- what there is to read ---------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Overview:
-    maths_pages: dict[int, int]  # page -> characters in maths fonts
-    read: list[int]  # pages read and in place
-    waiting: list[int]  # read and accepted, not in place yet: no time to read
-    kept_text: dict[int, str]  # page -> why it kept its text layer
-    seconds_per_page: float
 
 
 def _latest(session: Session, document: Document) -> dict[int, PageTranscription]:
@@ -78,53 +57,11 @@ def _latest(session: Session, document: Document) -> dict[int, PageTranscription
     return {row.page_number: row for row in ordered}
 
 
-def seconds_per_page(session: Session) -> float:
-    """How long a page takes to read on this machine."""
-    recent = list(
-        session.scalars(
-            select(PageTranscription.seconds)
-            .order_by(PageTranscription.created_at.desc())
-            .limit(ESTIMATE_FROM)
-        )
-    )
-    return statistics.median(recent) if recent else DEFAULT_SECONDS_PER_PAGE
-
-
-def overview(session: Session, document: Document) -> Overview:
-    """The document's maths pages and how far their reading has got. Opens
-    the file: a textbook of 450 pages takes a couple of seconds."""
-    path = storage.document_path(document.environment_id, document.id)
-    latest = _latest(session, document)
-    current = _current_pages(session, document)
-    return Overview(
-        maths_pages=parsing.maths_pages(path),
-        # Read and in place: a page read by a reading cancelled before its
-        # end is still to read, though reading it again takes no time.
-        read=sorted(
-            p
-            for p, row in latest.items()
-            if row.status == "accepted" and current.get(p) == row.content
-        ),
-        waiting=sorted(
-            p
-            for p, row in latest.items()
-            if row.status == "accepted" and current.get(p) != row.content
-        ),
-        kept_text={
-            p: row.reason or "" for p, row in latest.items() if row.status == "rejected"
-        },
-        seconds_per_page=seconds_per_page(session),
-    )
-
-
-def to_read(
-    session: Session, document: Document, llm: LLMProvider, first: int, last: int
+def not_read(
+    session: Session, document: Document, llm: LLMProvider, pages: list[int]
 ) -> list[int]:
-    """The maths pages from first to last not yet read with this model and
-    prompt. Raises NothingToRead if there are none and nothing read before
-    is waiting to be put in place."""
-    path = storage.document_path(document.environment_id, document.id)
-    wanted = [p for p in parsing.maths_pages(path) if first <= p <= last]
+    """Of the pages of the document's file that set maths, those not yet
+    read with this model and prompt."""
     done = {
         row.page_number
         for row in session.scalars(
@@ -136,14 +73,7 @@ def to_read(
             )
         )
     }
-    pages = [p for p in wanted if p not in done]
-    if not pages and not _waiting(session, document, first, last):
-        raise NothingToRead(
-            "The maths of these pages has been read already."
-            if wanted
-            else "These pages hold no maths to read."
-        )
-    return pages
+    return [p for p in pages if p not in done]
 
 
 def _current_pages(session: Session, document: Document) -> dict[int, str]:
@@ -156,16 +86,13 @@ def _current_pages(session: Session, document: Document) -> dict[int, str]:
     }
 
 
-def _waiting(session: Session, document: Document, first: int, last: int) -> list[int]:
-    """Pages read and accepted whose text is not the page's text yet: their
-    reading was cancelled, or failed, before it was put in place."""
+def _waiting(session: Session, document: Document) -> list[int]:
+    """Pages read and accepted whose text is not the page's text yet."""
     current = _current_pages(session, document)
     return [
         p
         for p, row in _latest(session, document).items()
-        if first <= p <= last
-        and row.status == "accepted"
-        and current.get(p) != row.content
+        if row.status == "accepted" and current.get(p) != row.content
     ]
 
 
@@ -329,12 +256,13 @@ def transcribe_page(
 
 
 def apply(
-    session_factory: SessionFactory, document_id: uuid.UUID, first: int, last: int
+    session_factory: SessionFactory, document_id: uuid.UUID, found: int = 0
 ) -> dict | None:
-    """The reading's last step: put the document back in the queue to be
-    read if any page read differs from the page's text now. Returns the
-    pages from first to last read and kept, for the update; None if the
-    document is gone."""
+    """A step of reading the document again after its maths was read: put
+    it back in the queue to be read if any page read differs from the
+    page's text now. Returns the pages read and kept, for the update, and
+    how many of the found were not read at all, as when the reading was
+    stopped; None if the document is gone."""
     with session_factory() as session:
         document = session.get(
             Document, document_id, with_for_update=True, populate_existing=True
@@ -342,19 +270,19 @@ def apply(
         if document is None:
             return None
         latest = _latest(session, document)
-        in_range = {p: row for p, row in latest.items() if first <= p <= last}
-        changed = _waiting(session, document, first, last)
+        changed = _waiting(session, document)
         if changed and document.status == "ready":
             document.status = "uploaded"
             document.error = None
         session.commit()
         return {
-            "read": sorted(p for p, r in in_range.items() if r.status == "accepted"),
+            "read": sorted(p for p, r in latest.items() if r.status == "accepted"),
             "kept": {
                 str(p): r.reason
-                for p, r in sorted(in_range.items())
+                for p, r in sorted(latest.items())
                 if r.status == "rejected"
             },
+            "not_read": max(0, found - len(latest)),
             "changed": len(changed),
         }
 

@@ -21,9 +21,10 @@ and they are treated differently:
   little, as OCR misreads and the model corrects a typo now and then.
 - Every number it gives, in any part, must be one of the figure's own: a
   number the figure does not show is made up.
-- The description cannot be checked further. It is kept, marked as the
-  model's, never as the book's: it is shown beside the picture, found by
-  search, and nothing is written from it (app/services/figures.py).
+- The description cannot be checked further. It is kept with the reading
+  but is in no passage (record 31): nothing shows it, finds it, or is
+  written from it. A number in it that the figure does not show still
+  marks the reading as made up.
 
 This module is pure: it neither calls the model nor opens the PDF.
 """
@@ -272,8 +273,10 @@ def repeats(reading: Reading, text: str) -> bool:
 
 
 def passage(reading: Reading) -> str:
-    """The figure as one paragraph of text, for search and for the page: what
-    is written in it, then the model's description, marked as the model's."""
+    """The figure as one paragraph of text, for search, summaries and
+    concepts: what is written in it, its labels and its tables row by row,
+    all of it checked. Not the description, which could not be (record
+    31). Empty for a figure with nothing written in it."""
     pieces = []
     if reading.text:
         labels = "; ".join(t.rstrip(".") for t in reading.text)
@@ -281,5 +284,4 @@ def passage(reading: Reading) -> str:
     for table in reading.tables:
         rows = " / ".join(" | ".join(row) for row in table.rows)
         pieces.append(f"{table.title}: {rows}." if table.title else f"Table: {rows}.")
-    pieces.append(f"Described by the model: {reading.description}")
     return " ".join(" ".join(pieces).split())

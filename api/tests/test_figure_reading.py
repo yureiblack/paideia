@@ -1,12 +1,12 @@
 """Tests for app/figure_reading.py: a figure's reading by the vision model
 split into its parts, checked against the figure's own text, and made into
-its passage (decision record 29).
+its passage (decision records 29 and 31).
 
 Purpose: prove that the four parts are found however the model sets their
 names, that tables are read as rows, that a number the figure does not show
 is refused wherever it is written, that the text may differ from the
-figure's by a few words but not more, and that the passage marks the
-description as the model's.
+figure's by a few words but not more, and that the passage is what is
+written in the figure, never the model's description.
 """
 
 import pytest
@@ -146,7 +146,7 @@ def test_a_picture_with_no_text_of_its_own_is_checked_for_numbers_only():
     assert check(Reading("photograph", (), (), "A ring of 6 atoms."), "") is not None
 
 
-def test_the_passage_says_what_is_written_then_what_the_model_described():
+def test_the_passage_says_what_is_written_never_what_the_model_described():
     reading = Reading(
         "plot",
         ("p1", "p2"),
@@ -154,9 +154,8 @@ def test_the_passage_says_what_is_written_then_what_the_model_described():
         "Two points.",
     )
 
-    assert passage(reading) == (
-        "Plot: p1; p2. Points: x | y / 0 | 2. Described by the model: Two points."
-    )
+    assert passage(reading) == "Plot: p1; p2. Points: x | y / 0 | 2."
+    assert passage(Reading("photograph", (), (), "A ring of atoms.")) == ""
 
 
 def test_a_long_word_set_apart_in_the_pdf_is_found_but_short_scraps_are_not():

@@ -198,7 +198,8 @@ def process_document(
                 )
             parsed = parser.parse(path)
             # Pages whose maths was read replace their text layer (record 26),
-            # and figures read take the place of the text inside them (29).
+            # and every figure gathers its text in one place, a reading
+            # accepted in place of the text it repeats (29, 31).
             parsed = maths_reading.with_transcriptions(session, document, parsed)
             parsed = figure_service.with_figures(session, document, parsed)
             chunks = chunk_document(document_id, parsed)
@@ -344,12 +345,7 @@ def _store_result(
                 document_id=document_id,
                 page_number=page.number,
                 content=page.text,
-                figures=[
-                    {"id": b.figure, "start": b.start, "end": b.end}
-                    for b in page.blocks
-                    if b.figure
-                ]
-                or None,
+                figures=[figure_service.stored(f) for f in page.figures] or None,
             )
             for page in parsed.pages
         )
