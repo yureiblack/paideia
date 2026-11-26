@@ -1,7 +1,7 @@
 # 29. Reading figures, tables and scans
 
 Date: 2026-11-23
-Status: accepted
+Status: accepted; changed by [31](31-one-reading.md): figures read with the document, shown as their pictures, and what is written in them a source, their descriptions in no passage
 
 ## Context
 

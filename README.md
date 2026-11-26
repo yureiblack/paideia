@@ -78,7 +78,7 @@ and Learn:
 | Section | What it shows |
 |---|---|
 | **Overview** | Today's study plan, worked out from your answers: concepts to strengthen, reviews due, the next stage to learn, new material to skim. Each part has its reason and an estimate of the time it takes. Under it, every other section in one line of what it holds. |
-| **Materials** | Every PDF or picture, read page by page, with the steps of its reading shown as they happen. A scan, a photograph of a board or a screenshot is read by OCR. Each document has its own page for reading: its text page by page, its summary, its maths and its figures, as four tabs. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. When you ask, for a range of pages, the local vision model reads a document's maths, each page checked against the PDF's own text, and its figures and tables: what is written in a figure is checked against it, and its description is shown as the model's, never used as a source. |
+| **Materials** | Every PDF or picture, read page by page, with the steps of its reading shown as they happen. A scan, a photograph of a board or a screenshot is read by OCR. Each document has its own page for reading: its text page by page, each figure as its picture, and its summary, as two tabs. Every change is followed step by step, then reported: what it added, removed and updated, and what it left as it was. Once a document's text is read, the local vision model reads its maths, each page checked against the PDF's own text, and its figures and tables: what is written in a figure is checked against it and read by summaries and practice like any passage; the model's description of a figure is never used. |
 | **Summary** | A summary of all the material, built from each document's summary. Every key point cites its passages. |
 | **Knowledge map** | The concepts, with definitions and the passages that explain them. For each concept: what it builds on, what builds on it, its parts, and what it is related to. Every relationship cites the passages it was found in. |
 | **Search** | Keyword search and search by meaning, fused and then reranked. Every result is a citation. "Show in page" opens the passage, highlighted in its page, and "Show scoring" shows how each result was ranked. |
@@ -330,13 +330,16 @@ flowchart LR
 Practice is prepared when the learner asks for it, stage by stage, as its own
 background job.
 
-A document's maths is read when the learner asks for it too, for a range of
-pages (record 26). The vision model transcribes each page from its image,
-with the maths in LaTeX. A page is used only if what it shows agrees with
-the PDF's own text; if not, it is read again in two halves, and otherwise
-keeps its text. Then the document is read again with the pages read, and
-only what changed is redone. It takes about a minute a page, so a textbook
-takes hours.
+A document's maths and figures are read with it (records 26, 29 and 31),
+between reading its text and writing its summary, so the text can be read
+and searched at once. The vision model transcribes each page that sets
+maths from its image, with the maths in LaTeX. A page is used only if what
+it shows agrees with the PDF's own text; if not, it is read again in two
+halves, and otherwise keeps its text. Each figure's labels and tables are
+read and checked against the figure the same way. Then the document is read
+again with what was read, and only what changed is redone. It takes about a
+minute a page of maths and a quarter of a minute a figure, so a textbook
+takes hours. Cancelling it keeps what was read and goes on to the summary.
 
 ## Incremental updates
 
@@ -551,23 +554,23 @@ this phase's fixes:
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 955 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 958 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 89%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 104 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 97 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.
   - They query the page by role and name, and use no snapshots.
 - **End to end:** one Playwright journey through the running app.
   - It goes from the first visit's welcome and creating an environment to a
-    second PDF updating it, then reads a third PDF's maths on the
-    document's own page, practises a computed exercise, reads a fourth
-    PDF's figure, and uploads a photograph of a board note whose words are
-    read, in fifteen steps.
+    second PDF updating it, then a third PDF whose maths is read with it,
+    practises a computed exercise, a fourth PDF whose figure is read with
+    it and shown as its picture, and a photograph of a board note whose
+    words are read, in seventeen steps.
   - Everything in it is real except the language model, which is a
     stand-in.
 - **CI:** GitHub Actions runs three jobs on every pull request and every
@@ -785,9 +788,9 @@ Known limits, each stated in its decision record:
 - **A scan is a program's reading.** Tesseract reads prose almost without
   fault, but loses a formula's subscripts and some table cells. Figures are
   found by their captions and drawings, not on scanned pages, and a figure's
-  description cannot be checked: it is shown as the model's and nothing is
-  written from it, so a table read from a figure does not yet feed practice
-  ([29](docs/architecture/29-figures-and-scans.md)). Keyword search uses an
+  description cannot be checked, so it is never shown or used
+  ([29](docs/architecture/29-figures-and-scans.md),
+  [31](docs/architecture/31-one-reading.md)). Keyword search uses an
   English dictionary.
 - **The chunker splits a paragraph that crosses a page break** into two
   passages. The benchmark found one citation harmed by it. The fix is to be
