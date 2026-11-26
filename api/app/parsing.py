@@ -613,6 +613,11 @@ class Figure:
         return f"{self.page}:" + ",".join(f"{v:.0f}" for v in self.rect)
 
     @property
+    def is_table(self) -> bool:
+        """Whether its caption calls it a table."""
+        return (self.caption or "").lstrip().lower().startswith("table")
+
+    @property
     def crop(self) -> tuple[float, float, float, float]:
         """The figure with its caption, as the model and the reader see it."""
         rect = pymupdf.Rect(self.rect)
@@ -701,9 +706,14 @@ def _candidates(page: pymupdf.Page, one_page: bool) -> list[pymupdf.Rect]:
     """What is drawn or pictured on the page, large enough to be a figure."""
     width, height = page.rect.width, page.rect.height
     area = width * height
+    # cluster_drawings leaves out whatever is not wholly inside its clip, so
+    # the page alone would lose a wide table's rules, set a few points past
+    # its edges, and with them the table. Each cluster is cut back to the
+    # page below.
+    reach = page.rect + (-width, -height, width, height)
     found = []
     for rect in [
-        *page.cluster_drawings(),
+        *page.cluster_drawings(clip=reach),
         *(pymupdf.Rect(image["bbox"]) for image in page.get_image_info()),
     ]:
         rect &= page.rect

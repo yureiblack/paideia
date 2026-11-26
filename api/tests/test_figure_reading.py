@@ -3,10 +3,12 @@ split into its parts, checked against the figure's own text, and made into
 its passage (decision record 29).
 
 Purpose: prove that the four parts are found however the model sets their
-names, that tables are read as rows, that a number the figure does not show
-is refused wherever it is written, that the text may differ from the
-figure's by a few words but not more, and that the passage marks the
-description as the model's.
+names, that tables are read as rows, with or without bars at their ends,
+that an underscore inside a word is kept, that a number the figure does not
+show is refused wherever it is written, that a table's reading must give
+most of its numbers, that the text may differ from the figure's by a few
+words but not more, and that the passage marks the description as the
+model's.
 """
 
 import pytest
@@ -189,3 +191,138 @@ def test_tables_written_under_text_are_tables_their_header_cells_as_lines():
     )
     assert reading.text == ()
     assert reading.description == "Two tables."
+
+
+# Table 2.9 of a textbook as its PDF sets it, and the model's answer, which
+# gave the headers and none of the distances.
+DISTANCES = (
+    "p1 p2 p3 p4\np1 0.0 2.8 3.2 5.1\np2 2.8 0.0 1.4 3.2\n"
+    "p3 3.2 1.4 0.0 2.0\np4 5.1 3.2 2.0 0.0"
+)
+HEADERS_ONLY = (
+    "KIND\nTable\n\nTEXT\nTable 2.9.\nEuclidean distance matrix for Table 2.8.\n\n"
+    "p1\np2\np3\np4\n\nDESCRIPTION\nA square matrix of distances between four points.\n"
+)
+
+
+def test_a_table_that_leaves_out_its_numbers_is_refused():
+    own = DISTANCES + "\nTable 2.9. Euclidean distance matrix for Table 2.8."
+    reading = parse(HEADERS_ONLY)
+
+    assert check(reading, own) is None  # all it says is in the figure
+    assert (
+        check(reading, own, table_text=DISTANCES)
+        # The caption written again gives 2.8, which the table also sets.
+        == "It leaves out numbers the table shows: 15 of 16."
+    )
+
+    rows = "\n".join(
+        f"| {line.replace(' ', ' | ')} |" for line in DISTANCES.split("\n")[1:]
+    )
+    complete = parse(
+        f"KIND\ntable\n\nTABLE\n| | p1 | p2 | p3 | p4 |\n|---|---|---|---|---|\n{rows}\n\nDESCRIPTION\nDistances.\n"
+    )
+    assert check(complete, own, table_text=DISTANCES) is None
+
+
+def test_a_table_may_leave_out_a_few_of_its_numbers():
+    own = DISTANCES
+    rows = DISTANCES.split("\n")[1:4]  # three of the four rows: 12 of 16 numbers
+    answer = (
+        "KIND\ntable\n\nTABLE\n"
+        + "\n".join(f"| {line.replace(' ', ' | ')} |" for line in rows)
+        + "\n\nDESCRIPTION\nDistances.\n"
+    )
+
+    assert check(parse(answer), own, table_text=DISTANCES) == (
+        "It leaves out numbers the table shows: 4 of 16."
+    )
+    four = DISTANCES.split("\n")[1:5]
+    answer = (
+        "KIND\ntable\n\nTABLE\n"
+        + "\n".join(f"| {line.replace(' ', ' | ')} |" for line in four)
+        + "\n\nDESCRIPTION\nDistances.\n"
+    )
+    assert check(parse(answer), own, table_text=DISTANCES) is None
+
+
+def test_rows_without_bars_at_their_ends_are_a_table_beside_a_separator():
+    # How the model wrote a textbook's Table 2.4: no bar at either end of a
+    # row, and a last column of ellipses, under the separator too.
+    answer = (
+        "KIND\nTable\n\nTEXT\nTransaction ID\nItem\n\nTABLE\n```\n"
+        "Transaction ID | Item   | Price   | …\n"
+        "--------------|--------|---------| …\n"
+        "101123        | Watch  | $25.99  | …\n"
+        "101124        | Shoes  | $75.00  | …\n"
+        "```\n\nDESCRIPTION\nPurchases.\n"
+    )
+
+    reading = parse(answer)
+
+    assert reading.tables == (
+        Table(
+            None,
+            (
+                ("Transaction ID", "Item", "Price", "…"),
+                ("101123", "Watch", "$25.99", "…"),
+                ("101124", "Shoes", "$75.00", "…"),
+            ),
+        ),
+    )
+
+
+def test_a_bar_in_a_line_of_text_is_no_table():
+    answer = (
+        "KIND\ntable\n\nTEXT\nd = |x - y|/(n - 1)\ns = 1 - d\nd = |x - y|\n\n"
+        "DESCRIPTION\nFormulas.\n"
+    )
+
+    reading = parse(answer)
+
+    assert reading.tables == ()
+    assert reading.text == ("d = |x - y|/(n - 1)", "s = 1 - d", "d = |x - y|")
+
+
+def test_an_underscore_inside_a_word_is_kept_and_emphasis_is_not():
+    # The model wrote these right; the parser took min_d)/(max_ for italics.
+    answer = (
+        "KIND\ntable\n\nTEXT\nnew_value = f(old_value)\n"
+        "s = 1 - (d - min_d)/(max_d - min_d)\n_Ordinal_\n**Ratio**\n*Interval*\n\n"
+        "DESCRIPTION\nThe _new_value_ column.\n"
+    )
+
+    reading = parse(answer)
+
+    assert reading.text == (
+        "new_value = f(old_value)",
+        "s = 1 - (d - min_d)/(max_d - min_d)",
+        "Ordinal",
+        "Ratio",
+        "Interval",
+    )
+    assert reading.description == "The new_value column."
+
+
+def test_two_tables_one_after_the_other_are_two_tables():
+    # How the model wrote a textbook's Figure 2.4(a): two tables with a blank
+    # line between them, each with its header and separator.
+    answer = (
+        "KIND\ntable\n\nTABLE\n| Time | Customer | Items |\n|---|---|---|\n"
+        "| t1 | C1 | A, B |\n| t2 | C3 | A, C |\n\n"
+        "| Customer | Time and Items |\n|---|---|\n| C1 | (t1: A,B) |\n| C3 | (t2: A, C) |\n\n"
+        "DESCRIPTION\nTwo tables.\n"
+    )
+
+    reading = parse(answer)
+
+    assert reading.tables == (
+        Table(
+            None,
+            (("Time", "Customer", "Items"), ("t1", "C1", "A, B"), ("t2", "C3", "A, C")),
+        ),
+        Table(
+            None,
+            (("Customer", "Time and Items"), ("C1", "(t1: A,B)"), ("C3", "(t2: A, C)")),
+        ),
+    )
