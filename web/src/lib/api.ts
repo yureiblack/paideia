@@ -11,11 +11,9 @@ import type {
   EnvironmentInput,
   EnvironmentPatch,
   EnvironmentSummaryState,
-  FiguresOverview,
   GraphState,
   Job,
   MaterialUpdate,
-  MathsOverview,
   Neighbourhood,
   AttemptInput,
   AttemptResult,
@@ -109,10 +107,16 @@ const documentPath = (id: string) =>
 const uploadType = (file: File) => ({ "Content-Type": file.type || "application/pdf" });
 
 // A figure's picture, with its caption, as the API draws it from the
-// document's file. An address for an <img>, not a request: the browser
-// fetches it, only once the picture is near the screen.
+// document's file. Addresses for an <img>, not requests: the browser fetches
+// one only once the picture is near the screen. A figure read, by its
+// reading, as search shows it:
 export const figureImageUrl = (figureId: string) =>
   `${API_BASE_URL}/api/figures/${encodeURIComponent(figureId)}/image`;
+
+// A figure in its page, by its key, for one version of the file (its
+// SHA-256), so a new version is a new address (decision record 31).
+export const pageFigureUrl = (documentId: string, key: string, version: string) =>
+  `${API_BASE_URL}${documentPath(documentId)}/figures/${encodeURIComponent(key)}/image?version=${encodeURIComponent(version)}`;
 
 export const api = {
   listEnvironments: () => request<Environment[]>("/api/environments"),
@@ -274,30 +278,6 @@ export const api = {
 
   deleteDocument: (documentId: string) =>
     request<void>(documentPath(documentId), { method: "DELETE" }),
-
-  // The document's maths pages and how far reading them has got.
-  getMaths: (documentId: string) =>
-    request<MathsOverview>(`${documentPath(documentId)}/maths`),
-
-  // Read the maths of these pages with the local vision model, then read the
-  // document again with them. Returns the reading's job.
-  readMaths: (documentId: string, firstPage: number, lastPage: number) =>
-    request<Job>(
-      `${documentPath(documentId)}/maths`,
-      withJson("POST", { first_page: firstPage, last_page: lastPage }),
-    ),
-
-  // The document's figures and how far reading them has got.
-  getFigures: (documentId: string) =>
-    request<FiguresOverview>(`${documentPath(documentId)}/figures`),
-
-  // Read the figures on these pages with the local vision model, then read
-  // the document again with them. Returns the reading's job.
-  readFigures: (documentId: string, firstPage: number, lastPage: number) =>
-    request<Job>(
-      `${documentPath(documentId)}/figures`,
-      withJson("POST", { first_page: firstPage, last_page: lastPage }),
-    ),
 
   getPreview: (chunkId: string) =>
     request<SourcePreview>(`/api/chunks/${encodeURIComponent(chunkId)}/preview`),

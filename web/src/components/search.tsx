@@ -268,7 +268,7 @@ function ResultCard({
           </p>
           {citation.figure_id && (
             <p className="label text-ink-3">
-              <span aria-hidden>· </span>Figure · described by the model
+              <span aria-hidden>· </span>Figure · read by the model
             </p>
           )}
         </div>

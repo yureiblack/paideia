@@ -1,7 +1,7 @@
 # 26. Reading maths from PDFs
 
 Date: 2026-11-21
-Status: accepted
+Status: accepted; when the maths is read changed by [31](31-one-reading.md): with the document, never asked for apart
 
 ## Context
 

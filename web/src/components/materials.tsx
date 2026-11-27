@@ -187,11 +187,7 @@ function DocumentRow({
             onOpenChange={setMenuOpen}
             links={
               ready
-                ? [
-                    { label: summaryLabel(summary.data), href: `${href}?tab=summary` },
-                    { label: "Read the maths", href: `${href}?tab=maths` },
-                    { label: "Read the figures", href: `${href}?tab=figures` },
-                  ]
+                ? [{ label: summaryLabel(summary.data), href: `${href}?tab=summary` }]
                 : []
             }
           />
@@ -256,14 +252,14 @@ function summaryLabel(summary: CurrentSummary | null | undefined) {
 // Each document's queued or running job, if any. A job names the material
 // update it carries out, and the update names its document. Of a document's
 // jobs, the one running is shown, or else the first still waiting in its
-// chain: its maths or its figures, then its reading, then what is made from
-// it.
-const CHAIN = ["maths", "figures", "read", "derive"];
-
-function rank(job: Job): number {
-  if (job.status === "running") return 0;
-  const place = CHAIN.indexOf(job.kind);
-  return 1 + (place < 0 ? CHAIN.length : place);
+// chain, which is queued in order (decision record 31): its text read, its
+// maths and figures, the text read again with them, what is made from it.
+function before(job: Job, other: Job): boolean {
+  if ((job.status === "running") !== (other.status === "running")) {
+    return job.status === "running";
+  }
+  const [a, b] = [Date.parse(job.created_at), Date.parse(other.created_at)];
+  return a === b ? job.created_at < other.created_at : a < b;
 }
 
 export function useDocumentJobs(environmentId: string): Map<string, Job> {
@@ -278,7 +274,7 @@ export function useDocumentJobs(environmentId: string): Map<string, Job> {
     const documentId = job.update_id ? documentOf.get(job.update_id) : null;
     if (!documentId) continue;
     const held = found.get(documentId);
-    if (!held || rank(job) < rank(held)) found.set(documentId, job);
+    if (!held || before(job, held)) found.set(documentId, job);
   }
   return found;
 }
@@ -300,8 +296,8 @@ const STEP_OF: Record<string, number> = {
 };
 
 // Which of READING_STEPS a document is at, or null when it is at none:
-// settled, or busy with work outside them, such as reading its maths or its
-// figures.
+// settled, or busy with work outside them, reading its maths and figures,
+// which shows a bar instead.
 export function readingStep(document: Document, job: Job | undefined): number | null {
   if (job?.kind === "read") return 0;
   if (job?.kind === "derive") return job.step ? (STEP_OF[job.step] ?? 1) : 1;

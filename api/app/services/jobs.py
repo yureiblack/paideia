@@ -62,6 +62,9 @@ STALE = timedelta(minutes=2)  # no heartbeat for this long: its worker stopped
 SIGNAL = "paideia:jobs:{lane}"  # Redis list a queued job's id is pushed to
 WORKER_KEY = "paideia:workers:"  # prefix of each live worker's key in Redis
 ACTIVE = ("queued", "running")
+# Jobs whose work only improves what the job after them reads: cancelled,
+# they are skipped, and the chain goes on (record 31).
+SKIPPABLE = ("vision",)
 
 
 @dataclass
@@ -140,7 +143,7 @@ STEPS: dict[str, Callable[[Tools, dict], object]] = {
         int(a["total"]),
     ),
     "apply_maths": lambda t, a: maths_reading.apply(
-        t.session_factory, _id(a["document_id"]), int(a["first"]), int(a["last"])
+        t.session_factory, _id(a["document_id"]), int(a.get("found", 0))
     ),
     "read_figure": lambda t, a: figure_service.read_figure(
         t.session_factory,
@@ -151,7 +154,7 @@ STEPS: dict[str, Callable[[Tools, dict], object]] = {
         int(a["total"]),
     ),
     "apply_figures": lambda t, a: figure_service.apply(
-        t.session_factory, _id(a["document_id"]), int(a["first"]), int(a["last"])
+        t.session_factory, _id(a["document_id"]), int(a.get("found", 0))
     ),
 }
 
@@ -207,10 +210,10 @@ def document_steps(document_id, environment_id, update_id) -> tuple[list, list]:
     return read, derive
 
 
-def maths_steps(document_id, update_id, pages: list[int], first: int, last: int):
-    """Reading a document's maths (decision record 26): one step per page,
-    so the reading shows its progress and stops between pages when
-    cancelled, then putting the pages read in place."""
+def vision_steps(document_id, update_id, pages: list[int], figures: list) -> list:
+    """Reading a document's maths and figures with the vision model (records
+    26, 29 and 31): one step per page and per figure, so the reading shows
+    its progress and stops between them when cancelled."""
     return [
         step(
             "transcribe_page",
@@ -223,21 +226,6 @@ def maths_steps(document_id, update_id, pages: list[int], first: int, last: int)
         for page in pages
     ] + [
         step(
-            "apply_maths",
-            "Putting the pages read in place",
-            "maths",
-            document_id=document_id,
-            first=first,
-            last=last,
-        )
-    ]
-
-
-def figure_steps(document_id, update_id, figures: list, first: int, last: int):
-    """Reading a document's figures (decision record 29): one step per
-    figure, then putting the figures read in place."""
-    return [
-        step(
             "read_figure",
             f"Reading {figure_service.name(figure)} on page {figure.page}",
             document_id=document_id,
@@ -246,15 +234,38 @@ def figure_steps(document_id, update_id, figures: list, first: int, last: int):
             total=len(figures),
         )
         for figure in figures
-    ] + [
-        step(
-            "apply_figures",
-            "Putting the figures read in place",
-            "figures",
-            document_id=document_id,
-            first=first,
-            last=last,
+    ]
+
+
+def rereading_steps(document_id, maths: int, figures: int) -> list:
+    """Reading a document again once its maths and figures were read: what
+    was read put in place, the update told how it went, then the document
+    read. maths and figures are how many pages with maths and figures the
+    file has; the update names a step only for those it has."""
+    steps = []
+    if maths:
+        steps.append(
+            step(
+                "apply_maths",
+                "Putting the maths read in place",
+                "maths",
+                document_id=document_id,
+                found=maths,
+            )
         )
+    if figures:
+        steps.append(
+            step(
+                "apply_figures",
+                "Putting the figures read in place",
+                "figures",
+                document_id=document_id,
+                found=figures,
+            )
+        )
+    return [
+        *steps,
+        step("process_document", "Reading the document", document_id=document_id),
     ]
 
 
@@ -475,7 +486,7 @@ def claim(
         if before is not None and before.status in ACTIVE:
             continue
         if before is not None and before.status == "cancelled":
-            _end_cancelled(session, job, now)
+            _end_cancelled(session, job, now, directly=False)
             continue
         job.status = "running"
         job.attempts += 1
@@ -490,18 +501,29 @@ def claim(
 
 
 def _end_cancelled(
-    session: Session, job: Job, now: datetime, was_running: bool = False
+    session: Session,
+    job: Job,
+    now: datetime,
+    was_running: bool = False,
+    directly: bool = True,
 ) -> None:
+    """End a job cancelled, and the jobs waiting for it. A job reading a
+    document's maths and figures, cancelled by itself, is skipped instead:
+    the chain after it goes on with what it read (record 31)."""
     job.status = "cancelled"
     job.step = None
     job.finished_at = now
     release(session, job, retrying=False, was_running=was_running)
-    if job.update_id:
+    skipped = directly and job.kind in SKIPPABLE
+    if job.update_id and not skipped:
         updates.cancel(session, job.update_id, now)
     for waiting in session.scalars(
         select(Job).where(Job.after_id == job.id, Job.status == "queued")
     ):
-        _end_cancelled(session, waiting, now)
+        if skipped:
+            waiting.after_id = job.after_id
+        else:
+            _end_cancelled(session, waiting, now, directly=False)
 
 
 def _outcome(session: Session, job: Job) -> str | None:

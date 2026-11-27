@@ -118,6 +118,8 @@ class ParsedPage:
     blocks: tuple[ParsedBlock, ...] = ()
     # Its text was read from a picture of the page by OCR (record 29).
     ocr: bool = False
+    # The figures on the page, each with where all its text is (record 31).
+    figures: tuple["PlacedFigure", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -624,6 +626,20 @@ class Figure:
         if self.caption_rect:
             rect |= pymupdf.Rect(self.caption_rect)
         return (rect.x0, rect.y0, rect.x1, rect.y1)
+
+
+@dataclass(frozen=True)
+class PlacedFigure:
+    """A figure in its page (decision record 31): page.text[start:end] is all
+    its text there, gathered in one place, which the reader shows as the
+    figure's picture. start equals end for a figure with no text. reading is
+    the figure reading whose passage is part of that text, if one was
+    accepted."""
+
+    figure: Figure
+    start: int
+    end: int
+    reading: str | None = None
 
 
 @dataclass

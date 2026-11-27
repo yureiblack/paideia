@@ -61,11 +61,17 @@ DOCUMENT_STEPS = (
     "roadmap",
 )
 DELETION_STEPS = ("environment_summary", "knowledge_graph", "roadmap")
-# Reading a document's maths: the pages first, then the document read again
-# with them, and everything after as for any change (decision record 26).
-MATHS_STEPS = ("maths", *DOCUMENT_STEPS)
-# Reading a document's figures, likewise (decision record 29).
-FIGURE_STEPS = ("figures", *DOCUMENT_STEPS)
+
+
+def document_steps(maths: bool, figures: bool) -> tuple[str, ...]:
+    """A document's steps when its file has maths or figures to read: the
+    text first, then those, then what is made from it all (record 31)."""
+    return (
+        "read",
+        *(("maths",) if maths else ()),
+        *(("figures",) if figures else ()),
+        *DOCUMENT_STEPS[1:],
+    )
 
 
 # --- snapshots ------------------------------------------------------------------
@@ -237,32 +243,41 @@ def _pages(numbers: list[int]) -> str:
     return shown + (f" and {len(numbers) - 8} more" if len(numbers) > 8 else "")
 
 
+def _not_read(result: dict) -> str:
+    """ " 3 not read, as the reading stopped." for a reading stopped part
+    way, cancelled or failed (record 31); else nothing."""
+    missing = result.get("not_read", 0)
+    return f" {missing} not read, as the reading stopped." if missing else ""
+
+
 def _describe_maths(session, update, result, llm):
     if result is None:
         return "skipped", "The document was deleted meanwhile."
     read, kept = result["read"], sorted(int(p) for p in result["kept"])
-    if not read and not kept:
+    found = len(read) + len(kept) + result.get("not_read", 0)
+    if not found:
         return "done", "No page was read."
-    detail = f"{len(read)} of {_count(len(read) + len(kept), 'page')} read."
+    detail = f"{len(read)} of {_count(found, 'page')} read."
     if len(kept) == 1:
         detail += f" Page {kept[0]} keeps the PDF's own text."
     elif kept:
         detail += f" Pages {_pages(kept)} keep the PDF's own text."
-    return "done", detail
+    return "done", detail + _not_read(result)
 
 
 def _describe_figures(session, update, result, llm):
     if result is None:
         return "skipped", "The document was deleted meanwhile."
     read, kept = result["read"], len(result["kept"])
-    if not read and not kept:
+    found = len(read) + kept + result.get("not_read", 0)
+    if not found:
         return "done", "No figure was read."
-    detail = f"{len(read)} of {_count(len(read) + kept, 'figure')} read."
+    detail = f"{len(read)} of {_count(found, 'figure')} read."
     if kept == 1:
         detail += " One keeps the PDF's own text."
     elif kept:
         detail += f" {kept} keep the PDF's own text."
-    return "done", detail
+    return "done", detail + _not_read(result)
 
 
 def _describe_document_summary(session, update, result, llm):

@@ -1,30 +1,32 @@
-"""Reading a document's figures with the vision model (decision record 29).
+"""Reading a document's figures with the vision model (decision records 29
+and 31).
 
 Purpose
 -------
 A figure's text layer is its tick labels and cells, out of order, and
-nothing of what it draws. The local model can look at the figure and say
-what it shows, at about a quarter of a minute a figure. Like reading maths
-(record 26) it is never done unasked: the Materials tab offers it for a
-range of pages, with how many figures there are and how long it should take.
+nothing of what it draws. The local model can look at the figure and copy
+what is written in it, its labels and its tables in rows, at about a quarter
+of a minute a figure. Every figure is read as part of reading the document
+(record 31): its reading job, one step per figure, comes after the first
+reading of the text, so the text is there to read at once.
 
-A reading is a job on the model lane, one step per figure, so it shows its
-progress and can be cancelled between figures. Each figure is read once and,
-if its reading disagrees with the figure's own text (app/figure_reading.py),
-once more. A figure that still disagrees keeps the PDF's text, and the
-document says why.
+Each figure is read once and, if its reading disagrees with the figure's own
+text (app/figure_reading.py), once more. A figure that still disagrees keeps
+the PDF's text, and the update says why.
 
-Readings are kept per version of the file. The reading's last step puts the
-document back in the queue to be read; reading it puts each accepted figure
-in its page (with_figures), in place of the text-layer blocks inside it,
-caption included, as one paragraph that becomes a passage of its own. Search
-finds it; summaries and concepts are written from the other passages only,
-so nothing written as knowledge rests on the model's description.
+Readings are kept per version of the file. Reading the document puts every
+figure in its page (with_figures): all the text inside it gathered in one
+place, which the reader shows as the figure's picture, and an accepted
+reading's passage in place of the text it repeats. That passage, the
+caption and what is written in the figure, is read by summaries and
+concepts like any other. The model's description of the figure is kept with
+the reading but is in no passage: it could not be checked, and was wrong in
+half the diagrams it was tried on.
 """
 
 import json
 import logging
-import statistics
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,16 +45,6 @@ logger = logging.getLogger(__name__)
 
 PROMPT = ("figure_reading", "v1")
 PROMPT_ID = "/".join(PROMPT)
-
-# Seconds a figure takes before this machine has read any: on an Apple M3
-# Pro, 12 figures of a textbook took 12 to 44 s, about 15 s typically.
-DEFAULT_SECONDS_PER_FIGURE = 20.0
-ESTIMATE_FROM = 50
-
-
-class NothingToRead(Exception):
-    """The request names no figure that is still to be read."""
-
 
 # --- figures as stored ------------------------------------------------------------
 
@@ -111,15 +103,6 @@ def decode(value: str) -> parsing.Figure:
 # --- what there is to read ---------------------------------------------------
 
 
-@dataclass(frozen=True)
-class Overview:
-    figures: list[parsing.Figure]
-    read: list[str]  # keys of figures read and in place
-    waiting: list[str]  # read and accepted, not in place yet
-    kept: dict[str, str]  # key -> why it kept the PDF's text
-    seconds_per_figure: float
-
-
 def _latest(session: Session, document: Document) -> dict[str, FigureReading]:
     """The reading in use of each figure of the document's current file: the
     newest accepted one, or if none was accepted the newest."""
@@ -139,56 +122,34 @@ def _in_place(session: Session, document: Document) -> set[str]:
     for figures in session.scalars(
         select(DocumentPage.figures).where(DocumentPage.document_id == document.id)
     ):
-        placed.update(f["id"] for f in figures or ())
+        placed.update(r for f in figures or () if (r := _reading_of(f)))
     return placed
 
 
-def seconds_per_figure(session: Session) -> float:
-    recent = list(
-        session.scalars(
-            select(FigureReading.seconds)
-            .order_by(FigureReading.created_at.desc())
-            .limit(ESTIMATE_FROM)
-        )
-    )
-    return statistics.median(recent) if recent else DEFAULT_SECONDS_PER_FIGURE
+def _reading_of(entry: dict) -> str | None:
+    """The reading a page's figure holds; before record 31 a page listed
+    only figures read, by "id"."""
+    return entry.get("reading", entry.get("id"))
 
 
-def overview(session: Session, document: Document) -> Overview:
-    """The document's figures and how far their reading has got. Opens the
-    file: a textbook of 450 pages takes a few seconds."""
-    path = storage.document_path(document.environment_id, document.id)
-    latest = _latest(session, document)
-    placed = _in_place(session, document)
-    accepted = {k: r for k, r in latest.items() if r.status == "accepted"}
-    return Overview(
-        figures=parsing.figures(path),
-        read=sorted(k for k, r in accepted.items() if str(r.id) in placed),
-        waiting=sorted(k for k, r in accepted.items() if str(r.id) not in placed),
-        kept={k: r.reason or "" for k, r in latest.items() if r.status == "rejected"},
-        seconds_per_figure=seconds_per_figure(session),
-    )
-
-
-def _waiting(session: Session, document: Document, first: int, last: int) -> list[str]:
+def _waiting(session: Session, document: Document) -> list[str]:
+    """Figures read and accepted whose reading is not in place yet."""
     placed = _in_place(session, document)
     return [
         key
         for key, row in _latest(session, document).items()
-        if first <= row.page_number <= last
-        and row.status == "accepted"
-        and str(row.id) not in placed
+        if row.status == "accepted" and str(row.id) not in placed
     ]
 
 
-def to_read(
-    session: Session, document: Document, llm: LLMProvider, first: int, last: int
+def not_read(
+    session: Session,
+    document: Document,
+    llm: LLMProvider,
+    figures: list[parsing.Figure],
 ) -> list[parsing.Figure]:
-    """The figures on pages first to last not yet read with this model and
-    prompt. Raises NothingToRead if there are none and nothing read before
-    is waiting to be put in place."""
-    path = storage.document_path(document.environment_id, document.id)
-    wanted = [f for f in parsing.figures(path) if first <= f.page <= last]
+    """Of the figures found in the document's file, those not yet read with
+    this model and prompt."""
     done = set(
         session.scalars(
             select(FigureReading.figure_key).where(
@@ -199,14 +160,7 @@ def to_read(
             )
         )
     )
-    figures = [f for f in wanted if f.key not in done]
-    if not figures and not _waiting(session, document, first, last):
-        raise NothingToRead(
-            "The figures of these pages have been read already."
-            if wanted
-            else "These pages have no figures to read."
-        )
-    return figures
+    return [f for f in figures if f.key not in done]
 
 
 # --- reading one figure ---------------------------------------------------------
@@ -388,12 +342,13 @@ def read_figure(
 
 
 def apply(
-    session_factory: SessionFactory, document_id: uuid.UUID, first: int, last: int
+    session_factory: SessionFactory, document_id: uuid.UUID, found: int = 0
 ) -> dict | None:
-    """The reading's last step: put the document back in the queue to be
-    read if a figure read is not in place yet. Returns the figures from
-    first to last read and kept, for the update; None if the document is
-    gone."""
+    """A step of reading the document again after its figures were read:
+    put it back in the queue to be read if a figure read is not in place
+    yet. Returns the figures read and kept, for the update, and how many of
+    the found were not read at all, as when the reading was stopped; None
+    if the document is gone."""
     with session_factory() as session:
         document = session.get(
             Document, document_id, with_for_update=True, populate_existing=True
@@ -401,19 +356,17 @@ def apply(
         if document is None:
             return None
         latest = _latest(session, document)
-        in_range = {k: r for k, r in latest.items() if first <= r.page_number <= last}
-        changed = _waiting(session, document, first, last)
+        changed = _waiting(session, document)
         if changed and document.status == "ready":
             document.status = "uploaded"
             document.error = None
         session.commit()
         return {
-            "read": sorted(k for k, r in in_range.items() if r.status == "accepted"),
+            "read": sorted(k for k, r in latest.items() if r.status == "accepted"),
             "kept": {
-                k: r.reason
-                for k, r in sorted(in_range.items())
-                if r.status == "rejected"
+                k: r.reason for k, r in sorted(latest.items()) if r.status == "rejected"
             },
+            "not_read": max(0, found - len(latest)),
             "changed": len(changed),
         }
 
@@ -426,135 +379,322 @@ def _signature(text: str) -> str:
     return "".join(c for c in text.lower() if c.isalnum())
 
 
-def _place(page: parsing.ParsedPage, rows: list[FigureReading]) -> parsing.ParsedPage:
-    """The page with each figure read in place of the blocks inside it and
-    its caption, or failing those where its caption or its height puts it."""
-    pieces: list[tuple[str, parsing.ParsedBlock]] = [
-        (page.text[b.start : b.end], b) for b in page.blocks
-    ]
-    if not pieces and page.text.strip():
-        pieces = [(page.text.strip(), parsing.ParsedBlock(0, 0, False))]
-    for row in sorted(rows, key=lambda r: (r.rect[1], r.rect[0])):
-        figure = as_figure(row)
-        crop = pymupdf.Rect(figure.crop) + (-2, -2, 2, 2)
-        reading = as_reading(row)
-        caption_area = (
-            pymupdf.Rect(figure.caption_rect) + (-2, -2, 2, 2)
-            if figure.caption_rect
-            else None
+# A piece of a page: its text, its block, and the figure (key) it belongs to.
+_Piece = tuple[str, parsing.ParsedBlock, str | None]
+
+# LaTeX's markup, which says nothing a figure's own text could: \( and \)
+# and commands, set apart; braces, sub- and superscript marks and dollar
+# signs, taken out, so L_1 is L1 as the PDF sets it.
+_LATEX_APART = re.compile(r"\\[()\[\]]|\\[A-Za-z]+")
+_LATEX_OUT = re.compile(r"[{}_^$]")
+
+
+def _without_latex(text: str) -> str:
+    return _LATEX_OUT.sub("", _LATEX_APART.sub(" ", text))
+
+
+def _says_only(text: str, own: str) -> bool | None:
+    """Whether a paragraph of a page whose maths was read says only what the
+    figure's own text says, word for word and number for number: a table's
+    rows, a plot's labels. None for one with no word or number at all, such
+    as a rule or a stray fence."""
+    plain = _without_latex(text)
+    words, numbers = figure_reading.words(plain), figure_reading.numbers(plain)
+    if not words and not numbers:
+        return None
+    own_words, own_numbers = (
+        set(figure_reading.words(own)),
+        set(figure_reading.numbers(own)),
+    )
+    squashed = "".join(figure_reading.words(own))
+    return all(w in own_words or w in squashed for w in words) and all(
+        n in own_numbers for n in numbers
+    )
+
+
+def _gathered(pieces: list[_Piece], anchor: int, own: str) -> list[int]:
+    """On a page whose maths was read, which keeps no places, a figure's
+    paragraphs: the one at anchor, its caption's, and those on either side
+    of it that say only what the figure's own text says, as the model wrote
+    out a table's rows."""
+
+    def free(i: int) -> bool:
+        return (
+            0 <= i < len(pieces)
+            and pieces[i][2] is None
+            and pieces[i][1].figure is None
         )
-        # The text inside the figure gives way to the reading only where the
-        # reading repeats it: what the model left out stays in the page. The
-        # caption always does, as the figure's passage begins with it.
-        inside = [
-            i
-            for i, (text, b) in enumerate(pieces)
-            if b.box is not None
-            and b.figure is None
-            and _centre(b.box) in crop
-            and (
-                (caption_area is not None and _centre(b.box) in caption_area)
-                or figure_reading.repeats(reading, text)
-            )
-        ]
+
+    taken = [anchor]
+    for step in (1, -1):
+        i, pending = anchor + step, []
+        while free(i):
+            verdict = _says_only(pieces[i][0], own)
+            if verdict is False:
+                break
+            pending.append(i)
+            if verdict:
+                taken += pending
+                pending = []
+            i += step
+    return sorted(taken)
+
+
+def _place(
+    page: parsing.ParsedPage,
+    figures: list[tuple[parsing.Figure, FigureReading | None]],
+    own: dict[str, str] | None = None,
+) -> parsing.ParsedPage:
+    """The page with each figure's text gathered in one place: the blocks
+    inside it, or failing those its caption's paragraph and, given the
+    figure's own text (own, by key), the paragraphs beside it that say only
+    what that does. A figure read, and accepted, has its passage there in
+    place of its caption and of the text it repeats; what the model left
+    out stays in the page, beside it. A figure with no text at all is placed
+    where its height puts it."""
+    pieces: list[_Piece] = [(page.text[b.start : b.end], b, None) for b in page.blocks]
+    if not pieces and page.text.strip():
+        pieces = [(page.text.strip(), parsing.ParsedBlock(0, 0, False), None)]
+    for figure, row in sorted(figures, key=lambda f: (f[0].rect[1], f[0].rect[0])):
+        key = figure.key
+        crop = pymupdf.Rect(figure.crop) + (-2, -2, 2, 2)
+        free = [i for i, (_, b, owner) in enumerate(pieces) if owner is None]
         within = [
             i
-            for i, (_, b) in enumerate(pieces)
-            if b.box is not None and b.figure is None and _centre(b.box) in crop
+            for i in free
+            if (box := pieces[i][1].box) is not None
+            and pieces[i][1].figure is None
+            and _centre(box) in crop
         ]
         caption = _signature(figure.caption or "")[:40]
-        if within:
-            at = within[0]
-        elif caption and (
-            found := [
+        by_caption = (
+            [
                 i
-                for i, (text, b) in enumerate(pieces)
-                if b.figure is None and _signature(text).startswith(caption)
-            ]
-        ):
-            at, inside = found[0], found[:1]
+                for i in free
+                if pieces[i][1].figure is None
+                and _signature(pieces[i][0]).startswith(caption)
+            ][:1]
+            if caption and not within
+            else []
+        )
+        known = (own or {}).get(key)
+        if known and not within:
+            if not by_caption and (label := _signature(name(figure))) != "afigure":
+                # The model may set the caption out of its order, as
+                # "Table 2.11. | L∞ distance matrix": its paragraph names
+                # the figure and says only what the figure does.
+                by_caption = [
+                    i
+                    for i in free
+                    if pieces[i][1].figure is None
+                    and label in _signature(pieces[i][0])
+                    and _says_only(pieces[i][0], known)
+                ][:1]
+            mine = _gathered(pieces, by_caption[0], known) if by_caption else []
+        else:
+            mine = within or by_caption
+        if mine:
+            at = mine[0]
         else:
             below = [
                 i
-                for i, (_, b) in enumerate(pieces)
-                if b.box is not None and b.box[1] >= figure.rect[1]
+                for i in free
+                if (box := pieces[i][1].box) is not None and box[1] >= figure.rect[1]
             ]
             at = below[0] if below else len(pieces)
-        text = figure_reading.passage(reading)
-        if figure.caption:
-            text = f"{' '.join(figure.caption.split())} {text}"
-        kept = [p for i, p in enumerate(pieces) if i not in inside]
-        at -= sum(1 for i in inside if i < at)
-        kept.insert(at, (text, parsing.ParsedBlock(0, 0, False, figure=str(row.id))))
-        pieces = kept
+
+        group: list[_Piece] = [(t, b, key) for t, b, _ in (pieces[i] for i in mine)]
+        if row is not None:
+            reading = as_reading(row)
+            caption_area = (
+                pymupdf.Rect(figure.caption_rect) + (-2, -2, 2, 2)
+                if figure.caption_rect
+                else None
+            )
+            # The text inside the figure gives way to the reading only where
+            # the reading repeats it: what the model left out stays. The
+            # caption always does, as the figure's passage begins with it.
+            replaced = {
+                i
+                for i in mine
+                if i in by_caption
+                or (
+                    caption_area is not None
+                    and (box := pieces[i][1].box) is not None
+                    and _centre(box) in caption_area
+                )
+                or figure_reading.repeats(reading, _without_latex(pieces[i][0]))
+            }
+            text = " ".join(
+                part
+                for part in (
+                    " ".join((figure.caption or "").split()),
+                    figure_reading.passage(reading),
+                )
+                if part
+            )
+            group = [
+                (text, parsing.ParsedBlock(0, 0, False, figure=str(row.id)), key),
+                *(
+                    (t, b, key)
+                    for i, (t, b, _) in enumerate(pieces)
+                    if i in mine and i not in replaced
+                ),
+            ]
+        if not group:
+            group = [("", parsing.ParsedBlock(0, 0, False), key)]
+        taken = set(mine)
+        rest = [p for i, p in enumerate(pieces) if i not in taken]
+        at -= sum(1 for i in taken if i < at)
+        pieces = rest[:at] + group + rest[at:]
 
     text, blocks = "", []
-    for piece, block in pieces:
+    spans: dict[str, tuple[int, int]] = {}
+    for piece, block, owner in pieces:
+        if not piece:  # a figure with no text: its picture goes here
+            if owner is not None:
+                spans.setdefault(owner, (len(text), len(text)))
+            continue
         if text:
             text += parsing.PARAGRAPH_BREAK
+        start = len(text)
+        text += piece
         blocks.append(
             parsing.ParsedBlock(
-                len(text),
-                len(text) + len(piece),
-                block.is_heading,
-                block.box,
-                block.figure,
+                start, len(text), block.is_heading, block.box, block.figure
             )
         )
-        text += piece
-    return parsing.ParsedPage(page.number, text, tuple(blocks), page.ocr)
+        if owner is not None:
+            spans[owner] = (spans[owner][0] if owner in spans else start, len(text))
+    placed = []
+    for figure, row in figures:
+        if figure.key in spans:
+            start, end = spans[figure.key]
+            held = str(row.id) if row is not None else None
+            placed.append(parsing.PlacedFigure(figure, start, end, held))
+    placed.sort(key=lambda f: (f.start, f.end))
+    return parsing.ParsedPage(page.number, text, tuple(blocks), page.ocr, tuple(placed))
+
+
+def find(path: Path) -> list[parsing.Figure]:
+    """The figures of a file, or none if they cannot be found: a fault in
+    finding them never stops a document being read."""
+    try:
+        return parsing.figures(path)
+    except parsing.ParseError:
+        return []  # the parser reports an unreadable file
+    except Exception:
+        logger.exception("Could not find the figures of %s", path)
+        return []
 
 
 def with_figures(
-    session: Session, document: Document, parsed: parsing.ParsedDocument
+    session: Session,
+    document: Document,
+    parsed: parsing.ParsedDocument,
+    found: list[parsing.Figure] | None = None,
 ) -> parsing.ParsedDocument:
-    """The parsed document with each figure read, and accepted, in its page."""
-    by_page: dict[int, list[FigureReading]] = {}
-    for row in _latest(session, document).values():
-        if row.status == "accepted":
-            by_page.setdefault(row.page_number, []).append(row)
+    """The parsed document with every figure in its page: each found in the
+    file (found, else found here), and each read and accepted, its reading
+    in place of the text it repeats."""
+    path = storage.document_path(document.environment_id, document.id)
+    if found is None:
+        found = find(path)
+    accepted = {
+        key: row
+        for key, row in _latest(session, document).items()
+        if row.status == "accepted"
+    }
+    by_page: dict[int, dict[str, tuple[parsing.Figure, FigureReading | None]]] = {}
+    for figure in found:
+        by_page.setdefault(figure.page, {})[figure.key] = (
+            figure,
+            accepted.get(figure.key),
+        )
+    # A figure read that the finder no longer finds, as after a change to
+    # the finder, stays where it was read.
+    for key, row in accepted.items():
+        by_page.setdefault(row.page_number, {}).setdefault(key, (as_figure(row), row))
     if not by_page:
         return parsed
     pages = [
-        _place(page, by_page[page.number]) if page.number in by_page else page
+        _place(
+            page,
+            list(by_page[page.number].values()),
+            _own_texts(path, page, by_page[page.number].values()),
+        )
+        if page.number in by_page
+        else page
         for page in parsed.pages
     ]
     return parsing.ParsedDocument(pages=pages, repaired=parsed.repaired)
 
 
-def page_figures(session: Session, pages: list[DocumentPage]) -> dict[int, list[dict]]:
-    """The figures each page holds, with what was read in them, by page."""
-    placed = {
-        f["id"]: (page.page_number, f) for page in pages for f in page.figures or ()
-    }
-    if not placed:
+def _own_texts(path: Path, page: parsing.ParsedPage, figures) -> dict[str, str]:
+    """For a page whose maths was read, which keeps no places, each figure's
+    own text, its labels, cells and caption, to find its paragraphs by."""
+    if any(b.box is not None for b in page.blocks):
         return {}
-    rows = session.scalars(
-        select(FigureReading).where(
-            FigureReading.id.in_([uuid.UUID(i) for i in placed])
-        )
-    )
+    texts = {}
+    for figure, _ in figures:
+        try:
+            inside = parsing.figure_text(path, figure)
+        except parsing.ParseError:
+            inside = ""
+        texts[figure.key] = f"{inside}\n{figure.caption or ''}"
+    return texts
+
+
+def stored(placed: parsing.PlacedFigure) -> dict:
+    """A figure in its page as the page's row keeps it (DocumentPage.figures)."""
+    figure = placed.figure
+    return {
+        "key": figure.key,
+        "rect": list(figure.rect),
+        "caption": figure.caption,
+        "caption_rect": list(figure.caption_rect) if figure.caption_rect else None,
+        "reading": placed.reading,
+        "start": placed.start,
+        "end": placed.end,
+    }
+
+
+def page_figures(session: Session, pages: list[DocumentPage]) -> dict[int, list[dict]]:
+    """The figures each page holds, by page: each one's key, where its text
+    is in the page, and its caption. A page stored before record 31 lists
+    only the figures read, by their reading."""
     found: dict[int, list[dict]] = {}
-    for row in rows:
-        number, where = placed[str(row.id)]
-        reading = as_reading(row)
-        found.setdefault(number, []).append(
-            {
-                "id": row.id,
-                "start": where["start"],
-                "end": where["end"],
-                "caption": row.caption,
-                "kind": reading.kind,
-                "text": list(reading.text),
-                "tables": [
-                    {"title": t.title, "rows": [list(r) for r in t.rows]}
-                    for t in reading.tables
-                ],
-                "description": reading.description,
-            }
-        )
+    old: dict[str, tuple[int, dict]] = {}
+    for page in pages:
+        for entry in page.figures or ():
+            if "key" in entry:
+                found.setdefault(page.page_number, []).append(
+                    {
+                        "key": entry["key"],
+                        "start": entry["start"],
+                        "end": entry["end"],
+                        "caption": entry["caption"],
+                    }
+                )
+            elif "id" in entry:
+                old[entry["id"]] = (page.page_number, entry)
+    if old:
+        for row in session.scalars(
+            select(FigureReading).where(
+                FigureReading.id.in_([uuid.UUID(i) for i in old])
+            )
+        ):
+            number, entry = old[str(row.id)]
+            found.setdefault(number, []).append(
+                {
+                    "key": row.figure_key,
+                    "start": entry["start"],
+                    "end": entry["end"],
+                    "caption": row.caption,
+                }
+            )
     for figures in found.values():
-        figures.sort(key=lambda f: f["start"])
+        figures.sort(key=lambda f: (f["start"], f["end"]))
     return found
 
 
@@ -572,3 +712,38 @@ def image(session: Session, reading_id: uuid.UUID) -> bytes | None:
         return None
     path = storage.document_path(document.environment_id, document.id)
     return parsing.figure_image(path, as_figure(row))
+
+
+def image_at(session: Session, document: Document, key: str) -> bytes | None:
+    """The picture of the figure with this key in the document's current
+    file, as its page holds it; None if the page holds no such figure."""
+    number, _, _ = key.partition(":")
+    if not number.isdigit():
+        return None
+    page = session.scalar(
+        select(DocumentPage).where(
+            DocumentPage.document_id == document.id,
+            DocumentPage.page_number == int(number),
+        )
+    )
+    figure = None
+    for entry in (page.figures if page is not None else None) or ():
+        if entry.get("key") == key:
+            figure = parsing.Figure(
+                page=int(number),
+                rect=tuple(entry["rect"]),
+                caption=entry["caption"],
+                caption_rect=tuple(entry["caption_rect"])
+                if entry["caption_rect"]
+                else None,
+            )
+        elif _reading_of(entry):
+            row = session.get(FigureReading, uuid.UUID(_reading_of(entry)))
+            if row is not None and row.figure_key == key and "key" not in entry:
+                figure = as_figure(row)
+        if figure is not None:
+            break
+    if figure is None:
+        return None
+    path = storage.document_path(document.environment_id, document.id)
+    return parsing.figure_image(path, figure)
