@@ -21,6 +21,9 @@ and they are treated differently:
   little, as OCR misreads and the model corrects a typo now and then.
 - Every number it gives, in any part, must be one of the figure's own: a
   number the figure does not show is made up.
+- A table's reading must also give most of the numbers the table's PDF
+  text sets: one that gave a distance matrix's headers and none of its
+  distances said nothing untrue, and passed the other tests.
 - The description cannot be checked further. It is kept with the reading
   but is in no passage (record 31): nothing shows it, finds it, or is
   written from it. A number in it that the figure does not show still
@@ -31,6 +34,7 @@ This module is pure: it neither calls the model nor opens the PDF.
 
 import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 
 # The parts, by the names the prompt gives them, in capitals on a line of
@@ -47,13 +51,27 @@ _ITEM = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
 _ROW = re.compile(r"^\s*\|.*\|\s*$")
 _RULE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
 _SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
-_EMPHASIS = re.compile(r"(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1")
+# Emphasis the model puts around a label or cell: *a*, **a**, _a_, __a__.
+# An underscore inside a word is part of the word, as in new_value or min_d,
+# and opens or closes nothing.
+_EMPHASIS = re.compile(
+    r"(\*\*|\*)(?=\S)(.+?)(?<=\S)\1|(?<!\w)(__|_)(?=\S)(.+?)(?<=\S)\3(?!\w)"
+)
+# A row written without a bar at either end, "101123 | Watch | $25.99", is
+# a row only among lines of as many cells that include a separator of
+# dashes; a cell of ellipses may stand in for dashes there.
+_RULE_CELL = re.compile(r"^\s*(:?-{3,}:?|…|\.{3}|⋯)?\s*$")
 _NONE = {"none", "n/a", "no text", "no table", "-", ""}
 
 # A number as written: "12", "0.25", "−3", "1,000" counts as 1 and 000. Not
 # the digits of a label such as p1 or x2, which are part of a word.
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
 _WORD = re.compile(r"[^\W\d_]{3,}")
+
+# A table's reading must give at least this share of the numbers its PDF
+# text sets in it: a reading that gives its headers and none of its cells
+# says nothing that is not in the figure, and passed every other test.
+NUMBERS_GIVEN_SHARE = 0.8
 
 # Words of the text and tables not found in the figure's own text: this many
 # are allowed, or this share of them, whichever is more.
@@ -86,7 +104,7 @@ def _plain(line: str) -> str:
     previous = None
     while previous != line:
         previous = line
-        line = _EMPHASIS.sub(lambda m: m.group(2), line)
+        line = _EMPHASIS.sub(lambda m: m.group(2) or m.group(4), line)
     return line.strip().strip('"“”').strip()
 
 
@@ -113,6 +131,33 @@ def _cells(line: str) -> tuple[str, ...]:
     return tuple(_plain(c) for c in line.strip().strip("|").split("|"))
 
 
+def _bare_rows(lines: list[str]) -> list[str]:
+    """The lines, with rows written without bars at their ends given them,
+    and their separator made one of dashes, so they read as a table."""
+    out: list[str] = []
+    block: list[str] = []
+
+    def flush() -> None:
+        cells = [line.strip().strip("|").split("|") for line in block]
+        widths = {len(row) for row in cells}
+        rules = [all(_RULE_CELL.match(c) for c in row) for row in cells]
+        if len(block) >= 2 and len(widths) == 1 and widths != {1} and any(rules):
+            for row, rule in zip(cells, rules):
+                out.append("|" + "|".join("---" if rule else c for c in row) + "|")
+        else:
+            out.extend(block)
+        block.clear()
+
+    for line in lines:
+        if "|" in line and not _ROW.match(line) and not _RULE.match(line):
+            block.append(line)
+        else:
+            flush()
+            out.append(line)
+    flush()
+    return out
+
+
 def _tables(lines: list[str], titled: bool) -> tuple[tuple[Table, ...], list[str]]:
     """The Markdown tables among the lines, and the lines that are not in a
     table. A table's header is its first row when a separator row follows
@@ -123,6 +168,7 @@ def _tables(lines: list[str], titled: bool) -> tuple[tuple[Table, ...], list[str
     rest: list[str] = []
     rows: list[tuple[str, ...]] = []
     header_row = False
+    lines = _bare_rows(lines)
 
     def close() -> None:
         nonlocal rows, header_row
@@ -150,7 +196,13 @@ def _tables(lines: list[str], titled: bool) -> tuple[tuple[Table, ...], list[str
         if not line.strip() or _RULE.match(line):
             continue
         if _ROW.match(line):
-            if _SEPARATOR.match(line):
+            if _SEPARATOR.match(line) and len(rows) >= 2:
+                # A separator under a later row: that row heads the next
+                # table, as when two are written one after the other.
+                last = rows.pop()
+                close()
+                rows, header_row = [last], True
+            elif _SEPARATOR.match(line):
                 header_row = header_row or len(rows) == 1
             else:
                 rows.append(_cells(line))
@@ -222,11 +274,13 @@ def _written(reading: Reading) -> str:
     return "\n".join([*reading.text, *titles, *cells])
 
 
-def check(reading: Reading, own_text: str) -> str | None:
+def check(reading: Reading, own_text: str, table_text: str | None = None) -> str | None:
     """Why the reading disagrees with the figure's own text, or None.
 
     own_text is everything the figure is known to show: the PDF's text
-    inside it, its caption, and Tesseract's reading of its picture."""
+    inside it, its caption, and Tesseract's reading of its picture. For a
+    table, table_text is the PDF's text inside it, whose numbers the reading
+    must mostly give."""
     own_numbers = set(numbers(own_text))
     said = numbers(_written(reading)) + numbers(reading.description)
     made_up = sorted(
@@ -234,6 +288,8 @@ def check(reading: Reading, own_text: str) -> str | None:
     )
     if made_up:
         return f"It gives numbers the figure does not show: {', '.join(made_up[:8])}."
+    if table_text is not None and (left_out := _left_out(reading, table_text)):
+        return left_out
     own_words = set(words(own_text))
     if not own_words:
         return None  # a picture with no text to compare its text with
@@ -254,6 +310,20 @@ def check(reading: Reading, own_text: str) -> str | None:
             f"Its text differs from the figure's: {len(missing)} of {len(written)} "
             f"words are not in it ({shown[:120]})."
         )
+    return None
+
+
+def _left_out(reading: Reading, table_text: str) -> str | None:
+    """Why a table's reading gives too few of its numbers, or None. Each
+    number counts as often as the table sets it."""
+    wanted = Counter(numbers(table_text))
+    total = sum(wanted.values())
+    if not total:
+        return None
+    given = Counter(numbers(_written(reading)))
+    found = sum(min(count, given[n]) for n, count in wanted.items())
+    if found < total * NUMBERS_GIVEN_SHARE:
+        return f"It leaves out numbers the table shows: {total - found} of {total}."
     return None
 
 

@@ -192,6 +192,8 @@ def _read(llm: LLMProvider, path: Path, figure: parsing.Figure) -> _Outcome:
     text, once more. An LLMError is left to the job, which tries again."""
     image = parsing.figure_image(path, figure)
     own = own_text(path, figure, image)
+    # A table's reading must give most of the numbers its PDF text sets.
+    table = parsing.figure_text(path, figure) if figure.is_table else None
     prompt = prompting.render(*PROMPT)
     seconds, reason = 0.0, None
     for attempt, again in enumerate((False, True)):
@@ -202,7 +204,7 @@ def _read(llm: LLMProvider, path: Path, figure: parsing.Figure) -> _Outcome:
         except figure_reading.Unusable as exc:
             reason = str(exc)
             continue
-        reason = figure_reading.check(reading, own)
+        reason = figure_reading.check(reading, own, table)
         if reason is None:
             return _Outcome("accepted", reading, None, attempt + 1, seconds)
     return _Outcome("rejected", None, reason, 2, seconds)

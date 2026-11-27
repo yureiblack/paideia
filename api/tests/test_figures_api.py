@@ -8,10 +8,11 @@ figure is read once the text is; each, read or not, is a place in its page
 where the reader shows its picture; a reading that agrees with the figure
 takes the place of its caption and labels as a passage of its own, without
 the model's description, found by search and read by the summary; one that
-gives a number the figure does not show is asked again, and if it still
-does the page keeps the PDF's text and the update says why; a table is read
-as rows; the figure's picture is served for its version of the file only;
-and a figure read already is not read again.
+gives a number the figure does not show, or a table's reading that leaves
+out most of its numbers, is asked again, and if it still does the page
+keeps the PDF's text and the update says so; a table is read as rows; the
+figure's picture is served for its version of the file only; and a figure
+read already is not read again.
 """
 
 import tempfile
@@ -22,7 +23,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app import parsing
-from app.models import Document, Job
+from app.models import Document, FigureReading, Job
 from app.services import summaries
 from tests import pdfs
 from tests.test_documents_api import new_environment, uploaded
@@ -249,6 +250,26 @@ def test_a_table_is_read_as_rows(client, llm):
         "Table 1. Some values. Table: Name | Value / alpha | 12 / beta | 34."
         in (second["content"])
     )
+
+
+def test_a_table_that_leaves_out_its_numbers_keeps_the_pdfs_text(client, llm, session):
+    names_only = (
+        "KIND\ntable\n\nTEXT\nName\nValue\nalpha\nbeta\n\nDESCRIPTION\nTwo names."
+    )
+
+    document = upload(client, llm, {**CAPTIONS, "Table 1. Some values.": names_only})
+
+    assert figures_step(last_update(client, document))["detail"] == (
+        "3 of 4 figures read. One keeps the PDF's own text."
+    )
+    kept = session.scalars(
+        select(FigureReading).where(FigureReading.status == "rejected")
+    ).one()
+    assert (kept.caption, kept.reason) == (
+        "Table 1. Some values.",
+        "It leaves out numbers the table shows: 2 of 2.",
+    )
+    assert "12" in pages(client, document)[1]["content"]
 
 
 def test_figures_read_already_are_not_read_again(client, llm, session):

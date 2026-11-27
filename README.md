@@ -554,7 +554,7 @@ this phase's fixes:
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 958 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 966 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.

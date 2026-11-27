@@ -107,7 +107,10 @@ this chain:
 Steps 2 and 3 are left out when the file has nothing left to read. Reading
 the document again reads only what was not read. The update record gains a
 step for the maths and one for the figures when there are any, saying how
-many were read and which kept the PDF's text.
+many were read, which pages and how many figures kept the PDF's text, and
+how many were not read if the reading stopped. Why each kept the PDF's text
+is stored with its reading, but no longer shown: the tabs that listed it are
+gone, and in the reader the figure is its picture either way.
 
 Why this order:
 
@@ -141,6 +144,10 @@ before this one still say "Read the maths of" and "Read the figures of".
 
 ## Testing
 
+- **A table's reading that leaves out most of its numbers** keeps the
+  PDF's text when the table is read with its upload: the check that a
+  table's reading gives at least 80% of the numbers its PDF text sets,
+  added to record 29's reading the day before.
 - **Placing a figure in its page**, against hand-made pages:
   - a figure read takes the place of its caption and of the labels its
     reading repeats;
