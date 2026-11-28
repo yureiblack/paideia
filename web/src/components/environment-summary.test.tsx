@@ -1,7 +1,8 @@
 // The environment's summary as an article with notes (decision record 28):
 // every passage the points cite is numbered once, in the order first cited;
 // a number beside a point, or a note in the margin, opens the passage under
-// its point. Before there is a summary, the page says what comes.
+// its point. Before there is a summary, or once the last one was built from
+// a document since deleted, the page says what comes.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
@@ -155,5 +156,24 @@ describe("EnvironmentSummary", () => {
       "href",
       "/environments/e1/materials",
     );
+  });
+
+  it("says the summary is being updated when the last one was built from a deleted document", async () => {
+    // The API shows no summary with points from a document that is gone.
+    show({ ...written, state: "stale", summary: null, earlier_versions: 1 }, [{ status: "ready" }]);
+
+    expect(await screen.findByText("The summary is being updated.")).toBeInTheDocument();
+    expect(screen.getByText(/The material has changed since the last summary/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update now" })).toBeInTheDocument();
+    expect(screen.queryByText("The summary comes after the reading.")).not.toBeInTheDocument();
+  });
+
+  it("says the summary comes after the reading before the first one is started", async () => {
+    // The first document is summarized and the environment's is not started yet.
+    show({ ...written, state: "stale", summary: null, earlier_versions: 0 }, [{ status: "ready" }]);
+
+    expect(await screen.findByText("The summary comes after the reading.")).toBeInTheDocument();
+    expect(screen.queryByText("The summary is being updated.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/since the last summary/)).not.toBeInTheDocument();
   });
 });

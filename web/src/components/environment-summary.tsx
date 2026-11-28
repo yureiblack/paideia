@@ -98,6 +98,7 @@ export function EnvironmentSummary({ environmentId }: { environmentId: string })
           environmentId={environmentId}
           state={state}
           waitingFor={waiting_for}
+          earlierVersions={earlier_versions}
           documents={documents.data?.length ?? null}
           error={error}
           action={updateAction}
@@ -228,11 +229,13 @@ function LeftOut({ items }: { items: NotIncluded[] }) {
   );
 }
 
-// Before there is a summary: what comes, and when.
+// When there is no summary to show, before the first one or after a document
+// it was built from is deleted: what comes, and when.
 function NoSummary({
   environmentId,
   state,
   waitingFor,
+  earlierVersions,
   documents,
   error,
   action,
@@ -240,6 +243,7 @@ function NoSummary({
   environmentId: string;
   state: EnvironmentSummaryState["state"];
   waitingFor: number;
+  earlierVersions: number;
   documents: number | null;
   error: string | null;
   action: ReactNode;
@@ -259,6 +263,18 @@ function NoSummary({
         <span role="status">
           The local model is writing it from the summaries of your documents. It appears
           here when it is done.
+        </span>
+      </Empty>
+    );
+  }
+  // Only once there was a summary: stale with none before is the moment
+  // between the first document's summary and the environment's.
+  if (state === "stale" && earlierVersions > 0) {
+    return (
+      <Empty title="The summary is being updated." action={action}>
+        <span role="status">
+          The material has changed since the last summary, so a new one is written from the
+          summaries of your documents. It appears here when it is done.
         </span>
       </Empty>
     );

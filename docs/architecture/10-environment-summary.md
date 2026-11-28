@@ -1,7 +1,7 @@
 # 10. The environment's summary, kept up to date
 
 Date: 2026-11-09
-Status: accepted
+Status: accepted; changed on 2026-11-28: a summary built from a document since deleted is no longer shown
 
 ## Context
 
@@ -123,6 +123,16 @@ supported by its cited passages, the weakest at 0.95.
   It also returns the newest ready summary, the documents not included and
   the number of earlier summaries kept. While a new summary is on its way,
   the previous one stays visible, marked as from earlier material.
+
+  Changed on 2026-11-28: not when a document it was built from has been
+  deleted since. Its points would then be from material that is gone, and
+  their pages could no longer be opened. Until the summary of what is left
+  is written, the tab says it is being updated. Once every document is
+  deleted, it shows what a new environment shows. Such a summary stays in
+  the history, which still says what it was built from. Before this change,
+  deleting the last document left its summary on the tab under "Nothing
+  yet", and deleting one of several showed the deleted document's points
+  until the rebuild was done.
 - `POST` brings the summary up to date, or tries again after a failure.
 - `GET /api/environments/{id}/summaries` lists the history.
 
@@ -151,8 +161,9 @@ through "Updating…" to "Up to date" in 48 seconds.
   - Documents that failed or were never summarized are left out with their
     reasons.
   - A deletion rebuilds it while the old one still names the deleted
-    document.
-  - With nothing summarized there is no summary.
+    document. The old one is not shown while the rebuild is on its way.
+  - With nothing summarized there is no summary, including once every
+    document is deleted.
   - Large environments are summarized in groups.
   - Nothing is written for material that changed while it waited.
   - A failure is retried in the same row, under the one-at-a-time lock.
@@ -162,6 +173,8 @@ through "Updating…" to "Up to date" in 48 seconds.
   - Asking again writes nothing.
   - Deleting the last document added returns to the earlier summary with no
     model call, while deleting another rebuilds it.
+  - A summary built from a deleted document is not shown, even when the
+    rebuild fails, and deleting every document leaves no summary.
   - A document summary written on request updates the environment.
   - The waiting and failed states are reported, and Try again recovers.
   - An empty environment has nothing to summarize, and unknown environments

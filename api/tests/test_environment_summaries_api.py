@@ -3,8 +3,9 @@
 Purpose: the HTTP contract with a stand-in model. Uploads keep the summary
 up to date by themselves; asking again writes nothing new; deleting a
 document rebuilds it, or returns to an earlier summary when the material is
-what it was then; waiting and failed states are reported, and Try again
-recovers; an empty environment has nothing to summarize.
+what it was then, and a summary built from a deleted document is not shown;
+waiting and failed states are reported, and Try again recovers; an empty
+environment has nothing to summarize.
 """
 
 import uuid
@@ -127,6 +128,45 @@ def test_deleting_a_document_rebuilds_the_summary_from_what_is_left(
     body = state(client, env)
     assert body["state"] == "up_to_date"
     assert [d["filename"] for d in body["summary"]["based_on"]] == ["b.pdf"]
+
+
+def test_deleting_every_document_leaves_no_summary(client: TestClient):
+    env = environment(client)
+    document = upload(client, env, "a.pdf", SCHEDULING)
+
+    client.delete(f"/api/documents/{document['id']}")
+
+    body = state(client, env)
+    assert (body["state"], body["summary"], body["earlier_versions"]) == (
+        "none",
+        None,
+        1,
+    )
+    # Kept in the history, never shown.
+    history = client.get(f"/api/environments/{env}/summaries").json()
+    kept = [(h["current"], [d["filename"] for d in h["based_on"]]) for h in history]
+    assert kept == [(False, ["a.pdf"])]
+
+
+def test_a_summary_with_points_from_a_deleted_document_is_not_shown(
+    client: TestClient, llm
+):
+    env = environment(client)
+    first = upload(client, env, "a.pdf", SCHEDULING)
+    upload(client, env, "b.pdf", MEMORY)
+    app.dependency_overrides[get_llm] = FailsOnTheWholeEnvironment
+
+    client.delete(f"/api/documents/{first['id']}")
+
+    # The rebuild failed, and every earlier summary has points from a.pdf.
+    failed = state(client, env)
+    assert (failed["state"], failed["summary"]) == ("failed", None)
+
+    app.dependency_overrides[get_llm] = lambda: llm
+    client.post(f"/api/environments/{env}/summary")
+    rebuilt = state(client, env)
+    assert rebuilt["state"] == "up_to_date"
+    assert [d["filename"] for d in rebuilt["summary"]["based_on"]] == ["b.pdf"]
 
 
 def test_a_document_summary_written_on_request_updates_the_environment(
