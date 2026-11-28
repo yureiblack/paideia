@@ -554,13 +554,13 @@ this phase's fixes:
 
 ([record 22](docs/architecture/22-testing-and-ci.md))
 
-- **Backend:** 966 tests with pytest, on a real Postgres with pgvector.
+- **Backend:** 970 tests with pytest, on a real Postgres with pgvector.
   - Each test is rolled back, and test PDFs are built in code.
   - The suite covers unit, API, database integration, ingestion,
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 89%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 97 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 98 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.

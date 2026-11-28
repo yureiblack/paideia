@@ -161,7 +161,8 @@ export type EnvironmentSummary = {
 // material as it is now. updating: a new one is being written. waiting:
 // waiting_for documents are still being read or summarized. stale: the
 // material changed and no rebuild was asked for. failed: error says why.
-// none: nothing to summarize yet. summary is the newest ready one.
+// none: nothing to summarize yet. summary is the newest ready one, unless a
+// document it was built from has been deleted since.
 export type EnvironmentSummaryState = {
   state: "up_to_date" | "updating" | "waiting" | "stale" | "failed" | "none";
   waiting_for: number;

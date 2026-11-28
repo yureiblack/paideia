@@ -198,7 +198,9 @@ function SummaryLine({ environmentId }: { environmentId: string }) {
           );
         }
         if (s?.state === "failed") return "The summary could not be written; open it to see why.";
-        if (s?.state === "updating" || s?.state === "waiting") return "Being written from the documents' summaries.";
+        if (s?.state === "updating" || s?.state === "waiting" || s?.state === "stale") {
+          return "Being written from the documents' summaries.";
+        }
         return "Written once the documents have been read.";
       }}
     </Line>

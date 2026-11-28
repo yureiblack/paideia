@@ -228,7 +228,8 @@ function LeftOut({ items }: { items: NotIncluded[] }) {
   );
 }
 
-// Before there is a summary: what comes, and when.
+// When there is no summary to show, before the first one or after a document
+// it was built from is deleted: what comes, and when.
 function NoSummary({
   environmentId,
   state,
@@ -259,6 +260,16 @@ function NoSummary({
         <span role="status">
           The local model is writing it from the summaries of your documents. It appears
           here when it is done.
+        </span>
+      </Empty>
+    );
+  }
+  if (state === "stale") {
+    return (
+      <Empty title="The summary is being updated." action={action}>
+        <span role="status">
+          The material has changed since the last summary, so a new one is written from the
+          summaries of your documents. It appears here when it is done.
         </span>
       </Empty>
     );

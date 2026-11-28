@@ -375,6 +375,19 @@ def history(session: Session, environment: Environment) -> list[GeneratedArtifac
     )
 
 
+def _from_deleted(session: Session, artifact: GeneratedArtifact) -> bool:
+    """Whether the summary was built from a document that has been deleted
+    since. It stays in the history, which says what it was built from."""
+    named = {
+        uuid.UUID(source["document_id"])
+        for source in artifact.metadata_json.get("based_on", [])
+    }
+    if not named:
+        return False
+    left = session.scalars(select(Document.id).where(Document.id.in_(named)))
+    return set(left) != named
+
+
 def to_read(artifact: GeneratedArtifact, current: bool) -> EnvironmentSummaryRead:
     content = artifact.content or {}
     return EnvironmentSummaryRead(
@@ -398,7 +411,8 @@ def to_read(artifact: GeneratedArtifact, current: bool) -> EnvironmentSummaryRea
 def state(
     session: Session, environment: Environment, llm: LLMProvider
 ) -> EnvironmentSummaryState:
-    """Where the environment's summary stands, with the newest ready one."""
+    """Where the environment's summary stands, with the newest ready one
+    unless a document it was built from has been deleted."""
     inputs = gather(session, environment, llm)
     all_summaries = history(session, environment)
     current = None
@@ -421,10 +435,15 @@ def state(
         label = "up_to_date"
 
     # The current summary when it is ready; otherwise the newest earlier one,
-    # shown as out of date while the current one is written.
-    shown = (
-        current if current is not None and current.status == "ready" else newest_ready
-    )
+    # shown as out of date while the current one is written. Not one built
+    # from a document deleted since: its points would be from material that
+    # is gone, and their pages could not be opened.
+    if current is not None and current.status == "ready":
+        shown: GeneratedArtifact | None = current
+    elif newest_ready is not None and not _from_deleted(session, newest_ready):
+        shown = newest_ready
+    else:
+        shown = None
     return EnvironmentSummaryState(
         state=label,
         waiting_for=inputs.waiting_for,

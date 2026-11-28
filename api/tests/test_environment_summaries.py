@@ -4,8 +4,9 @@ Purpose: with a stand-in model, that the summary is derived state. It is
 built from the documents' summaries, citations carried through; rebuilt only
 when they change, the old one kept; it waits for documents still on their
 way; documents that could not be summarized are left out with the reason; a
-deletion rebuilds it; large environments are summarized in groups; and
-nothing is written for material that changed while it waited.
+deletion rebuilds it, and a summary built from a deleted document is never
+shown, only kept in the history; large environments are summarized in
+groups; and nothing is written for material that changed while it waited.
 """
 
 import asyncio
@@ -355,6 +356,44 @@ def test_deleting_a_document_rebuilds_it_from_what_is_left(
         a for a in env_summaries.history(session, env) if a.id == before.summary.id
     )
     assert [d["filename"] for d in old.metadata_json["based_on"]] == ["a.pdf", "b.pdf"]
+
+
+def test_a_summary_built_from_a_deleted_document_is_not_shown(
+    session: Session, session_factory
+):
+    llm = MockProvider()
+    env, (_, mem) = course(
+        session, session_factory, llm, ("a.pdf", SCHEDULING), ("b.pdf", MEMORY)
+    )
+    before = refresh(session, session_factory, env, llm)
+
+    document_service.delete_document(session, mem)
+    session.expire_all()
+    rebuilding = env_summaries.state(session, env, llm)
+
+    # Until the summary of what is left is written there is none to show:
+    # the one before has points from b.pdf, which is gone.
+    assert (rebuilding.state, rebuilding.summary) == ("stale", None)
+    assert before.summary.id in {a.id for a in env_summaries.history(session, env)}
+
+    after = refresh(session, session_factory, env, llm)
+    assert after.state == "up_to_date"
+    assert [d.filename for d in after.summary.based_on] == ["a.pdf"]
+
+
+def test_with_every_document_deleted_there_is_no_summary(
+    session: Session, session_factory
+):
+    llm = MockProvider()
+    env, (sched,) = course(session, session_factory, llm, ("a.pdf", SCHEDULING))
+    built = refresh(session, session_factory, env, llm)
+
+    document_service.delete_document(session, sched)
+    state = refresh(session, session_factory, env, llm)
+
+    assert (state.state, state.summary) == ("none", None)
+    # Kept in the history, which still says what it was built from.
+    assert [a.id for a in env_summaries.history(session, env)] == [built.summary.id]
 
 
 def test_with_nothing_summarized_there_is_no_summary(session: Session, session_factory):
