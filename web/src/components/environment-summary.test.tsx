@@ -167,4 +167,13 @@ describe("EnvironmentSummary", () => {
     expect(screen.getByRole("button", { name: "Update now" })).toBeInTheDocument();
     expect(screen.queryByText("The summary comes after the reading.")).not.toBeInTheDocument();
   });
+
+  it("says the summary comes after the reading before the first one is started", async () => {
+    // The first document is summarized and the environment's is not started yet.
+    show({ ...written, state: "stale", summary: null, earlier_versions: 0 }, [{ status: "ready" }]);
+
+    expect(await screen.findByText("The summary comes after the reading.")).toBeInTheDocument();
+    expect(screen.queryByText("The summary is being updated.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/since the last summary/)).not.toBeInTheDocument();
+  });
 });

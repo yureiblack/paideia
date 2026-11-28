@@ -372,8 +372,10 @@ def test_a_summary_built_from_a_deleted_document_is_not_shown(
     rebuilding = env_summaries.state(session, env, llm)
 
     # Until the summary of what is left is written there is none to show:
-    # the one before has points from b.pdf, which is gone.
+    # the one before has points from b.pdf, which is gone. It is still
+    # counted, which is how the page tells this from a first summary.
     assert (rebuilding.state, rebuilding.summary) == ("stale", None)
+    assert rebuilding.earlier_versions == 1
     assert before.summary.id in {a.id for a in env_summaries.history(session, env)}
 
     after = refresh(session, session_factory, env, llm)

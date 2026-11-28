@@ -137,7 +137,11 @@ def test_deleting_every_document_leaves_no_summary(client: TestClient):
     client.delete(f"/api/documents/{document['id']}")
 
     body = state(client, env)
-    assert (body["state"], body["summary"]) == ("none", None)
+    assert (body["state"], body["summary"], body["earlier_versions"]) == (
+        "none",
+        None,
+        1,
+    )
     # Kept in the history, never shown.
     history = client.get(f"/api/environments/{env}/summaries").json()
     kept = [(h["current"], [d["filename"] for d in h["based_on"]]) for h in history]

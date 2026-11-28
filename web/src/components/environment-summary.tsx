@@ -98,6 +98,7 @@ export function EnvironmentSummary({ environmentId }: { environmentId: string })
           environmentId={environmentId}
           state={state}
           waitingFor={waiting_for}
+          earlierVersions={earlier_versions}
           documents={documents.data?.length ?? null}
           error={error}
           action={updateAction}
@@ -234,6 +235,7 @@ function NoSummary({
   environmentId,
   state,
   waitingFor,
+  earlierVersions,
   documents,
   error,
   action,
@@ -241,6 +243,7 @@ function NoSummary({
   environmentId: string;
   state: EnvironmentSummaryState["state"];
   waitingFor: number;
+  earlierVersions: number;
   documents: number | null;
   error: string | null;
   action: ReactNode;
@@ -264,7 +267,9 @@ function NoSummary({
       </Empty>
     );
   }
-  if (state === "stale") {
+  // Only once there was a summary: stale with none before is the moment
+  // between the first document's summary and the environment's.
+  if (state === "stale" && earlierVersions > 0) {
     return (
       <Empty title="The summary is being updated." action={action}>
         <span role="status">

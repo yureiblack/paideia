@@ -560,7 +560,7 @@ this phase's fixes:
     retrieval, scheduling and job tests.
   - Coverage, lines and branches, is 89%, reported but never enforced.
   - mypy checks `app/`.
-- **Frontend:** 98 tests with Vitest and Testing Library, most of them of
+- **Frontend:** 101 tests with Vitest and Testing Library, most of them of
   components.
   - They run the real API client, with each test supplying the API's
     answers.
